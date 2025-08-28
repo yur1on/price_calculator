@@ -1,6 +1,7 @@
+# notify_tg/apps.py
 from django.apps import AppConfig
 
-
 class NotifyTgConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'notify_tg'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "notify_tg"
+    verbose_name = "Уведомления в Telegram"

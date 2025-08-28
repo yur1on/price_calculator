@@ -1,6 +1,4 @@
 """Админка приложения repairs (на русском)."""
-from __future__ import annotations
-
 from django.contrib import admin, messages
 from django.utils import timezone
 from django.db.models import Sum
@@ -11,6 +9,7 @@ from .models import (
     Technician, WorkingHour, TimeOff, Appointment,
 )
 
+from notify_tg.utils import notify_partner  # <-- добавили
 
 # Русские заголовки панели администрирования
 admin.site.site_header = "Мастерская — панель администратора"
@@ -53,26 +52,21 @@ class ReferralPartnerAdmin(admin.ModelAdmin):
 @admin.register(ReferralRedemption)
 class ReferralRedemptionAdmin(admin.ModelAdmin):
     date_hierarchy = "created_at"
-    list_display = (
-        "created_at", "partner", "appointment", "phone",
-        "discount_amount", "commission_amount", "status", "paid_at",
-    )
+    list_display = ("created_at", "partner", "appointment", "phone",
+                    "discount_amount", "commission_amount", "status", "paid_at")
     list_filter = ("partner", "status", "created_at")
     search_fields = ("partner__name", "partner__code", "phone", "appointment__customer_name")
-    actions = ("mark_as_accrued", "mark_as_paid", "mark_as_unpaid", "show_totals")
-
-    @admin.action(description="Пометить как начислено")
-    def mark_as_accrued(self, request, queryset):
-        updated = queryset.exclude(status="paid").update(status="accrued")
-        self.message_user(request, f"Начислено: {updated}", level=messages.SUCCESS)
+    actions = ("mark_as_paid", "mark_as_unpaid", "show_totals")
 
     @admin.action(description="Отметить как выплачено")
     def mark_as_paid(self, request, queryset):
         updated = 0
         for r in queryset.exclude(status="paid"):
             r.status = "paid"
-            r.paid_at = timezone.now()
+            if not r.paid_at:
+                r.paid_at = timezone.now()
             r.save(update_fields=["status", "paid_at"])
+            # уведомление отправит сигнал post_save
             updated += 1
         self.message_user(request, f"Отмечено выплаченными: {updated}", level=messages.SUCCESS)
 

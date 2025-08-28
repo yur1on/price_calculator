@@ -18,6 +18,8 @@ DEBUG = True
 
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
+
+
 # Приложения
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -28,7 +30,13 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
 
     "repairs.apps.RepairsConfig",
+    "notify_tg",
 ]
+
+
+import os
+# 🔑 Токен Telegram-бота (Только для локальной разработки!)
+TELEGRAM_BOT_TOKEN = ""
 
 # Промежуточные слои (middleware)
 MIDDLEWARE = [
