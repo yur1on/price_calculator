@@ -1,0 +1,24 @@
+{% extends "repairs/base.html" %}
+{% block title %}Запись создана{% endblock %}
+{% block content %}
+  <h1>Запись оформлена ✅</h1>
+  <p>Спасибо, {{ appointment.customer_name }}! Ваша запись подтверждена.</p>
+
+  <ul>
+    <li><strong>Устройство:</strong> {{ appointment.phone_model.brand.name }} {{ appointment.phone_model.name }}</li>
+    <li><strong>Услуга:</strong> {{ appointment.repair_type.name }}</li>
+    <li><strong>Дата:</strong> {{ appointment.start|date:"d.m.Y" }}</li>
+    <li><strong>Время:</strong> {{ appointment.start|date:"H:i" }} – {{ appointment.end|date:"H:i" }}</li>
+<li><strong>Стоимость:</strong> {{ appointment.price_final }} BYN
+  {% if appointment.discount_amount > 0 %}
+    <span class="muted">(скидка −{{ appointment.discount_amount }} BYN)</span>
+  {% endif %}
+</li>
+
+    <li><strong>Статус:</strong> {{ appointment.get_status_display }}</li>
+    <li><strong>ID брони:</strong> {{ appointment.id }}</li>
+  </ul>
+
+  <p class="small muted">Адрес и условия гарантии можно разместить здесь.</p>
+  <p><a class="btn" href="{% url 'repairs:brand_list' %}">Новая заявка</a></p>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "repairs/base.html" %}
+{% block title %}Модели — {{ brand.name }}{% endblock %}
+{% block content %}
+<style>
+  /* базовое */
+  *{box-sizing:border-box}
+  .muted{color:#64748b}
+
+  /* фильтр категорий */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 16px}
+  .chip{padding:8px 12px;border:1px solid #e5e7eb;border-radius:999px;text-decoration:none;color:#111;display:inline-block}
+  .chip.active{background:#111;color:#fff;border-color:#111}
+
+  /* сетка карточек моделей */
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); /* было 220px */
+    gap:12px
+  }
+
+  /* карточка: используем grid вместо flex, чтобы не было переполнения */
+  .card{
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    padding:12px;
+    background:#fff;
+    display:grid;
+    grid-template-columns:1fr auto;   /* инфо слева, кнопка справа */
+    gap:12px;
+    align-items:center;
+  }
+
+  .info .name{font-weight:600; margin-bottom:4px}
+  .meta{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+  .badge{
+    font-size:12px;
+    color:#111;
+    background:#f3f4f6;
+    border-radius:999px;
+    padding:4px 8px;
+  }
+
+  /* кнопка действия */
+  .btn{
+    display:inline-flex;
+    justify-content:center;
+    align-items:center;
+    padding:10px 14px;
+    border-radius:10px;
+    background:#111;
+    color:#fff;
+    text-decoration:none;
+    white-space:nowrap;   /* текст короткий, не переносим */
+    border:1px solid #111;
+  }
+  .btn:hover{opacity:.95}
+
+  /* адаптив: на узких экранах кнопка уходит на новую строку и растягивается */
+  @media (max-width: 560px){
+    .grid{grid-template-columns:1fr}
+    .card{
+      grid-template-columns:1fr;   /* всё в одну колонку */
+    }
+    .card .btn{
+      width:100%;
+      margin-top:6px;
+    }
+  }
+</style>
+
+<p><a href="{% url 'repairs:brand_list' %}?cat={{ selected_cat }}">← Назад к брендам</a></p>
+<h1>{{ brand.name }} — модели</h1>
+
+<div class="chips">
+  {% for key,label in categories %}
+    {% if selected_cat == key %}
+      <span class="chip active">{{ label }}</span>
+    {% else %}
+      <a class="chip" href="?cat={{ key }}">{{ label }}</a>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{% if models %}
+  <div class="grid">
+    {% for m in models %}
+      <div class="card">
+        <div class="info">
+          <div class="name">{{ m.name }}</div>
+          <div class="meta">
+            <span class="muted">{{ brand.name }}</span>
+            <span class="badge">
+              {% if m.category == 'phone' %}Телефон{% elif m.category == 'tablet' %}Планшет{% else %}Смарт-часы{% endif %}
+            </span>
+          </div>
+        </div>
+
+        <a class="btn" href="{% url 'repairs:repair_list' brand_slug=brand.slug model_slug=m.slug %}">
+          Выбрать
+        </a>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="muted">Нет моделей выбранной категории.</p>
+{% endif %}
+{% endblock %}

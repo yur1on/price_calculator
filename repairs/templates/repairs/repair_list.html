@@ -1,0 +1,30 @@
+{% extends "repairs/base.html" %}
+{% block title %}Ремонт {{ model.brand.name }} {{ model.name }}{% endblock %}
+{% block content %}
+  <p><a href="{% url 'repairs:model_list' brand_slug=model.brand.slug %}">← Назад к моделям</a></p>
+  <h1>{{ model.brand.name }} {{ model.name }} — ремонт</h1>
+
+  <table class="table">
+    <thead>
+      <tr><th>Услуга</th><th>Цена</th><th>Время</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for price in prices %}
+        <tr>
+          <td>{{ price.repair_type.name }}</td>
+          <td>{{ price.price }} BYN</td>
+
+          <td>{{ price.duration_min }} мин</td>
+          <td>
+            <a class="btn"
+               href="{% url 'repairs:slot_select' brand_slug=model.brand.slug model_slug=model.slug repair_slug=price.repair_type.slug %}">
+              Выбрать время
+            </a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="muted">Для этой модели нет активных услуг.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

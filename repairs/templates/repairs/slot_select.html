@@ -1,0 +1,83 @@
+{% extends "repairs/base.html" %}
+{% block title %}Календарь — {{ model.brand.name }} {{ model.name }}{% endblock %}
+
+{% block content %}
+<style>
+  /* Стили календаря (локально для страницы) */
+  #cal{--gap:12px;--radius:14px;--border:#e5e7eb;--muted:#64748b;--accent:#111;--bg:#fff}
+  #cal .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  #cal .btn{display:inline-flex;gap:8px;align-items:center;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:#fff;color:#111;text-decoration:none}
+  #cal .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  #cal .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:var(--gap)}
+  #cal .dow{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  #cal .cell{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;min-height:110px;display:flex;flex-direction:column;gap:8px}
+  #cal .cell .top{display:flex;justify-content:space-between;align-items:center}
+  #cal .num{font-weight:600}
+  #cal .out{opacity:.55}
+  #cal .badge{font-size:12px;color:var(--muted)}
+  #cal .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
+  #cal .chip{display:inline-flex;gap:6px;align-items:center;padding:6px 9px;border-radius:999px;background:var(--accent);color:#fff;text-decoration:none}
+  #cal .muted{color:var(--muted)}
+  .ico{width:18px;height:18px}
+  @media (max-width: 700px){
+    #cal .cell{min-height:100px;padding:8px}
+  }
+</style>
+
+<div id="cal">
+  <p><a class="btn" href="{% url 'repairs:repair_list' brand_slug=model.brand.slug model_slug=model.slug %}">
+    <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M15 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Назад к услугам
+  </a></p>
+
+  <div class="toolbar">
+    <a class="btn" href="?month={{ prev_month|date:'Y-m' }}">
+      <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M15 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Предыдущий
+    </a>
+    <h1 style="margin:0">{{ month_start|date:"F Y" }}</h1>
+    <a class="btn" href="?month={{ next_month|date:'Y-m' }}">
+      Следующий
+      <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+  </div>
+
+  <!-- Заголовки дней недели -->
+  <div class="grid" style="margin-bottom:8px">
+    <div class="dow">Пн</div><div class="dow">Вт</div><div class="dow">Ср</div>
+    <div class="dow">Чт</div><div class="dow">Пт</div><div class="dow">Сб</div><div class="dow">Вс</div>
+  </div>
+
+  <!-- Сетка 6×7 -->
+  <div class="grid">
+    {% for week in weeks %}
+      {% for day in week %}
+        <div class="cell {% if not day.in_month %}out{% endif %}">
+          <div class="top">
+            <div class="num">{{ day.date.day }}</div>
+            <span class="badge">{% if day.slots %}{{ day.slots|length }} слотов{% else %}—{% endif %}</span>
+          </div>
+
+          {% if day.slots %}
+            <div class="chips">
+              {% for s in day.slots %}
+                <a class="chip"
+                   href="{% url 'repairs:book' brand_slug=model.brand.slug model_slug=model.slug repair_slug=repair_type.slug %}?slot={{ s|date:'c'|urlencode }}">
+                  <svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  {{ s|date:"H:i" }}
+                </a>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="muted">Нет</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% endfor %}
+  </div>
+
+  <p style="margin-top:16px" class="muted">
+    Модель: {{ model.brand.name }} {{ model.name }} • {{ repair_type.name }}
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "repairs/base.html" %}
+{% block title %}Выбор бренда{% endblock %}
+{% block content %}
+<style>
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 16px}
+  .chip{padding:8px 12px;border:1px solid #e5e7eb;border-radius:999px;text-decoration:none;color:#111}
+  .chip.active{background:#111;color:#fff;border-color:#111}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+  .card{border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#fff}
+  .card a{text-decoration:none;color:#111;font-weight:600}
+  .muted{color:#64748b}
+</style>
+
+<h1>Выберите бренд</h1>
+
+<div class="chips">
+  {% for key,label in categories %}
+    {% if selected_cat == key %}
+      <span class="chip active">{{ label }}</span>
+    {% else %}
+      <a class="chip" href="?cat={{ key }}">{{ label }}</a>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{% if brands %}
+  <div class="grid">
+    {% for b in brands %}
+      <div class="card">
+        <a href="{% url 'repairs:model_list' brand_slug=b.slug %}?cat={{ selected_cat }}">
+          {{ b.name }}
+        </a>
+        <div class="muted">Смотреть модели</div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="muted">Для выбранной категории брендов не найдено.</p>
+{% endif %}
+{% endblock %}
