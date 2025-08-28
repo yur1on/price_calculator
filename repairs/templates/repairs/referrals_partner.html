@@ -1,0 +1,67 @@
+{% extends "repairs/base.html" %}
+{% block title %}{{ partner.name }} — сводка{% endblock %}
+{% block content %}
+<h1>Сводка по партнёру: {{ partner.name }} <span class="muted">(<code>{{ partner.code }}</code>)</span></h1>
+
+<p><a href="{% url 'repairs:referrals_report' %}?from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}{% if status %}&status={{ status }}{% endif %}">← К общему отчёту</a></p>
+
+<form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:12px 0">
+  <label>С даты<br><input type="date" name="from" value="{{ date_from|date:'Y-m-d' }}"></label>
+  <label>По дату<br><input type="date" name="to" value="{{ date_to|date:'Y-m-d' }}"></label>
+
+  {% if has_status %}
+    <label>Статус<br>
+      <select name="status">
+        <option value="" {% if not status %}selected{% endif %}>Все</option>
+        <option value="pending" {% if status == 'pending' %}selected{% endif %}>Ожидает</option>
+        <option value="accrued" {% if status == 'accrued' %}selected{% endif %}>Начислено</option>
+        <option value="paid" {% if status == 'paid' %}selected{% endif %}>Выплачено</option>
+      </select>
+    </label>
+  {% endif %}
+
+  <button class="btn" type="submit">Показать</button>
+</form>
+
+<div class="card" style="margin-bottom:14px">
+  <div><strong>Всего использований:</strong> {{ totals.uses|default:0 }}</div>
+  <div><strong>Сумма скидок:</strong> {{ totals.total_discount|default:0 }} BYN</div>
+  <div><strong>Комиссия к выплате:</strong> {{ totals.total_commission|default:0 }} BYN</div>
+</div>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Дата</th>
+      <th>Клиент</th>
+      <th>Модель</th>
+      <th>Услуга</th>
+      <th>Скидка, BYN</th>
+      <th>Комиссия, BYN</th>
+      {% comment %} Покажем статус только если поле есть {% endcomment %}
+      {% if has_status %}<th>Статус</th>{% endif %}
+      <th>ID брони</th>
+      {% if request.user.is_staff %}<th>Админка</th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for op in operations %}
+      <tr>
+        <td>{{ op.created_at|date:"d.m.Y H:i" }}</td>
+        <td>{{ op.appointment.customer_name }}<br><span class="muted">{{ op.phone }}</span></td>
+        <td>{{ op.appointment.phone_model.brand.name }} {{ op.appointment.phone_model.name }}</td>
+        <td>{{ op.appointment.repair_type.name }}</td>
+        <td>{{ op.discount_amount }}</td>
+        <td>{{ op.commission_amount }}</td>
+        {% if has_status %}<td>{{ op.get_status_display }}</td>{% endif %}
+        <td>{{ op.appointment_id }}</td>
+        {% if request.user.is_staff %}
+          <td><a href="/admin/repairs/appointment/{{ op.appointment_id }}/change/" target="_blank">Открыть</a></td>
+        {% endif %}
+      </tr>
+    {% empty %}
+      <tr><td colspan="{% if has_status %}9{% else %}8{% endif %}" class="muted">Нет операций за выбранный период</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

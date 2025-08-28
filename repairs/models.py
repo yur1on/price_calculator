@@ -122,7 +122,6 @@ class ReferralPartner(models.Model):
         return f"{self.name} ({self.code})"
 
     def is_active(self) -> bool:
-        """Код активен и может быть применён?"""
         if self.expires_at and self.expires_at < timezone.now():
             return False
         if self.max_uses is not None and self.redemptions.count() >= self.max_uses:
@@ -131,6 +130,12 @@ class ReferralPartner(models.Model):
 
 
 class ReferralRedemption(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Ожидает выполнения"),
+        ("accrued", "Начислено (запись выполнена)"),
+        ("paid", "Выплачено партнёру"),
+    ]
+
     partner = models.ForeignKey(
         ReferralPartner,
         verbose_name="Партнёр",
@@ -146,15 +151,20 @@ class ReferralRedemption(models.Model):
     )
     discount_amount = models.DecimalField("Сумма скидки", max_digits=10, decimal_places=2)
     commission_amount = models.DecimalField("Комиссия партнёра", max_digits=10, decimal_places=2)
+    status = models.CharField("Статус выплаты", max_length=10, choices=STATUS_CHOICES, default="pending", db_index=True)
+    paid_at = models.DateTimeField("Дата выплаты", null=True, blank=True)
     created_at = models.DateTimeField("Создано", auto_now_add=True)
 
     class Meta:
         verbose_name = "Использование реф-кода"
         verbose_name_plural = "Использования реф-кодов"
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["partner", "appointment"], name="uniq_partner_appointment_redemption"),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.partner.code} → {self.appointment_id}"
+        return f"{self.partner.code} → #{self.appointment_id} [{self.get_status_display()}]"
 
 
 class Technician(models.Model):
@@ -262,11 +272,9 @@ class Appointment(models.Model):
 
     @property
     def duration(self) -> timedelta:
-        """Длительность записи."""
         return self.end - self.start
 
     def apply_referral(self) -> None:
-        """Применить реферальный код, если он валиден."""
         if not self.referral_code:
             self.discount_amount = Decimal("0")
             self.price_final = self.price_original
@@ -284,7 +292,6 @@ class Appointment(models.Model):
             return
 
         discount = (self.price_original * partner.client_discount_pct / Decimal("100")).quantize(Decimal("0.01"))
-        # Комиссию партнёра фиксируем через ReferralRedemption после сохранения записи
         self.discount_amount = discount
         self.price_final = self.price_original - discount
 

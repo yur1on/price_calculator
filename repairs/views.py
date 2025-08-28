@@ -1,38 +1,20 @@
-"""Представления (views) приложения repairs.
-
-Эти представления реализуют многошаговый процесс: пользователь
-выбирает бренд и модель телефона, тип ремонта, затем подходящее
-время и отправляет данные для бронирования.
-"""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from decimal import Decimal
-
-from django.shortcuts import render, get_object_or_404, redirect
-from django.utils import timezone
-
-from .forms import BookingForm
-
-
-from datetime import datetime, date, timedelta
-from decimal import Decimal
 from collections import OrderedDict
+from datetime import date, datetime, timedelta
 
-from django.shortcuts import render, get_object_or_404, redirect
-from django.utils import timezone
-
-from .forms import BookingForm
 from .models import (
     PhoneBrand,
     PhoneModel,
     RepairType,
     ModelRepairPrice,
-    ReferralPartner,
-    ReferralRedemption,
     Appointment,
-    WorkingHour,  # важно: импорт есть
+    WorkingHour,
+    ReferralPartner,        # ← добавь
+    ReferralRedemption,     # ← добавь (используется в отчётах)
 )
+
+
 
 
 from .forms import BookingForm
@@ -246,35 +228,18 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
 
     slot_str = request.GET.get("slot")
     if not slot_str:
-        return redirect(
-            "repairs:slot_select",
-            brand_slug=brand.slug,
-            model_slug=model.slug,
-            repair_slug=repair_type.slug,
-        )
+        return redirect("repairs:slot_select", brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 
-    # Подстраховка на случай, если '+' в часовом поясе превратился в пробел
-    # (например, "+02:00" стало " 02:00" при неправильном кодировании ссылки)
     slot_str = slot_str.replace(" ", "+")
-
-    # Парсим ISO-дату и приводим к aware-datetime
     try:
         slot_dt = datetime.fromisoformat(slot_str)
         if slot_dt.tzinfo is None:
             slot_dt = timezone.make_aware(slot_dt)
     except ValueError:
-        return redirect(
-            "repairs:slot_select",
-            brand_slug=brand.slug,
-            model_slug=model.slug,
-            repair_slug=repair_type.slug,
-        )
+        return redirect("repairs:slot_select", brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 
-    # Цена и длительность
     try:
-        price_entry = ModelRepairPrice.objects.get(
-            phone_model=model, repair_type=repair_type, is_active=True
-        )
+        price_entry = ModelRepairPrice.objects.get(phone_model=model, repair_type=repair_type, is_active=True)
         duration_min = price_entry.duration_min
         price = price_entry.price
     except ModelRepairPrice.DoesNotExist:
@@ -296,49 +261,155 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
                 referral_code=form.cleaned_data.get("referral_code", "").strip(),
                 price_original=price,
             )
-
-            # Применяем скидку по коду (если валиден)
             app.apply_referral()
-
             if not app.price_final:
                 app.price_final = app.price_original - app.discount_amount
-
             app.save()
 
-            # Фиксируем использование реферального кода (для отчётности)
-            if app.referral_code and app.discount_amount > 0:
-                try:
-                    partner = ReferralPartner.objects.get(code__iexact=app.referral_code)
-                    commission = app.price_original * partner.partner_commission_pct / Decimal("100.0")
-                    ReferralRedemption.objects.create(
-                        partner=partner,
-                        phone=app.customer_phone,
-                        appointment=app,
-                        discount_amount=app.discount_amount,
-                        commission_amount=commission.quantize(Decimal("0.01")),
-                    )
-                except ReferralPartner.DoesNotExist:
-                    pass
+            # НИЧЕГО не создаём здесь — запись ReferralRedemption делает сигнал!
 
             return redirect("repairs:booking_success", appointment_id=app.id)
     else:
         form = BookingForm()
 
-    return render(
-        request,
-        "repairs/booking_form.html",
-        {
-            "brand": brand,
-            "model": model,
-            "repair_type": repair_type,
-            "slot": slot_dt,
-            "duration": duration_min,
-            "price": price,
-            "form": form,
-        },
-    )
+    return render(request, "repairs/booking_form.html", {
+        "brand": brand,
+        "model": model,
+        "repair_type": repair_type,
+        "slot": slot_dt,
+        "duration": duration_min,
+        "price": price,
+        "form": form,
+    })
+
 
 def booking_success(request, appointment_id: int):
     """Страница подтверждения после успешного бронирования."""
     appointment = get_object_or_404(Appointment, id=appointment_id)
     return render(request, "repairs/booking_success.html", {"appointment": appointment})
+
+
+from django.db.models import Sum, Count, Q
+
+from django.contrib.admin.views.decorators import staff_member_required
+from django.db.models import Sum, Count, Max
+from django.utils import timezone
+
+from .models import ReferralRedemption  # убедись, что импорт есть
+
+from django.db.models import Sum, Count, Q
+from django.core.exceptions import FieldDoesNotExist
+
+def _parse_date_or(default_date, value):
+    try:
+        return datetime.fromisoformat(value).date() if value else default_date
+    except ValueError:
+        return default_date
+
+def referrals_report(request):
+    """Итоги по всем партнёрам за период (?from=YYYY-MM-DD&to=YYYY-MM-DD&status=...)."""
+    today = timezone.localdate()
+    month_start = today.replace(day=1)
+
+    date_from = _parse_date_or(month_start, request.GET.get("from"))
+    date_to   = _parse_date_or(today,       request.GET.get("to"))
+    status    = request.GET.get("status", "").strip()
+
+    qs = ReferralRedemption.objects.filter(
+        created_at__date__gte=date_from,
+        created_at__date__lte=date_to,
+    )
+
+    # Аккуратно проверяем, есть ли поле "status" в модели (на случай, если его ещё не добавили)
+    has_status = True
+    try:
+        ReferralRedemption._meta.get_field("status")
+    except FieldDoesNotExist:
+        has_status = False
+
+    if has_status and status in {"pending", "accrued", "paid"}:
+        qs = qs.filter(status=status)
+
+    # Агрегации
+    annotate_kwargs = {
+        "uses": Count("id"),
+        "total_discount": Sum("discount_amount"),
+        "total_commission": Sum("commission_amount"),
+    }
+    if has_status:
+        annotate_kwargs.update({
+            "pending_commission": Sum("commission_amount", filter=Q(status="pending")),
+            "accrued_commission": Sum("commission_amount", filter=Q(status="accrued")),
+            "paid_commission":    Sum("commission_amount", filter=Q(status="paid")),
+        })
+
+    rows = (
+        qs.values("partner__id", "partner__name", "partner__code")
+          .annotate(**annotate_kwargs)
+          .order_by("partner__name")
+    )
+
+    totals = qs.aggregate(
+        total_uses=Count("id"),
+        total_discount=Sum("discount_amount"),
+        total_commission=Sum("commission_amount"),
+    )
+
+    return render(request, "repairs/referrals_report.html", {
+        "rows": rows,
+        "totals": totals,
+        "date_from": date_from,
+        "date_to": date_to,
+        "status": status if has_status else "",
+        "has_status": has_status,
+    })
+
+def referrals_partner_report(request, code: str):
+    """Детальный отчёт по одному партнёру (?from=YYYY-MM-DD&to=YYYY-MM-DD&status=...)."""
+    partner = get_object_or_404(ReferralPartner, code__iexact=code)
+
+    today = timezone.localdate()
+    month_start = today.replace(day=1)
+
+    date_from = _parse_date_or(month_start, request.GET.get("from"))
+    date_to   = _parse_date_or(today,       request.GET.get("to"))
+    status    = request.GET.get("status", "").strip()
+
+    qs = ReferralRedemption.objects.filter(
+        partner=partner,
+        created_at__date__gte=date_from,
+        created_at__date__lte=date_to,
+    )
+
+    # Есть ли поле статус?
+    has_status = True
+    try:
+        ReferralRedemption._meta.get_field("status")
+    except FieldDoesNotExist:
+        has_status = False
+
+    if has_status and status in {"pending", "accrued", "paid"}:
+        qs = qs.filter(status=status)
+
+    # Сводные суммы
+    totals = qs.aggregate(
+        uses=Count("id"),
+        total_discount=Sum("discount_amount"),
+        total_commission=Sum("commission_amount"),
+    )
+
+    # Перечень операций (для таблицы)
+    operations = (
+        qs.select_related("appointment", "appointment__phone_model", "appointment__repair_type")
+          .order_by("-created_at")
+    )
+
+    return render(request, "repairs/referrals_partner.html", {
+        "partner": partner,
+        "operations": operations,
+        "totals": totals,
+        "date_from": date_from,
+        "date_to": date_to,
+        "status": status if has_status else "",
+        "has_status": has_status,
+    })

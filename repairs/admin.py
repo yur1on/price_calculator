@@ -1,10 +1,16 @@
 """Админка приложения repairs (на русском)."""
-from django.contrib import admin
+from __future__ import annotations
+
+from django.contrib import admin, messages
+from django.utils import timezone
+from django.db.models import Sum
+
 from .models import (
     PhoneBrand, PhoneModel, RepairType, ModelRepairPrice,
     ReferralPartner, ReferralRedemption,
     Technician, WorkingHour, TimeOff, Appointment,
 )
+
 
 # Русские заголовки панели администрирования
 admin.site.site_header = "Мастерская — панель администратора"
@@ -23,7 +29,6 @@ class PhoneModelAdmin(admin.ModelAdmin):
     list_display = ("name", "brand", "category", "slug")
     list_filter = ("brand", "category")
     prepopulated_fields = {"slug": ("name",)}
-
 
 
 @admin.register(RepairType)
@@ -47,9 +52,46 @@ class ReferralPartnerAdmin(admin.ModelAdmin):
 
 @admin.register(ReferralRedemption)
 class ReferralRedemptionAdmin(admin.ModelAdmin):
-    list_display = ("partner", "phone", "appointment", "discount_amount", "commission_amount", "created_at")
-    list_filter = ("partner", "created_at")
-    search_fields = ("partner__name", "phone")
+    date_hierarchy = "created_at"
+    list_display = (
+        "created_at", "partner", "appointment", "phone",
+        "discount_amount", "commission_amount", "status", "paid_at",
+    )
+    list_filter = ("partner", "status", "created_at")
+    search_fields = ("partner__name", "partner__code", "phone", "appointment__customer_name")
+    actions = ("mark_as_accrued", "mark_as_paid", "mark_as_unpaid", "show_totals")
+
+    @admin.action(description="Пометить как начислено")
+    def mark_as_accrued(self, request, queryset):
+        updated = queryset.exclude(status="paid").update(status="accrued")
+        self.message_user(request, f"Начислено: {updated}", level=messages.SUCCESS)
+
+    @admin.action(description="Отметить как выплачено")
+    def mark_as_paid(self, request, queryset):
+        updated = 0
+        for r in queryset.exclude(status="paid"):
+            r.status = "paid"
+            r.paid_at = timezone.now()
+            r.save(update_fields=["status", "paid_at"])
+            updated += 1
+        self.message_user(request, f"Отмечено выплаченными: {updated}", level=messages.SUCCESS)
+
+    @admin.action(description="Снять отметку о выплате")
+    def mark_as_unpaid(self, request, queryset):
+        updated = queryset.filter(status="paid").update(status="accrued", paid_at=None)
+        self.message_user(request, f"Снято отметок: {updated}", level=messages.SUCCESS)
+
+    @admin.action(description="Показать итоги по выборке")
+    def show_totals(self, request, queryset):
+        agg = queryset.aggregate(
+            total_discount=Sum("discount_amount"),
+            total_commission=Sum("commission_amount"),
+        )
+        self.message_user(
+            request,
+            f"ИТОГО: скидка {agg['total_discount'] or 0} BYN • комиссия {agg['total_commission'] or 0} BYN",
+            level=messages.INFO,
+        )
 
 
 @admin.register(Technician)

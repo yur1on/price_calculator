@@ -34,7 +34,14 @@
   <header>
     <div class="wrap">
       <a href="{% url 'repairs:brand_list' %}"><strong>Мастерская</strong></a>
-      <nav><a href="{% url 'repairs:brand_list' %}">Онлайн-калькулятор</a></nav>
+      <nav>
+  <a href="{% url 'repairs:brand_list' %}">Онлайн-калькулятор</a>
+  {% if request.user.is_staff %}
+    &nbsp;·&nbsp;<a href="{% url 'repairs:referrals_report' %}">Отчёт партнёров</a>
+
+  {% endif %}
+</nav>
+
     </div>
   </header>
   <main>

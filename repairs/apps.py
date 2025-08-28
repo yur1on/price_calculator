@@ -1,16 +1,12 @@
-"""Application configuration for the repairs app.
-
-This config class registers the app with Django's
-application registry. When the app is ready it can
-perform additional startup logic if required.
-"""
+"""Application configuration for the repairs app."""
 from django.apps import AppConfig
 
 
 class RepairsConfig(AppConfig):
-    """Configuration class for the repairs app."""
-
     default_auto_field = "django.db.models.BigAutoField"
     name = "repairs"
-    verbose_name = "Phone Repair Booking"
+    verbose_name = "Мастерская"
 
+    def ready(self):
+        # Импортируем сигналы при старте приложения
+        from . import signals  # noqa: F401
