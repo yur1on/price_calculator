@@ -40,6 +40,11 @@
     &nbsp;·&nbsp;<a href="{% url 'repairs:referrals_report' %}">Отчёт партнёров</a>
 
   {% endif %}
+              {% if request.user.is_authenticated and request.user.is_staff %}
+        <a href="{% url 'admin:index' %}">Админ-панель</a>
+        <span class="small" style="opacity:.8">({{ request.user.username }})</span>
+
+      {% endif %}
 </nav>
 
     </div>

@@ -36,7 +36,10 @@ INSTALLED_APPS = [
 
 import os
 # 🔑 Токен Telegram-бота (Только для локальной разработки!)
-TELEGRAM_BOT_TOKEN = ""
+TELEGRAM_BOT_TOKEN = "8221103907:AAHD4RoedYbC2qfrWtN_5SzvxL4vIPbQnZY"
+TELEGRAM_ADMIN_CHAT_IDS = "486747175"
+
+# SITE_URL="http://127.0.0.1:8000"
 
 # Промежуточные слои (middleware)
 MIDDLEWARE = [

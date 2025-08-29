@@ -1,8 +1,17 @@
+# repairs/views.py
 from __future__ import annotations
 
-from collections import OrderedDict
+import re
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 
+from django.core.exceptions import FieldDoesNotExist
+from django.db.models import Q, Sum, Count
+from django.db.models.functions import Lower
+from django.shortcuts import render, get_object_or_404, redirect
+from django.utils import timezone
+
+from .forms import BookingForm
 from .models import (
     PhoneBrand,
     PhoneModel,
@@ -10,22 +19,29 @@ from .models import (
     ModelRepairPrice,
     Appointment,
     WorkingHour,
-    ReferralPartner,        # ← добавь
-    ReferralRedemption,     # ← добавь (используется в отчётах)
+    ReferralPartner,
+    ReferralRedemption,
 )
 
 
+# ---------- утилиты ----------
+
+def _natural_key(s: str):
+    """Ключ для натуральной сортировки: 'Model 2' < 'Model 10'."""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s or "")]
 
 
-from .forms import BookingForm
+def _parse_date_or(default_date: date, value: str | None) -> date:
+    try:
+        return datetime.fromisoformat(value).date() if value else default_date
+    except ValueError:
+        return default_date
 
 
-from django.db.models import Q  # наверху файла, если ещё не импортирован
+# ---------- шаг 1: бренды ----------
 
 def brand_list(request):
-    """Список брендов только по выбранной категории ?cat=phone|tablet|watch.
-    Если параметр не передан или некорректен — по умолчанию 'phone'.
-    """
+    """Список брендов по выбранной категории ?cat=phone|tablet|watch."""
     choices = list(PhoneModel.CATEGORY_CHOICES)
     valid = {k for k, _ in choices}
     sel = request.GET.get("cat")
@@ -36,18 +52,21 @@ def brand_list(request):
         PhoneBrand.objects
         .filter(models__category=sel)
         .distinct()
-        .order_by("name")
+        .annotate(name_lc=Lower("name"))
+        .order_by("name_lc", "name")
     )
 
     return render(request, "repairs/brand_list.html", {
         "brands": brands,
-        "categories": choices,   # только три категории
+        "categories": choices,
         "selected_cat": sel,
     })
 
 
+# ---------- шаг 2: модели бренда ----------
+
 def model_list(request, brand_slug: str):
-    """Список моделей бренда по выбранной категории (без варианта 'all')."""
+    """Список моделей бренда по выбранной категории с натуральной сортировкой."""
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
 
     choices = list(PhoneModel.CATEGORY_CHOICES)
@@ -56,38 +75,38 @@ def model_list(request, brand_slug: str):
     if sel not in valid:
         sel = "phone"
 
-    models_qs = brand.models.filter(category=sel).order_by("name")
+    # Берём из БД и сортируем в Python «по-человечески»
+    models_qs = list(brand.models.filter(category=sel))
+    models_qs.sort(key=lambda m: _natural_key(m.name))
 
     return render(request, "repairs/model_list.html", {
         "brand": brand,
         "models": models_qs,
-        "categories": choices,   # только три категории
+        "categories": choices,
         "selected_cat": sel,
     })
 
 
+# ---------- шаг 3: услуги/цены модели ----------
+
 def repair_list(request, brand_slug: str, model_slug: str):
-    """Показать список типов ремонта и цен для выбранной модели."""
+    """Показать список типов ремонта и цен для выбранной модели (отсортировано по названию услуги)."""
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
     model = get_object_or_404(PhoneModel, brand=brand, slug=model_slug)
     prices = (
         ModelRepairPrice.objects
         .filter(phone_model=model, is_active=True)
         .select_related("repair_type")
+        .order_by("repair_type__name")
     )
-    return render(
-        request,
-        "repairs/repair_list.html",
-        {"brand": brand, "model": model, "prices": prices},
-    )
+    return render(request, "repairs/repair_list.html", {
+        "brand": brand,
+        "model": model,
+        "prices": prices,
+    })
 
 
-from datetime import datetime, timedelta
-from decimal import Decimal
-from django.utils import timezone
-from django.shortcuts import render, get_object_or_404, redirect
-
-# ...
+# ---------- слоты и бронь ----------
 
 def get_available_slots(
     phone_model: PhoneModel,
@@ -96,11 +115,7 @@ def get_available_slots(
     start_date: date | None = None,
     tz=None,
 ) -> list[datetime]:
-    """Вернуть список доступных слотов от start_date на days дней вперёд.
-
-    Учитывает рабочие часы (WorkingHour) и пересечения с Appointment.
-    Длительность берётся из ModelRepairPrice или RepairType.default_duration_min.
-    """
+    """Вернуть список доступных слотов от start_date на days дней вперёд."""
     # длительность
     try:
         price_entry = ModelRepairPrice.objects.get(
@@ -134,7 +149,6 @@ def get_available_slots(
         day_hours = [wh for wh in working_hours if wh.weekday == weekday]
 
         for wh in day_hours:
-            # Python 3.10: делаем naive -> make_aware
             naive_start = datetime.combine(current_date, wh.start)
             naive_end = datetime.combine(current_date, wh.end)
             slot_start_time = timezone.make_aware(naive_start, tz)
@@ -146,7 +160,10 @@ def get_available_slots(
                     current_slot += duration
                     continue
                 end_slot = current_slot + duration
-                conflict = appointments.filter(start__lt=end_slot, end__gt=current_slot).exists()
+                conflict = appointments.filter(
+                    start__lt=end_slot,
+                    end__gt=current_slot,
+                ).exists()
                 if not conflict:
                     slots.append(current_slot)
                 current_slot += duration
@@ -154,14 +171,8 @@ def get_available_slots(
     return slots
 
 
-from datetime import datetime, date, timedelta
-from django.utils import timezone
-from django.shortcuts import render, get_object_or_404
-
-# ... остальные импорты уже есть выше (PhoneBrand, PhoneModel, RepairType, ModelRepairPrice, Appointment, WorkingHour, и т.д.)
-
 def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
-    """Месячный календарь (6 недель), без изменения маршрутов/URL."""
+    """Месячный календарь (6 недель)."""
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
     model = get_object_or_404(PhoneModel, brand=brand, slug=model_slug)
     repair_type = get_object_or_404(RepairType, slug=repair_slug)
@@ -169,7 +180,7 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
     tz = timezone.get_current_timezone()
     today = timezone.localdate()
 
-    # month=YYYY-MM (например, 2025-08). Если не задан — текущий месяц.
+    # month=YYYY-MM (например, 2025-08)
     month_str = request.GET.get("month")
     if month_str:
         try:
@@ -180,12 +191,12 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
     else:
         month_start = today.replace(day=1)
 
-    # Старт сетки: понедельник недели, куда входит 1-е число
-    first_weekday = 0  # 0 = Monday
+    # Начало сетки: понедельник недели, куда входит 1-е число
+    first_weekday = 0  # Mon
     offset = (month_start.weekday() - first_weekday) % 7
     grid_start = month_start - timedelta(days=offset)
 
-    # Собираем доступные слоты на 6 недель (42 дня), сгруппуем по дате
+    # Доступные слоты на 6 недель (42 дня), сгруппуем по дате
     days_span = 42
     all_slots = get_available_slots(model, repair_type, days=days_span, start_date=grid_start, tz=tz)
     slots_by_date: dict[date, list[datetime]] = {}
@@ -193,7 +204,6 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
         d = s.date()
         slots_by_date.setdefault(d, []).append(s)
 
-    # Формируем 6 недель по 7 дней с уже готовыми полями для шаблона
     calendar_weeks = []
     for w in range(6):
         week = []
@@ -206,7 +216,6 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
             })
         calendar_weeks.append(week)
 
-    # Ссылки для навигации между месяцами
     prev_month = (month_start - timedelta(days=1)).replace(day=1)
     next_month = (month_start + timedelta(days=32)).replace(day=1)
 
@@ -217,8 +226,9 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
         "month_start": month_start,
         "prev_month": prev_month,
         "next_month": next_month,
-        "weeks": calendar_weeks,  # список недель; у недели список day-словарей {date, in_month, slots}
+        "weeks": calendar_weeks,
     })
+
 
 def book(request, brand_slug: str, model_slug: str, repair_slug: str):
     """Обработка формы бронирования для выбранного слота."""
@@ -230,6 +240,7 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
     if not slot_str:
         return redirect("repairs:slot_select", brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 
+    # Подстраховка: '+' мог превратиться в пробел
     slot_str = slot_str.replace(" ", "+")
     try:
         slot_dt = datetime.fromisoformat(slot_str)
@@ -265,8 +276,7 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
             if not app.price_final:
                 app.price_final = app.price_original - app.discount_amount
             app.save()
-
-            # НИЧЕГО не создаём здесь — запись ReferralRedemption делает сигнал!
+            # ReferralRedemption создаст сигнал
 
             return redirect("repairs:booking_success", appointment_id=app.id)
     else:
@@ -289,22 +299,7 @@ def booking_success(request, appointment_id: int):
     return render(request, "repairs/booking_success.html", {"appointment": appointment})
 
 
-from django.db.models import Sum, Count, Q
-
-from django.contrib.admin.views.decorators import staff_member_required
-from django.db.models import Sum, Count, Max
-from django.utils import timezone
-
-from .models import ReferralRedemption  # убедись, что импорт есть
-
-from django.db.models import Sum, Count, Q
-from django.core.exceptions import FieldDoesNotExist
-
-def _parse_date_or(default_date, value):
-    try:
-        return datetime.fromisoformat(value).date() if value else default_date
-    except ValueError:
-        return default_date
+# ---------- отчёты по партнёрам ----------
 
 def referrals_report(request):
     """Итоги по всем партнёрам за период (?from=YYYY-MM-DD&to=YYYY-MM-DD&status=...)."""
@@ -312,15 +307,14 @@ def referrals_report(request):
     month_start = today.replace(day=1)
 
     date_from = _parse_date_or(month_start, request.GET.get("from"))
-    date_to   = _parse_date_or(today,       request.GET.get("to"))
-    status    = request.GET.get("status", "").strip()
+    date_to = _parse_date_or(today, request.GET.get("to"))
+    status = (request.GET.get("status") or "").strip()
 
     qs = ReferralRedemption.objects.filter(
         created_at__date__gte=date_from,
         created_at__date__lte=date_to,
     )
 
-    # Аккуратно проверяем, есть ли поле "status" в модели (на случай, если его ещё не добавили)
     has_status = True
     try:
         ReferralRedemption._meta.get_field("status")
@@ -330,7 +324,6 @@ def referrals_report(request):
     if has_status and status in {"pending", "accrued", "paid"}:
         qs = qs.filter(status=status)
 
-    # Агрегации
     annotate_kwargs = {
         "uses": Count("id"),
         "total_discount": Sum("discount_amount"),
@@ -340,13 +333,13 @@ def referrals_report(request):
         annotate_kwargs.update({
             "pending_commission": Sum("commission_amount", filter=Q(status="pending")),
             "accrued_commission": Sum("commission_amount", filter=Q(status="accrued")),
-            "paid_commission":    Sum("commission_amount", filter=Q(status="paid")),
+            "paid_commission": Sum("commission_amount", filter=Q(status="paid")),
         })
 
     rows = (
         qs.values("partner__id", "partner__name", "partner__code")
-          .annotate(**annotate_kwargs)
-          .order_by("partner__name")
+        .annotate(**annotate_kwargs)
+        .order_by("partner__name")
     )
 
     totals = qs.aggregate(
@@ -364,16 +357,17 @@ def referrals_report(request):
         "has_status": has_status,
     })
 
+
 def referrals_partner_report(request, code: str):
-    """Детальный отчёт по одному партнёру (?from=YYYY-MM-DD&to=YYYY-MM-DD&status=...)."""
+    """Деталка по одному партнёру (?from=YYYY-MM-DD&to=YYYY-MM-DD&status=...)."""
     partner = get_object_or_404(ReferralPartner, code__iexact=code)
 
     today = timezone.localdate()
     month_start = today.replace(day=1)
 
     date_from = _parse_date_or(month_start, request.GET.get("from"))
-    date_to   = _parse_date_or(today,       request.GET.get("to"))
-    status    = request.GET.get("status", "").strip()
+    date_to = _parse_date_or(today, request.GET.get("to"))
+    status = (request.GET.get("status") or "").strip()
 
     qs = ReferralRedemption.objects.filter(
         partner=partner,
@@ -381,7 +375,6 @@ def referrals_partner_report(request, code: str):
         created_at__date__lte=date_to,
     )
 
-    # Есть ли поле статус?
     has_status = True
     try:
         ReferralRedemption._meta.get_field("status")
@@ -391,17 +384,15 @@ def referrals_partner_report(request, code: str):
     if has_status and status in {"pending", "accrued", "paid"}:
         qs = qs.filter(status=status)
 
-    # Сводные суммы
     totals = qs.aggregate(
         uses=Count("id"),
         total_discount=Sum("discount_amount"),
         total_commission=Sum("commission_amount"),
     )
 
-    # Перечень операций (для таблицы)
     operations = (
         qs.select_related("appointment", "appointment__phone_model", "appointment__repair_type")
-          .order_by("-created_at")
+        .order_by("-created_at")
     )
 
     return render(request, "repairs/referrals_partner.html", {

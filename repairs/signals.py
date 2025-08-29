@@ -1,4 +1,6 @@
 # repairs/signals.py
+from __future__ import annotations
+
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
@@ -7,6 +9,15 @@ from .models import Appointment, ReferralPartner, ReferralRedemption
 from .services import calc_discount_and_commission
 from notify_tg.utils import notify_partner
 
+# Пытаемся импортировать функции для уведомлений админам (могут отсутствовать).
+try:
+    from notify_tg.utils import notify_admins, admin_appointment_link  # type: ignore
+except Exception:  # pragma: no cover
+    def notify_admins(text: str) -> int:  # type: ignore
+        return 0
+    def admin_appointment_link(appointment_id: int) -> str:  # type: ignore
+        return f"/admin/repairs/appointment/{appointment_id}/change/"
+
 
 def _short_phone(p: str) -> str:
     p = (p or "").strip()
@@ -14,11 +25,33 @@ def _short_phone(p: str) -> str:
 
 
 # =========================
-# 1) Appointment -> создаём/синхронизируем Redemption
-#    и шлём ТОЛЬКО "Новая заявка..." (при первом создании)
+# 1) Appointment:
+#    - ВСЕГДА шлём админам уведомление при создании;
+#    - создаём/синхронизируем Redemption (если указан referral_code);
+#    - партнёру шлём «Новая заявка...» только при первом создании Redemption.
 # =========================
 @receiver(post_save, sender=Appointment)
 def sync_referral_on_appointment_save(sender, instance: Appointment, created: bool, **kwargs):
+    # --- уведомление админам о ЛЮБОЙ новой заявке ---
+    if created:
+        a = instance
+        admin_msg = (
+            "Новая заявка\n"
+            f"ID: #{a.id}\n"
+            f"Клиент: {a.customer_name} ({_short_phone(a.customer_phone)})\n"
+            f"Устройство: {a.phone_model}\n"
+            f"Услуга: {a.repair_type.name}\n"
+            f"Дата/время: {a.start:%d.%m.%Y %H:%M}\n"
+            f"Итоговая цена: {a.price_final} BYN"
+            + (f"\nПартнёрский код: {a.referral_code}" if a.referral_code else "")
+            + f"\nАдминка: {admin_appointment_link(a.id)}"
+        )
+        try:
+            notify_admins(admin_msg)
+        except Exception:
+            pass
+
+    # --- рефералки ---
     code = (instance.referral_code or "").strip()
     if not code:
         return
@@ -28,14 +61,12 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
     except ReferralPartner.DoesNotExist:
         return
 
-    # Посчитать суммы по текущей цене/процентам
     discount, commission = calc_discount_and_commission(
         instance.price_original,
         partner.client_discount_pct,
         partner.partner_commission_pct,
     )
 
-    # Создать/обновить начисление
     redemption, was_created = ReferralRedemption.objects.get_or_create(
         partner=partner,
         appointment=instance,
@@ -55,8 +86,6 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
         redemption.commission_amount = commission
         changed = True
 
-    # Переводим в accrued, если заявка завершена.
-    # Уведомление об «начислении» пошлёт отдельный сигнал на ReferralRedemption (см. ниже).
     if instance.status == "done" and redemption.status not in ("accrued", "paid"):
         redemption.status = "accrued"
         changed = True
@@ -68,43 +97,41 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
     if changed:
         redemption.save(update_fields=["discount_amount", "commission_amount", "status", "paid_at"])
 
-    # Сообщаем только о НОВОЙ заявке (чтобы не дублировать последующие статусы)
     if was_created:
-        notify_partner(
-            partner,
-            (
-                "Новая заявка с вашим кодом\n"
-                f"Заявка #{instance.id}\n"
-                f"Клиент: {instance.customer_name} ({_short_phone(instance.customer_phone)})\n"
-                f"Услуга: {instance.repair_type.name}\n"
-                f"Устройство: {instance.phone_model}\n"
-                f"Дата/время: {instance.start:%d.%m.%Y %H:%M}\n"
-                f"Скидка клиенту: {redemption.discount_amount} BYN\n"
-                f"Комиссия партнёру: {redemption.commission_amount} BYN\n"
-                f"Статус начисления: {redemption.get_status_display()}"
-            ),
-        )
+        try:
+            notify_partner(
+                partner,
+                (
+                    "Новая заявка с вашим кодом\n"
+                    f"Заявка #{instance.id}\n"
+                    f"Клиент: {instance.customer_name} ({_short_phone(instance.customer_phone)})\n"
+                    f"Услуга: {instance.repair_type.name}\n"
+                    f"Устройство: {instance.phone_model}\n"
+                    f"Дата/время: {instance.start:%d.%m.%Y %H:%M}\n"
+                    f"Скидка клиенту: {redemption.discount_amount} BYN\n"
+                    f"Комиссия партнёру: {redemption.commission_amount} BYN\n"
+                    f"Статус начисления: {redemption.get_status_display()}"
+                ),
+            )
+        except Exception:
+            pass
 
 
 # =========================
 # 2) ReferralRedemption: ловим ПЕРЕХОДЫ статуса
 #    - pending -> accrued  => «Начисление по заявке выполнено»
-#    - (что угодно) -> paid => «Выплата произведена»
+#    - * -> paid           => «Выплата произведена»
 # =========================
 @receiver(pre_save, sender=ReferralRedemption)
 def _detect_status_transitions(sender, instance: ReferralRedemption, **kwargs):
     if not instance.pk:
-        # Новый объект — переходов ещё нет
         return
     try:
         prev = ReferralRedemption.objects.get(pk=instance.pk)
     except ReferralRedemption.DoesNotExist:
         return
 
-    # Флаг начисления
     instance._notify_to_accrued = (prev.status != "accrued" and instance.status == "accrued")
-
-    # Флаг выплаты
     instance._notify_to_paid = (prev.status != "paid" and instance.status == "paid")
     if instance._notify_to_paid and not instance.paid_at:
         instance.paid_at = timezone.now()
@@ -112,28 +139,32 @@ def _detect_status_transitions(sender, instance: ReferralRedemption, **kwargs):
 
 @receiver(post_save, sender=ReferralRedemption)
 def _notify_on_redemption_change(sender, instance: ReferralRedemption, created: bool, **kwargs):
-    # Сообщение о начислении (перешло в accrued)
     if getattr(instance, "_notify_to_accrued", False):
         a = instance.appointment
-        notify_partner(
-            instance.partner,
-            (
-                "Начисление по заявке выполнено\n"
-                f"Заявка #{a.id} от {a.start:%d.%m.%Y}\n"
-                f"Комиссия: {instance.commission_amount} BYN (статус: {instance.get_status_display()})"
-            ),
-        )
+        try:
+            notify_partner(
+                instance.partner,
+                (
+                    "Начисление по заявке выполнено\n"
+                    f"Заявка #{a.id} от {a.start:%d.%m.%Y}\n"
+                    f"Комиссия: {instance.commission_amount} BYN (статус: {instance.get_status_display()})"
+                ),
+            )
+        except Exception:
+            pass
         instance._notify_to_accrued = False
 
-    # Сообщение о выплате (перешло в paid)
     if getattr(instance, "_notify_to_paid", False):
-        notify_partner(
-            instance.partner,
-            (
-                "Выплата произведена\n"
-                f"Заявка #{instance.appointment_id}\n"
-                f"Комиссия: {instance.commission_amount} BYN\n"
-                f"Дата выплаты: {instance.paid_at:%d.%m.%Y %H:%M}"
-            ),
-        )
+        try:
+            notify_partner(
+                instance.partner,
+                (
+                    "Выплата произведена\n"
+                    f"Заявка #{instance.appointment_id}\n"
+                    f"Комиссия: {instance.commission_amount} BYN\n"
+                    f"Дата выплаты: {instance.paid_at:%d.%m.%Y %H:%M}"
+                ),
+            )
+        except Exception:
+            pass
         instance._notify_to_paid = False
