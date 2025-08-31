@@ -19,6 +19,7 @@ from django.utils import timezone
 class PhoneBrand(models.Model):
     name = models.CharField("Название бренда", max_length=50, unique=True)
     slug = models.SlugField("Слаг", unique=True)
+    logo = models.ImageField("Логотип", upload_to="brands/", blank=True, null=True)  # ← NEW
 
     class Meta:
         verbose_name = "Бренд"

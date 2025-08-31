@@ -9,6 +9,8 @@ from pathlib import Path
 
 # Базовая директория проекта
 BASE_DIR = Path(__file__).resolve().parent.parent
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 # ⚠️ В продакшене обязательно вынести в переменные окружения!
 SECRET_KEY = "django-insecure-naw19pjep&r2ge^oc+hnp%tcqenkqv&x140^dc+&2k!la1m6^-"
@@ -37,7 +39,7 @@ INSTALLED_APPS = [
 import os
 # 🔑 Токен Telegram-бота (Только для локальной разработки!)
 TELEGRAM_BOT_TOKEN = "8221103907:AAHD4RoedYbC2qfrWtN_5SzvxL4vIPbQnZY"
-TELEGRAM_ADMIN_CHAT_IDS = "486747175"
+TELEGRAM_ADMIN_CHAT_IDS = "486747175 , 703690659 "
 
 # SITE_URL="http://127.0.0.1:8000"
 

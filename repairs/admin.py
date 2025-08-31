@@ -2,14 +2,13 @@
 from django.contrib import admin, messages
 from django.utils import timezone
 from django.db.models import Sum
+from django.utils.html import format_html  # ← для превью логотипа
 
 from .models import (
     PhoneBrand, PhoneModel, RepairType, ModelRepairPrice,
     ReferralPartner, ReferralRedemption,
     Technician, WorkingHour, TimeOff, Appointment,
 )
-
-from notify_tg.utils import notify_partner  # <-- добавили
 
 # Русские заголовки панели администрирования
 admin.site.site_header = "Мастерская — панель администратора"
@@ -19,14 +18,22 @@ admin.site.index_title = "Управление данными и заказам�
 
 @admin.register(PhoneBrand)
 class PhoneBrandAdmin(admin.ModelAdmin):
-    list_display = ("name", "slug")
+    list_display = ("logo_thumb", "name", "slug")
+    search_fields = ("name", "slug")
     prepopulated_fields = {"slug": ("name",)}
+
+    def logo_thumb(self, obj: PhoneBrand):
+        if obj.logo:
+            return format_html('<img src="{}" style="height:28px;border-radius:6px;background:#fff;padding:2px">', obj.logo.url)
+        return "—"
+    logo_thumb.short_description = "Логотип"
 
 
 @admin.register(PhoneModel)
 class PhoneModelAdmin(admin.ModelAdmin):
     list_display = ("name", "brand", "category", "slug")
     list_filter = ("brand", "category")
+    search_fields = ("name", "brand__name")
     prepopulated_fields = {"slug": ("name",)}
 
 
@@ -66,7 +73,6 @@ class ReferralRedemptionAdmin(admin.ModelAdmin):
             if not r.paid_at:
                 r.paid_at = timezone.now()
             r.save(update_fields=["status", "paid_at"])
-            # уведомление отправит сигнал post_save
             updated += 1
         self.message_user(request, f"Отмечено выплаченными: {updated}", level=messages.SUCCESS)
 

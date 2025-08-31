@@ -8,52 +8,145 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" integrity="sha512-Kc323vGBEqzTmouAECnVceyQqyqdsSiqLQISBL29aUW4U/M7pSPA/gEUZQqv1cwx4OnYxTxvA5u3uJLD7GcsdQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <title>{% block title %}Ремонт телефонов{% endblock %}</title>
   <style>
-    :root { --gap:14px; --radius:14px; }
+    :root {
+      --gap:16px; --radius:14px;
+      --ink:#0f172a; --muted:#64748b;
+      --brd:#e5e7eb; --brd2:#cbd5e1;
+    }
     *{box-sizing:border-box}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;background:#f7f7f8;color:#111}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;background:#f7f7f8;color:var(--ink)}
+    a{color:inherit}
+
+    /* Шапка */
     header{background:#111;color:#fff}
-    header .wrap{max-width:960px;margin:0 auto;padding:14px 20px;display:flex;justify-content:space-between;align-items:center}
+    .wrap{max-width:1000px;margin:0 auto;padding:14px 20px}
+    header .row{display:flex;justify-content:space-between;align-items:center;gap:12px}
     header a{color:#fff;text-decoration:none}
-    main{max-width:960px;margin:0 auto;padding:20px}
+    header nav a{opacity:.95}
+    header nav a + a{margin-left:14px}
+    header nav a:hover{opacity:1;text-decoration:underline}
+
+    /* Контент */
+    main{max-width:1000px;margin:0 auto;padding:20px}
+
+    /* Общие элементы */
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--gap)}
-    .card{background:#fff;border:1px solid #e5e7eb;border-radius:var(--radius);padding:14px;text-decoration:none;color:#111}
-    .card:hover{border-color:#cbd5e1}
+    .card{background:#fff;border:1px solid var(--brd);border-radius:var(--radius);padding:14px;text-decoration:none;color:var(--ink)}
+    .card:hover{border-color:var(--brd2)}
     .btn{display:inline-block;background:#111;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;border:1px solid #111}
     .btn:hover{opacity:.95}
     .table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden}
-    .table th,.table td{padding:10px;border-bottom:1px solid #eee;text-align:left}
-    .muted{color:#666}
+    .table th,.table td{padding:10px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}
+    .muted{color:var(--muted)}
     .small{font-size:12px}
     label{display:block;margin:10px 0 6px}
     input,select{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;background:#fff}
     .messages{margin:0 0 12px 0;padding:0;list-style:none}
     .messages li{background:#f1f5f9;border:1px solid #e2e8f0;color:#0f172a;padding:8px 10px;border-radius:8px;margin-bottom:8px}
+
+    /* Подвал */
+    footer{background:#0b1220;color:#cbd5e1;margin-top:28px}
+    footer .grid{
+      display:grid;gap:18px;
+      grid-template-columns:1.2fr 1fr 1fr;
+    }
+    footer h4{margin:0 0 10px;font-size:14px;color:#e2e8f0;letter-spacing:.02em}
+    footer p, footer li, footer a{font-size:14px;line-height:1.6}
+    footer a{color:#e2e8f0;text-decoration:none}
+    footer a:hover{text-decoration:underline}
+    footer ul{margin:0;padding:0;list-style:none}
+    .f-bottom{
+      margin-top:14px;padding-top:12px;
+      border-top:1px solid rgba(255,255,255,.08);
+      display:flex;justify-content:space-between;align-items:center;gap:12px;
+      font-size:12px;color:#94a3b8;
+    }
+    .social a{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border:1px solid rgba(255,255,255,.15);border-radius:10px;margin-right:8px}
+    .social a:hover{background:rgba(255,255,255,.06)}
+    @media (max-width:820px){
+      footer .grid{grid-template-columns:1fr 1fr}
+    }
+    @media (max-width:560px){
+      .wrap{padding:14px}
+      main{padding:16px}
+      footer .grid{grid-template-columns:1fr}
+      .f-bottom{flex-direction:column;align-items:flex-start}
+    }
   </style>
 </head>
 <body>
   <header>
     <div class="wrap">
-      <a href="{% url 'repairs:brand_list' %}"><strong>Мастерская</strong></a>
-      <nav>
-  <a href="{% url 'repairs:brand_list' %}">Онлайн-калькулятор</a>
-  {% if request.user.is_staff %}
-    &nbsp;·&nbsp;<a href="{% url 'repairs:referrals_report' %}">Отчёт партнёров</a>
-
-  {% endif %}
-              {% if request.user.is_authenticated and request.user.is_staff %}
-        <a href="{% url 'admin:index' %}">Админ-панель</a>
-        <span class="small" style="opacity:.8">({{ request.user.username }})</span>
-
-      {% endif %}
-</nav>
-
+      <div class="row">
+        <a href="{% url 'repairs:brand_list' %}"><strong>Мастерская</strong></a>
+        <nav>
+          <a href="{% url 'repairs:brand_list' %}">Онлайн-калькулятор</a>
+          {% if request.user.is_staff %}
+            <a href="{% url 'repairs:referrals_report' %}">Отчёт партнёров</a>
+          {% endif %}
+          {% if request.user.is_authenticated and request.user.is_staff %}
+            <a href="{% url 'admin:index' %}">Админ-панель</a>
+            <span class="small" style="opacity:.8">({{ request.user.username }})</span>
+          {% endif %}
+        </nav>
+      </div>
     </div>
   </header>
+
   <main>
     {% if messages %}
       <ul class="messages">{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>
     {% endif %}
     {% block content %}{% endblock %}
   </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="grid">
+        <section>
+          <h4>Мастерская</h4>
+          <p class="small" style="margin:0 0 10px">
+            Чиним смартфоны, планшеты и часы. Сразу показываем цену и свободные слоты в календаре — записывайтесь онлайн.
+          </p>
+          <div class="social">
+            <!-- заполни ссылки на свои соцсети -->
+            <a href="#" aria-label="Telegram"><i class="fa-brands fa-telegram"></i></a>
+            <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
+            <a href="#" aria-label="Facebook"><i class="fa-brands fa-facebook"></i></a>
+          </div>
+        </section>
+
+        <section>
+          <h4>Контакты</h4>
+          <ul>
+            <li><i class="fa-solid fa-location-dot"></i>&nbsp; г. Минск, ул. Пример, 1</li>
+            <li><i class="fa-solid fa-phone"></i>&nbsp; <a href="tel:+375291234567">+375 (29) 123-45-67</a></li>
+            <li><i class="fa-solid fa-envelope"></i>&nbsp; <a href="mailto:hello@example.com">hello@example.com</a></li>
+            <li><i class="fa-solid fa-clock"></i>&nbsp; Пн–Пт 09:00–17:00, Сб 10:00–14:00</li>
+          </ul>
+        </section>
+
+        <section>
+          <h4>Ссылки</h4>
+          <ul>
+            <li><a href="{% url 'repairs:brand_list' %}">Калькулятор ремонта</a></li>
+            {% if request.user.is_staff %}
+              <li><a href="{% url 'repairs:referrals_report' %}">Отчёт партнёров</a></li>
+            {% endif %}
+            {% if request.user.is_authenticated and request.user.is_staff %}
+              <li><a href="{% url 'admin:index' %}">Админ-панель</a></li>
+            {% endif %}
+            <li><a href="#">Политика конфиденциальности</a></li>
+            <li><a href="#">Условия сервиса</a></li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="f-bottom">
+        <div>© {% now "Y" %} «Мастерская». Все права защищены.</div>
+        <div class="small">Сайт создан для демонстрации — цены и сроки указаны для примера.</div>
+      </div>
+    </div>
+  </footer>
 </body>
 </html>

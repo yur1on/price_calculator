@@ -2,42 +2,128 @@
 {% block title %}Выбор бренда{% endblock %}
 {% block content %}
 <style>
-  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 16px}
-  .chip{padding:8px 12px;border:1px solid #e5e7eb;border-radius:999px;text-decoration:none;color:#111}
+  :root{
+    --bg:#0b1220;       /* фон hero-градиента */
+    --ink:#0f172a;      /* основной текст */
+    --muted:#64748b;    /* вторичный текст */
+    --card:#ffffff;     /* карточки */
+    --brd:#e5e7eb;      /* бордер карточек/инпутов */
+    --brd-hover:#cbd5e1;
+    --accent:#0ea5e9;   /* акцент (чипы/лого-фон по умолчанию) */
+    --radius:14px;
+    --gap:16px;
+  }
+
+  /* ——— Hero ——— */
+  .hero{
+    background: radial-gradient(1200px 600px at 10% 0%, #111 0%, #1f2937 40%, #0ea5e9 140%);
+    color:#fff;border-radius:18px;padding:28px 24px;margin:0 0 22px;
+    box-shadow: 0 10px 30px rgba(2,8,23,.2);
+  }
+  .hero h1{font-size:30px;line-height:1.15;margin:0 0 10px;letter-spacing:.2px}
+  .hero p{margin:0;opacity:.9;max-width:760px;font-size:16px}
+
+  /* ——— Категории ——— */
+  .toolbar{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin:6px 0 18px}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{
+    padding:10px 14px;border:1px solid var(--brd);border-radius:999px;
+    text-decoration:none;color:var(--ink);background:#fff;font-weight:600;
+    transition:.18s background,.18s color,.18s border-color,.18s transform;
+  }
+  .chip:hover{transform:translateY(-1px)}
   .chip.active{background:#111;color:#fff;border-color:#111}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
-  .card{border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#fff}
-  .card a{text-decoration:none;color:#111;font-weight:600}
-  .muted{color:#64748b}
+  .chips-label{font-size:13px;color:var(--muted);margin:0 0 6px}
+
+  /* ——— Сетка брендов ——— */
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
+    gap:var(--gap);
+  }
+  .card{
+    display:flex;align-items:center;gap:14px;
+    background:var(--card);border:1px solid var(--brd);border-radius:var(--radius);
+    padding:14px 16px;text-decoration:none;color:var(--ink);
+    transition:.2s border-color,.2s transform,.2s box-shadow;
+  }
+  .card:hover{
+    border-color:var(--brd-hover);transform:translateY(-2px);
+    box-shadow:0 8px 20px rgba(2,8,23,.06);
+  }
+
+  .avatar{
+    width:52px;height:52px;border-radius:12px;overflow:hidden;flex:0 0 52px;
+    background:#fff;border:1px solid var(--brd);display:grid;place-items:center;
+  }
+  .avatar img{
+    width:100%;height:100%;object-fit:contain;background:#fff;
+  }
+  .avatar .letter{
+    width:100%;height:100%;display:grid;place-items:center;
+    background:linear-gradient(135deg, var(--accent), #60a5fa);
+    color:#fff;font-weight:800;font-size:18px;
+  }
+
+  .title{font-weight:800;letter-spacing:.2px}
+  .sub{font-size:12px;color:var(--muted);margin-top:2px}
+
+  .section-title{margin:2px 0 10px;font-size:18px;letter-spacing:.2px}
+
+  /* ——— Адаптив ——— */
+  @media (max-width:760px){
+    .hero{padding:22px 18px}
+    .hero h1{font-size:24px}
+  }
+  @media (max-width:560px){
+    .grid{grid-template-columns:1fr}
+  }
 </style>
 
+<!-- Hero / промо -->
+<section class="hero">
+  <h1>Ремонт без лишних вопросов</h1>
+  <p>Сразу показываем стоимость и реальные слоты в календаре — запишитесь на удобное время. Оставьте заявку в пару кликов.</p>
+</section>
 
-
-<div class="chips">
-  {% for key,label in categories %}
-    {% if selected_cat == key %}
-      <span class="chip active">{{ label }}</span>
-    {% else %}
-      <a class="chip" href="?cat={{ key }}">{{ label }}</a>
-    {% endif %}
-  {% endfor %}
+<!-- Фильтр категорий -->
+<div class="toolbar">
+  <div>
+    <div class="chips-label">Категория устройства</div>
+    <div class="chips">
+      {% for key,label in categories %}
+        {% if selected_cat == key %}
+          <span class="chip active">{{ label }}</span>
+        {% else %}
+          <a class="chip" href="?cat={{ key }}">{{ label }}</a>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
 </div>
 
-<h1>Выберите бренд</h1>
-
+<h2 class="section-title">Выберите бренд</h2>
 
 {% if brands %}
   <div class="grid">
     {% for b in brands %}
-      <div class="card">
-        <a href="{% url 'repairs:model_list' brand_slug=b.slug %}?cat={{ selected_cat }}">
-          {{ b.name }}
-        </a>
-        <div class="muted">Смотреть модели</div>
-      </div>
+      <a class="card" href="{% url 'repairs:model_list' brand_slug=b.slug %}?cat={{ selected_cat }}">
+        <span class="avatar">
+          {% if b.logo %}
+            {# фиксируем размеры для уменьшения «скачков» контента #}
+            <img src="{{ b.logo.url }}" alt="{{ b.name }}" width="52" height="52" loading="lazy" decoding="async">
+          {% else %}
+            <span class="letter">{{ b.name|first|upper }}</span>
+          {% endif %}
+        </span>
+        <span>
+          <div class="title">{{ b.name }}</div>
+          <div class="sub">Смотреть модели</div>
+        </span>
+      </a>
     {% endfor %}
   </div>
 {% else %}
-  <p class="muted">Для выбранной категории брендов не найдено.</p>
+  <p class="sub">Для выбранной категории брендов не найдено.</p>
 {% endif %}
 {% endblock %}
