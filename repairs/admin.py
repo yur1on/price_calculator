@@ -1,8 +1,10 @@
-"""Админка приложения repairs (на русском)."""
+"""Админка приложения repairs (обновлено под django-unfold)."""
 from django.contrib import admin, messages
 from django.utils import timezone
 from django.db.models import Sum
-from django.utils.html import format_html  # ← для превью логотипа
+from django.utils.html import format_html
+
+from unfold.admin import ModelAdmin  # <-- базовый класс от Unfold
 
 from .models import (
     PhoneBrand, PhoneModel, RepairType, ModelRepairPrice,
@@ -10,61 +12,118 @@ from .models import (
     Technician, WorkingHour, TimeOff, Appointment,
 )
 
-# Русские заголовки панели администрирования
+# Если вы используете UNFOLD настройки (SITE_TITLE, и т.п.) — эти строки можно не трогать.
 admin.site.site_header = "Мастерская — панель администратора"
 admin.site.site_title = "Админка Мастерской"
 admin.site.index_title = "Управление данными и заказами"
 
 
+# -----------------------
+# Бренды / Модели
+# -----------------------
+class ModelRepairPriceInline(admin.TabularInline):
+    model = ModelRepairPrice
+    extra = 0
+    autocomplete_fields = ("repair_type",)
+    fields = ("repair_type", "price", "duration_min", "is_active")
+    show_change_link = True
+
+
 @admin.register(PhoneBrand)
-class PhoneBrandAdmin(admin.ModelAdmin):
+class PhoneBrandAdmin(ModelAdmin):
     list_display = ("logo_thumb", "name", "slug")
     search_fields = ("name", "slug")
     prepopulated_fields = {"slug": ("name",)}
+    ordering = ("name",)
 
+    @admin.display(description="Логотип")
     def logo_thumb(self, obj: PhoneBrand):
-        if obj.logo:
-            return format_html('<img src="{}" style="height:28px;border-radius:6px;background:#fff;padding:2px">', obj.logo.url)
+        if getattr(obj, "logo", None):
+            try:
+                return format_html(
+                    '<img src="{}" style="height:28px;border-radius:6px;background:#fff;padding:2px">',
+                    obj.logo.url,
+                )
+            except Exception:
+                # на случай отсутствия MEDIA настроек в dev
+                return "—"
         return "—"
-    logo_thumb.short_description = "Логотип"
 
 
 @admin.register(PhoneModel)
-class PhoneModelAdmin(admin.ModelAdmin):
+class PhoneModelAdmin(ModelAdmin):
     list_display = ("name", "brand", "category", "slug")
     list_filter = ("brand", "category")
-    search_fields = ("name", "brand__name")
+    search_fields = ("name", "brand__name", "slug")
     prepopulated_fields = {"slug": ("name",)}
+    ordering = ("brand__name", "category", "name")
+    inlines = (ModelRepairPriceInline,)
+    list_select_related = ("brand",)
 
 
+# -----------------------
+# Ремонты / Цены
+# -----------------------
 @admin.register(RepairType)
-class RepairTypeAdmin(admin.ModelAdmin):
+class RepairTypeAdmin(ModelAdmin):
     list_display = ("name", "default_duration_min", "slug")
     prepopulated_fields = {"slug": ("name",)}
+    search_fields = ("name", "slug")
+    ordering = ("name",)
 
 
 @admin.register(ModelRepairPrice)
-class ModelRepairPriceAdmin(admin.ModelAdmin):
+class ModelRepairPriceAdmin(ModelAdmin):
     list_display = ("phone_model", "repair_type", "price", "duration_min", "is_active")
     list_filter = ("phone_model__brand", "repair_type", "is_active")
     search_fields = ("phone_model__name", "repair_type__name")
+    list_select_related = ("phone_model", "phone_model__brand", "repair_type")
+    ordering = ("phone_model__brand__name", "phone_model__name", "repair_type__name")
+    autocomplete_fields = ("phone_model", "repair_type")
 
 
+# -----------------------
+# Реферальные партнёры и начисления
+# -----------------------
 @admin.register(ReferralPartner)
-class ReferralPartnerAdmin(admin.ModelAdmin):
+class ReferralPartnerAdmin(ModelAdmin):
     list_display = ("name", "code", "client_discount_pct", "partner_commission_pct", "expires_at", "max_uses")
     search_fields = ("name", "code")
+    ordering = ("name",)
 
 
 @admin.register(ReferralRedemption)
-class ReferralRedemptionAdmin(admin.ModelAdmin):
+class ReferralRedemptionAdmin(ModelAdmin):
     date_hierarchy = "created_at"
-    list_display = ("created_at", "partner", "appointment", "phone",
-                    "discount_amount", "commission_amount", "status", "paid_at")
+    list_display = (
+        "created_at", "partner", "appointment", "phone",
+        "discount_amount", "commission_amount", "status_badge", "paid_at",
+    )
     list_filter = ("partner", "status", "created_at")
     search_fields = ("partner__name", "partner__code", "phone", "appointment__customer_name")
     actions = ("mark_as_paid", "mark_as_unpaid", "show_totals")
+    list_select_related = ("partner", "appointment", "appointment__phone_model", "appointment__repair_type")
+    list_per_page = 50
+    autocomplete_fields = ("partner", "appointment")
+    ordering = ("-created_at",)
 
+    @admin.display(description="Статус")
+    def status_badge(self, obj: ReferralRedemption):
+        # Небольшой бейдж в списке
+        colors = {
+            "pending": "#f59e0b",   # amber
+            "accrued": "#10b981",   # emerald
+            "paid": "#3b82f6",      # blue
+        }
+        color = colors.get(obj.status, "#6b7280")
+        text = obj.get_status_display()
+        return format_html(
+            '<span style="display:inline-block;padding:2px 8px;border-radius:999px;'
+            'background:{}20;color:{};border:1px solid {}33;font-size:12px">{}</span>',
+            color, color, color, text
+        )
+
+    # --- действия ---
     @admin.action(description="Отметить как выплачено")
     def mark_as_paid(self, request, queryset):
         updated = 0
@@ -94,31 +153,82 @@ class ReferralRedemptionAdmin(admin.ModelAdmin):
         )
 
 
+# -----------------------
+# Персонал и расписание
+# -----------------------
 @admin.register(Technician)
-class TechnicianAdmin(admin.ModelAdmin):
+class TechnicianAdmin(ModelAdmin):
     list_display = ("name",)
     filter_horizontal = ("skills",)
+    search_fields = ("name",)
+    ordering = ("name",)
 
 
 @admin.register(WorkingHour)
-class WorkingHourAdmin(admin.ModelAdmin):
+class WorkingHourAdmin(ModelAdmin):
     list_display = ("weekday", "start", "end")
     list_filter = ("weekday",)
+    ordering = ("weekday", "start")
 
 
 @admin.register(TimeOff)
-class TimeOffAdmin(admin.ModelAdmin):
+class TimeOffAdmin(ModelAdmin):
     list_display = ("technician", "start", "end", "reason")
     list_filter = ("technician",)
+    list_select_related = ("technician",)
+    ordering = ("-start",)
 
 
+# -----------------------
+# Записи
+# -----------------------
 @admin.register(Appointment)
-class AppointmentAdmin(admin.ModelAdmin):
+class AppointmentAdmin(ModelAdmin):
+    date_hierarchy = "start"
     list_display = (
         "customer_name", "customer_phone",
         "phone_model", "repair_type",
-        "start", "end", "status",
+        "start", "end", "status_badge",
         "price_original", "discount_amount", "price_final",
     )
     list_filter = ("status", "phone_model__brand", "repair_type")
-    search_fields = ("customer_name", "customer_phone")
+    search_fields = ("customer_name", "customer_phone", "referral_code")
+    list_select_related = ("phone_model", "phone_model__brand", "repair_type", "technician")
+    autocomplete_fields = ("phone_model", "repair_type", "technician")
+    ordering = ("-start",)
+
+    fieldsets = (
+        ("Клиент", {
+            "fields": ("customer_name", "customer_phone", "referral_code", "status")
+        }),
+        ("Устройство и услуга", {
+            "fields": ("phone_model", "repair_type", "technician")
+        }),
+        ("Время", {
+            "fields": ("start", "end")
+        }),
+        ("Оплата", {
+            "fields": ("price_original", "discount_amount", "price_final")
+        }),
+        ("Служебное", {
+            "fields": ("created_at",),
+            "classes": ("collapse",),
+        }),
+    )
+    readonly_fields = ("created_at",)
+
+    @admin.display(description="Статус")
+    def status_badge(self, obj: Appointment):
+        colors = {
+            "new": "#6366f1",        # indigo
+            "confirmed": "#0ea5e9",  # sky
+            "done": "#10b981",       # emerald
+            "cancelled": "#ef4444",  # red
+        }
+        color = colors.get(obj.status, "#6b7280")
+        text = obj.get_status_display()
+        return format_html(
+            '<span style="display:inline-block;padding:2px 8px;border-radius:999px;'
+            'background:{}20;color:{};border:1px solid {}33;font-size:12px">{}</span>',
+            color, color, color, text
+        )

@@ -24,6 +24,10 @@ ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
 # Приложения
 INSTALLED_APPS = [
+    "unfold",  # обязательно до django.contrib.admin
+    "unfold.contrib.filters",  # опционально (диапазоны дат/чисел и т.п.)
+    "unfold.contrib.forms",  # опционально
+
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -106,8 +110,11 @@ USE_TZ = True
 
 # Статические файлы
 STATIC_URL = "static/"
-# Для продакшена можно раскомментировать:
+STATIC_URL = "static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]  # если кладёте статические в /static рядом с manage.py
+# Для продакшена:
 # STATIC_ROOT = BASE_DIR / "staticfiles"
+
 
 # Тип автоинкрементного ключа по умолчанию
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
