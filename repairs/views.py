@@ -1,5 +1,7 @@
 # repairs/views.py
 from __future__ import annotations
+from django.conf import settings
+from django.contrib import messages
 
 import re
 from datetime import date, datetime, timedelta
@@ -115,7 +117,11 @@ def get_available_slots(
     start_date: date | None = None,
     tz=None,
 ) -> list[datetime]:
-    """Вернуть список доступных слотов от start_date на days дней вперёд."""
+    """Вернуть список доступных слотов от start_date на days дней вперёд.
+
+    Теперь конфликт проверяется ГЛОБАЛЬНО: любые заявки (кроме отменённых),
+    независимо от модели/услуги, блокируют слот, если превышают ёмкость.
+    """
     # длительность
     try:
         price_entry = ModelRepairPrice.objects.get(
@@ -134,14 +140,26 @@ def get_available_slots(
     if start_date is None:
         start_date = now.date()
 
+    # Диапазон, в пределах которого будем собирать слоты и заранее подтащим все заявки
+    from datetime import time as _time
+    range_start = timezone.make_aware(datetime.combine(start_date, _time.min), tz)
+    range_end = timezone.make_aware(
+        datetime.combine(start_date + timedelta(days=days), _time.min), tz
+    )
+
+    # Берём все НЕ отменённые заявки, пересекающиеся с диапазоном сетки
+    existing = list(
+        Appointment.objects.filter(
+            status__in=["new", "confirmed", "done"],
+            start__lt=range_end,
+            end__gt=range_start,
+        ).values_list("start", "end")
+    )
+
+    capacity = int(getattr(settings, "REPAIRS_MAX_PARALLEL_APPOINTMENTS", 1))
+
     slots: list[datetime] = []
     working_hours = list(WorkingHour.objects.all())
-    appointments = Appointment.objects.filter(
-        phone_model=phone_model,
-        repair_type=repair_type,
-        status__in=["new", "confirmed", "done"],
-        start__gte=now - timedelta(days=1),
-    )
 
     for day_offset in range(days):
         current_date = start_date + timedelta(days=day_offset)
@@ -149,6 +167,7 @@ def get_available_slots(
         day_hours = [wh for wh in working_hours if wh.weekday == weekday]
 
         for wh in day_hours:
+            # Окно работы за день
             naive_start = datetime.combine(current_date, wh.start)
             naive_end = datetime.combine(current_date, wh.end)
             slot_start_time = timezone.make_aware(naive_start, tz)
@@ -156,16 +175,19 @@ def get_available_slots(
 
             current_slot = slot_start_time
             while current_slot + duration <= slot_end_time:
+                # Не показывать прошлое
                 if current_slot < now:
                     current_slot += duration
                     continue
+
                 end_slot = current_slot + duration
-                conflict = appointments.filter(
-                    start__lt=end_slot,
-                    end__gt=current_slot,
-                ).exists()
-                if not conflict:
+
+                # Считаем, сколько уже есть пересечений в этот интервал
+                overlaps = sum(1 for s, e in existing if s < end_slot and e > current_slot)
+
+                if overlaps < capacity:
                     slots.append(current_slot)
+
                 current_slot += duration
 
     return slots
@@ -231,26 +253,37 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
 
 
 def book(request, brand_slug: str, model_slug: str, repair_slug: str):
-    """Обработка формы бронирования для выбранного слота."""
+    """Создание брони для выбранного слота (с глобальной проверкой занятости)."""
+    from django.conf import settings
+    from django.contrib import messages
+    from django.db import transaction
+
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
     model = get_object_or_404(PhoneModel, brand=brand, slug=model_slug)
     repair_type = get_object_or_404(RepairType, slug=repair_slug)
 
+    # слот обязателен
     slot_str = request.GET.get("slot")
     if not slot_str:
-        return redirect("repairs:slot_select", brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
+        return redirect("repairs:slot_select",
+                        brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 
-    # Подстраховка: '+' мог превратиться в пробел
+    # подстраховка: '+' мог превратиться в пробел
     slot_str = slot_str.replace(" ", "+")
     try:
         slot_dt = datetime.fromisoformat(slot_str)
         if slot_dt.tzinfo is None:
             slot_dt = timezone.make_aware(slot_dt)
     except ValueError:
-        return redirect("repairs:slot_select", brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
+        messages.error(request, "Некорректный слот времени.")
+        return redirect("repairs:slot_select",
+                        brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 
+    # длительность и цена
     try:
-        price_entry = ModelRepairPrice.objects.get(phone_model=model, repair_type=repair_type, is_active=True)
+        price_entry = ModelRepairPrice.objects.get(
+            phone_model=model, repair_type=repair_type, is_active=True
+        )
         duration_min = price_entry.duration_min
         price = price_entry.price
     except ModelRepairPrice.DoesNotExist:
@@ -259,24 +292,50 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
 
     end_dt = slot_dt + timedelta(minutes=duration_min)
 
+    # базовая проверка занятости (глобально по всем заявкам, кроме отменённых)
+    capacity = int(getattr(settings, "REPAIRS_MAX_PARALLEL_APPOINTMENTS", 1))
+    overlaps = Appointment.objects.filter(
+        status__in=["new", "confirmed", "done"],
+        start__lt=end_dt,
+        end__gt=slot_dt,
+    ).count()
+    if overlaps >= capacity:
+        messages.error(request, "Этот слот уже занят. Пожалуйста, выберите другое время.")
+        return redirect("repairs:slot_select",
+                        brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
+
     if request.method == "POST":
         form = BookingForm(request.POST)
         if form.is_valid():
-            app = Appointment(
-                phone_model=model,
-                repair_type=repair_type,
-                start=slot_dt,
-                end=end_dt,
-                customer_name=form.cleaned_data["customer_name"],
-                customer_phone=form.cleaned_data["customer_phone"],
-                referral_code=form.cleaned_data.get("referral_code", "").strip(),
-                price_original=price,
-            )
-            app.apply_referral()
-            if not app.price_final:
-                app.price_final = app.price_original - app.discount_amount
-            app.save()
-            # ReferralRedemption создаст сигнал
+            # Повторная проверка в транзакции — защита от гонок
+            with transaction.atomic():
+                overlaps = (Appointment.objects
+                            .select_for_update()
+                            .filter(
+                                status__in=["new", "confirmed", "done"],
+                                start__lt=end_dt,
+                                end__gt=slot_dt,
+                            )
+                            .count())
+                if overlaps >= capacity:
+                    messages.error(request, "К сожалению, этот слот только что заняли. Выберите другое время.")
+                    return redirect("repairs:slot_select",
+                                    brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
+
+                app = Appointment(
+                    phone_model=model,
+                    repair_type=repair_type,
+                    start=slot_dt,
+                    end=end_dt,
+                    customer_name=form.cleaned_data["customer_name"],
+                    customer_phone=form.cleaned_data["customer_phone"],
+                    referral_code=form.cleaned_data.get("referral_code", "").strip(),
+                    price_original=price,
+                )
+                app.apply_referral()
+                if not app.price_final:
+                    app.price_final = app.price_original - app.discount_amount
+                app.save()  # ReferralRedemption создаст сигнал
 
             return redirect("repairs:booking_success", appointment_id=app.id)
     else:

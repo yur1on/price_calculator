@@ -43,7 +43,7 @@ INSTALLED_APPS = [
 import os
 # 🔑 Токен Telegram-бота (Только для локальной разработки!)
 TELEGRAM_BOT_TOKEN = "8221103907:AAHD4RoedYbC2qfrWtN_5SzvxL4vIPbQnZY"
-TELEGRAM_ADMIN_CHAT_IDS = "486747175 , 703690659 "
+TELEGRAM_ADMIN_CHAT_IDS = "486747175"
 
 # SITE_URL="http://127.0.0.1:8000"
 
@@ -118,3 +118,6 @@ STATICFILES_DIRS = [BASE_DIR / "static"]  # если кладёте статич
 
 # Тип автоинкрементного ключа по умолчанию
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Сколько заявок можно вести параллельно (1 = запрещать любые пересечения)
+REPAIRS_MAX_PARALLEL_APPOINTMENTS = 2
