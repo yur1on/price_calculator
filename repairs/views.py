@@ -2,7 +2,14 @@
 from __future__ import annotations
 from django.conf import settings
 from django.contrib import messages
-
+from typing import List
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from django.conf import settings
+from django.contrib import messages
+from django.db import transaction
+from django.shortcuts import render, get_object_or_404, redirect
+from django.utils import timezone
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -116,13 +123,16 @@ def get_available_slots(
     days: int = 7,
     start_date: date | None = None,
     tz=None,
-) -> list[datetime]:
-    """Вернуть список доступных слотов от start_date на days дней вперёд.
-
-    Теперь конфликт проверяется ГЛОБАЛЬНО: любые заявки (кроме отменённых),
-    независимо от модели/услуги, блокируют слот, если превышают ёмкость.
+) -> List[datetime]:
     """
-    # длительность
+    Вернуть список доступных слотов от start_date на days дней вперёд.
+
+    Конфликты считаются ГЛОБАЛЬНО: любые заявки (кроме отменённых),
+    независимо от модели/услуги, блокируют слот, если превышают ёмкость.
+
+    Ёмкость читается из settings.REPAIRS_MAX_PARALLEL_APPOINTMENTS (по умолчанию 1).
+    """
+    # 1) длительность услуги
     try:
         price_entry = ModelRepairPrice.objects.get(
             phone_model=phone_model, repair_type=repair_type, is_active=True
@@ -132,22 +142,19 @@ def get_available_slots(
         duration_min = repair_type.default_duration_min
     duration = timedelta(minutes=duration_min)
 
-    # таймзона/сейчас
+    # 2) таймзона/сейчас
     tz = tz or timezone.get_current_timezone()
     now = timezone.localtime(timezone.now(), tz)
 
-    # стартовая дата
+    # 3) стартовая дата
     if start_date is None:
         start_date = now.date()
 
-    # Диапазон, в пределах которого будем собирать слоты и заранее подтащим все заявки
+    # 4) заранее вытаскиваем все НЕ отменённые заявки, пересекающиеся с диапазоном сетки
     from datetime import time as _time
     range_start = timezone.make_aware(datetime.combine(start_date, _time.min), tz)
-    range_end = timezone.make_aware(
-        datetime.combine(start_date + timedelta(days=days), _time.min), tz
-    )
+    range_end = timezone.make_aware(datetime.combine(start_date + timedelta(days=days), _time.min), tz)
 
-    # Берём все НЕ отменённые заявки, пересекающиеся с диапазоном сетки
     existing = list(
         Appointment.objects.filter(
             status__in=["new", "confirmed", "done"],
@@ -156,9 +163,11 @@ def get_available_slots(
         ).values_list("start", "end")
     )
 
+    # 5) ёмкость (сколько ремонтов можно вести параллельно)
     capacity = int(getattr(settings, "REPAIRS_MAX_PARALLEL_APPOINTMENTS", 1))
 
-    slots: list[datetime] = []
+    # 6) собираем слоты по рабочим часам
+    slots: List[datetime] = []
     working_hours = list(WorkingHour.objects.all())
 
     for day_offset in range(days):
@@ -167,7 +176,7 @@ def get_available_slots(
         day_hours = [wh for wh in working_hours if wh.weekday == weekday]
 
         for wh in day_hours:
-            # Окно работы за день
+            # окно работы за день
             naive_start = datetime.combine(current_date, wh.start)
             naive_end = datetime.combine(current_date, wh.end)
             slot_start_time = timezone.make_aware(naive_start, tz)
@@ -175,14 +184,14 @@ def get_available_slots(
 
             current_slot = slot_start_time
             while current_slot + duration <= slot_end_time:
-                # Не показывать прошлое
+                # не показываем прошлое
                 if current_slot < now:
                     current_slot += duration
                     continue
 
                 end_slot = current_slot + duration
 
-                # Считаем, сколько уже есть пересечений в этот интервал
+                # сколько пересечений уже есть в этот интервал
                 overlaps = sum(1 for s, e in existing if s < end_slot and e > current_slot)
 
                 if overlaps < capacity:
@@ -253,11 +262,9 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
 
 
 def book(request, brand_slug: str, model_slug: str, repair_slug: str):
-    """Создание брони для выбранного слота (с глобальной проверкой занятости)."""
-    from django.conf import settings
-    from django.contrib import messages
-    from django.db import transaction
-
+    """
+    Создание брони для выбранного слота (с глобальной проверкой занятости и защитой от гонок).
+    """
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
     model = get_object_or_404(PhoneModel, brand=brand, slug=model_slug)
     repair_type = get_object_or_404(RepairType, slug=repair_slug)
@@ -292,7 +299,7 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
 
     end_dt = slot_dt + timedelta(minutes=duration_min)
 
-    # базовая проверка занятости (глобально по всем заявкам, кроме отменённых)
+    # первичная проверка занятости (глобально по всем активным заявкам)
     capacity = int(getattr(settings, "REPAIRS_MAX_PARALLEL_APPOINTMENTS", 1))
     overlaps = Appointment.objects.filter(
         status__in=["new", "confirmed", "done"],
@@ -307,7 +314,7 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
     if request.method == "POST":
         form = BookingForm(request.POST)
         if form.is_valid():
-            # Повторная проверка в транзакции — защита от гонок
+            # повторная проверка в транзакции — защита от гонок (на SQLite select_for_update не блокирует, но не мешает)
             with transaction.atomic():
                 overlaps = (Appointment.objects
                             .select_for_update()
@@ -350,7 +357,6 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
         "price": price,
         "form": form,
     })
-
 
 def booking_success(request, appointment_id: int):
     """Страница подтверждения после успешного бронирования."""
