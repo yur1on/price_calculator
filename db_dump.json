@@ -1,0 +1,826 @@
+[
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$RuEscpPI3LqWYXwTKktoRH$4tKP0B1/XT2I1fV7SYdCZfibcsoGI3GuGnuly54nKSs=",
+    "last_login": "2025-08-29T21:19:32.100Z",
+    "is_superuser": true,
+    "username": "yura",
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2025-08-27T22:02:17.117Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 1,
+  "fields": {
+    "name": "Xiaomi",
+    "slug": "xiaomi",
+    "logo": "brands/png-clipart-button-ui-requests-xiaomi-logo-thumbnail.png"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 2,
+  "fields": {
+    "name": "Huawei",
+    "slug": "huawei",
+    "logo": "brands/png-clipart-logo-huawei-design-mobile-phones-product-logo-oppo-logo-mobile-phones.png"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 3,
+  "fields": {
+    "name": "Realme",
+    "slug": "realme",
+    "logo": "brands/realme-logo-freelogovectors.net_.png"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 5,
+  "fields": {
+    "name": "Tecno",
+    "slug": "tecno",
+    "logo": "brands/Tecno_Mobile_logo.svg.png"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 6,
+  "fields": {
+    "name": "Infinix",
+    "slug": "infinix",
+    "logo": "brands/infinix-logo-png_seeklogo-458909.png"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 7,
+  "fields": {
+    "name": "Samsung",
+    "slug": "samsung",
+    "logo": "brands/15342424012546stOSyD1tdeGZGwS.png"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 8,
+  "fields": {
+    "name": "Vivo",
+    "slug": "vivo",
+    "logo": "brands/png-transparent-vivo-icon-blue-vivo-icon.png"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 9,
+  "fields": {
+    "name": "TCL",
+    "slug": "tcl",
+    "logo": "brands/png-transparent-tcl-hd-logo-thumbnail.png"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 10,
+  "fields": {
+    "name": "Oppo",
+    "slug": "oppo",
+    "logo": "brands/i.webp"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 11,
+  "fields": {
+    "name": "Google",
+    "slug": "google",
+    "logo": "brands/google-icon-3d-render_68185-1080.avif"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 12,
+  "fields": {
+    "name": "OnePlus",
+    "slug": "oneplus",
+    "logo": "brands/png-transparent-oneplus-5t-oneplus-6-oneplus-3-oneplus-logo-text-rectangle-logo.png"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 13,
+  "fields": {
+    "name": "Alcatel",
+    "slug": "alcatel",
+    "logo": ""
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 14,
+  "fields": {
+    "name": "Amigo",
+    "slug": "amigo",
+    "logo": ""
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 15,
+  "fields": {
+    "name": "Asus",
+    "slug": "asus",
+    "logo": ""
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 16,
+  "fields": {
+    "name": "Cubot",
+    "slug": "cubot",
+    "logo": ""
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 17,
+  "fields": {
+    "name": "Apple",
+    "slug": "apple",
+    "logo": "brands/png-clipart-apple-logo-apple-logo-white-heart.png"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 18,
+  "fields": {
+    "name": "Honor",
+    "slug": "honor",
+    "logo": "brands/khonor-logo-1.webp"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 19,
+  "fields": {
+    "name": "Nokia",
+    "slug": "nokia",
+    "logo": "brands/nokia-logo-png_seeklogo-100358.png"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 20,
+  "fields": {
+    "name": "Doogee",
+    "slug": "doogee",
+    "logo": "brands/4ieihmy1b5tenrz1nktvjog9sg6awypu.png"
+  }
+},
+{
+  "model": "repairs.phonebrand",
+  "pk": 21,
+  "fields": {
+    "name": "Motorola",
+    "slug": "motorola",
+    "logo": "brands/Motorola_M_symbol_black.svg.png"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 1,
+  "fields": {
+    "brand": 1,
+    "name": "mi4",
+    "slug": "mi4",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 10,
+  "fields": {
+    "brand": 17,
+    "name": "iphone 5",
+    "slug": "ip",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 11,
+  "fields": {
+    "brand": 17,
+    "name": "iphone 5s",
+    "slug": "iphone-5s",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 12,
+  "fields": {
+    "brand": 17,
+    "name": "iphone 6",
+    "slug": "iphone-6",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 13,
+  "fields": {
+    "brand": 17,
+    "name": "iphone 6s",
+    "slug": "iphone-6s",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 14,
+  "fields": {
+    "brand": 17,
+    "name": "iphone 6 Plus",
+    "slug": "iphone-6-plus",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 15,
+  "fields": {
+    "brand": 17,
+    "name": "iphone 6s Plus",
+    "slug": "6s-plus",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 16,
+  "fields": {
+    "brand": 17,
+    "name": "iphone 7",
+    "slug": "iphone-7",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 17,
+  "fields": {
+    "brand": 17,
+    "name": "iphone 7 Plus",
+    "slug": "iphone-7-plus",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 18,
+  "fields": {
+    "brand": 17,
+    "name": "iphone 8",
+    "slug": "iphone-8",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 19,
+  "fields": {
+    "brand": 17,
+    "name": "iphone 8 plus",
+    "slug": "iphone-8-plus",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 20,
+  "fields": {
+    "brand": 17,
+    "name": "iphone X",
+    "slug": "iphone-x",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 21,
+  "fields": {
+    "brand": 17,
+    "name": "iphone Xs",
+    "slug": "iphone-xs",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 22,
+  "fields": {
+    "brand": 17,
+    "name": "iphone Xs Max",
+    "slug": "iphone-xs-max",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 23,
+  "fields": {
+    "brand": 17,
+    "name": "Iphone Xr",
+    "slug": "iphone-xr",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 24,
+  "fields": {
+    "brand": 7,
+    "name": "J4 Plus (J415)",
+    "slug": "j4-plus-j415",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 25,
+  "fields": {
+    "brand": 2,
+    "name": "Y5 Prime 2018 (DRA-LX2)",
+    "slug": "y5-prime-2018-dra-lx2",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 26,
+  "fields": {
+    "brand": 6,
+    "name": "GT10 Pro (X6739)",
+    "slug": "gt10-pro-x6739",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 27,
+  "fields": {
+    "brand": 18,
+    "name": "8A Prime (JAT-LX1)",
+    "slug": "8a-prime-jat-lx1",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 28,
+  "fields": {
+    "brand": 11,
+    "name": "Pixel",
+    "slug": "pixel",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 29,
+  "fields": {
+    "brand": 3,
+    "name": "3 (RMX1825)",
+    "slug": "3-rmx1825",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 30,
+  "fields": {
+    "brand": 12,
+    "name": "7",
+    "slug": "7",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 31,
+  "fields": {
+    "brand": 9,
+    "name": "10 Pro",
+    "slug": "10-pro",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 32,
+  "fields": {
+    "brand": 5,
+    "name": "Spark Go (KC1)",
+    "slug": "spark-go-kc1",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 33,
+  "fields": {
+    "brand": 8,
+    "name": "Y03 (V2332)",
+    "slug": "y03-v2332",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 34,
+  "fields": {
+    "brand": 10,
+    "name": "A12 (CPH2083)",
+    "slug": "a12-cph2083",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 35,
+  "fields": {
+    "brand": 19,
+    "name": "2660 (2022) TA-1469",
+    "slug": "2660-2022-ta-1469",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 36,
+  "fields": {
+    "brand": 20,
+    "name": "S Cyber Pro",
+    "slug": "s-cyber-pro",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 37,
+  "fields": {
+    "brand": 21,
+    "name": "Razr 60 Ultra",
+    "slug": "razr-60-ultra",
+    "category": "phone"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 38,
+  "fields": {
+    "brand": 2,
+    "name": "MatePad T8       (KOB2-L09, KOB2-W09)",
+    "slug": "matepad-t8-kobe2-l09-kobe2-l03-kob2-l09-kob2-w09",
+    "category": "tablet"
+  }
+},
+{
+  "model": "repairs.phonemodel",
+  "pk": 39,
+  "fields": {
+    "brand": 2,
+    "name": "MatePad T10 (AGRK-L09, AGRK-W09, AGR-L09)",
+    "slug": "matepad-t10-agrk-l09-agrk-w09-agr-l09",
+    "category": "tablet"
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 1,
+  "fields": {
+    "name": "Замена дисплея",
+    "slug": "zamena-displeya",
+    "default_duration_min": 120
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 2,
+  "fields": {
+    "name": "Замена стекла дисплея",
+    "slug": "zamena-stekla-displeya",
+    "default_duration_min": 240
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 3,
+  "fields": {
+    "name": "Замена разъема зарядки",
+    "slug": "zamena-razema-zaryadki",
+    "default_duration_min": 60
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 4,
+  "fields": {
+    "name": "Замена разъема зарядки",
+    "slug": "zamena-razema-zaryadki2",
+    "default_duration_min": 120
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 5,
+  "fields": {
+    "name": "Замена задней крышки",
+    "slug": "zamena-zadnej-kryshki",
+    "default_duration_min": 60
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 6,
+  "fields": {
+    "name": "Замена задней крышки",
+    "slug": "zamena-zadnej-kryshki_iphone",
+    "default_duration_min": 360
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 7,
+  "fields": {
+    "name": "Замена дисплея оригинал",
+    "slug": "zamena-displeya-original",
+    "default_duration_min": 120
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 8,
+  "fields": {
+    "name": "Замена дисплея копия",
+    "slug": "zamena-displeya-kopiya",
+    "default_duration_min": 120
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 9,
+  "fields": {
+    "name": "Ребол процессора",
+    "slug": "rebol-processora",
+    "default_duration_min": 240
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 10,
+  "fields": {
+    "name": "Замена динамика",
+    "slug": "zamena-dinamika",
+    "default_duration_min": 60
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 11,
+  "fields": {
+    "name": "Замена микрафона",
+    "slug": "zamena-mikrafona",
+    "default_duration_min": 60
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 12,
+  "fields": {
+    "name": "Установка Вашего дисплея",
+    "slug": "ustanovka-vashego-displeya",
+    "default_duration_min": 120
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 13,
+  "fields": {
+    "name": "Замена корпуса",
+    "slug": "zamena-korpusa",
+    "default_duration_min": 120
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 14,
+  "fields": {
+    "name": "Замена аккумулятора",
+    "slug": "zamena-akkumulyatora",
+    "default_duration_min": 60
+  }
+},
+{
+  "model": "repairs.repairtype",
+  "pk": 15,
+  "fields": {
+    "name": "Замена аккумулятора",
+    "slug": "zamena-akkumulyatora1",
+    "default_duration_min": 120
+  }
+},
+{
+  "model": "repairs.modelrepairprice",
+  "pk": 1,
+  "fields": {
+    "phone_model": 1,
+    "repair_type": 1,
+    "price": "80.00",
+    "duration_min": 240,
+    "is_active": true
+  }
+},
+{
+  "model": "repairs.modelrepairprice",
+  "pk": 2,
+  "fields": {
+    "phone_model": 10,
+    "repair_type": 8,
+    "price": "60.00",
+    "duration_min": 120,
+    "is_active": true
+  }
+},
+{
+  "model": "repairs.modelrepairprice",
+  "pk": 3,
+  "fields": {
+    "phone_model": 10,
+    "repair_type": 7,
+    "price": "100.00",
+    "duration_min": 120,
+    "is_active": true
+  }
+},
+{
+  "model": "repairs.modelrepairprice",
+  "pk": 4,
+  "fields": {
+    "phone_model": 10,
+    "repair_type": 3,
+    "price": "45.00",
+    "duration_min": 120,
+    "is_active": true
+  }
+},
+{
+  "model": "repairs.modelrepairprice",
+  "pk": 5,
+  "fields": {
+    "phone_model": 39,
+    "repair_type": 1,
+    "price": "160.00",
+    "duration_min": 120,
+    "is_active": true
+  }
+},
+{
+  "model": "repairs.modelrepairprice",
+  "pk": 6,
+  "fields": {
+    "phone_model": 39,
+    "repair_type": 14,
+    "price": "100.00",
+    "duration_min": 60,
+    "is_active": true
+  }
+},
+{
+  "model": "repairs.referralpartner",
+  "pk": 6,
+  "fields": {
+    "name": "Юра",
+    "contact": "2345235325",
+    "code": "qaz",
+    "client_discount_pct": "5.00",
+    "partner_commission_pct": "5.00",
+    "expires_at": null,
+    "max_uses": 10
+  }
+},
+{
+  "model": "repairs.technician",
+  "pk": 1,
+  "fields": {
+    "name": "Юрий",
+    "skills": [
+      1,
+      2
+    ]
+  }
+},
+{
+  "model": "repairs.workinghour",
+  "pk": 1,
+  "fields": {
+    "weekday": 0,
+    "start": "10:00:00",
+    "end": "18:00:00"
+  }
+},
+{
+  "model": "repairs.workinghour",
+  "pk": 2,
+  "fields": {
+    "weekday": 1,
+    "start": "10:00:00",
+    "end": "18:00:00"
+  }
+},
+{
+  "model": "repairs.workinghour",
+  "pk": 3,
+  "fields": {
+    "weekday": 2,
+    "start": "10:00:00",
+    "end": "18:00:00"
+  }
+},
+{
+  "model": "repairs.workinghour",
+  "pk": 4,
+  "fields": {
+    "weekday": 3,
+    "start": "10:00:00",
+    "end": "18:00:00"
+  }
+},
+{
+  "model": "repairs.workinghour",
+  "pk": 5,
+  "fields": {
+    "weekday": 4,
+    "start": "10:00:00",
+    "end": "18:00:00"
+  }
+},
+{
+  "model": "repairs.workinghour",
+  "pk": 6,
+  "fields": {
+    "weekday": 5,
+    "start": "10:00:00",
+    "end": "18:00:00"
+  }
+},
+{
+  "model": "repairs.appointment",
+  "pk": 32,
+  "fields": {
+    "phone_model": 39,
+    "repair_type": 14,
+    "technician": null,
+    "start": "2025-09-02T08:00:00Z",
+    "end": "2025-09-02T09:00:00Z",
+    "customer_name": "Юра",
+    "customer_phone": "375256405452",
+    "referral_code": "",
+    "price_original": "100.00",
+    "discount_amount": "0.00",
+    "price_final": "100.00",
+    "status": "new",
+    "created_at": "2025-09-01T17:52:17.415Z"
+  }
+},
+{
+  "model": "repairs.appointment",
+  "pk": 33,
+  "fields": {
+    "phone_model": 10,
+    "repair_type": 8,
+    "technician": null,
+    "start": "2025-09-02T08:00:00Z",
+    "end": "2025-09-02T10:00:00Z",
+    "customer_name": "олег",
+    "customer_phone": "342324",
+    "referral_code": "",
+    "price_original": "60.00",
+    "discount_amount": "0.00",
+    "price_final": "60.00",
+    "status": "new",
+    "created_at": "2025-09-01T17:52:45.381Z"
+  }
+}
+]

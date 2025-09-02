@@ -82,12 +82,24 @@ TEMPLATES = [
 WSGI_APPLICATION = "core.wsgi.application"
 
 # База данных (SQLite по умолчанию)
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.sqlite3",
+#         "NAME": BASE_DIR / "db.sqlite3",
+#     }
+# }
+
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "masterskay",
+        "USER": "masterskay_user",
+        "PASSWORD": "54321",           # замени на свой
+        "HOST": "127.0.0.1",
+        "PORT": "5432",
     }
 }
+
 
 # Валидаторы паролей
 AUTH_PASSWORD_VALIDATORS = [
