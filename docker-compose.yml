@@ -1,0 +1,70 @@
+services:
+  db:
+    image: mirror.gcr.io/library/postgres:16
+    platform: linux/arm64
+    environment:
+      POSTGRES_DB: ${DB_NAME:-masterskay}
+      POSTGRES_USER: ${DB_USER:-masterskay_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-masterskay_user} -d ${DB_NAME:-masterskay}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  web:
+    build:
+      context: .
+    platform: linux/arm64
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-127.0.0.1,localhost}
+      TIME_ZONE: ${TIME_ZONE:-Europe/Bratislava}
+      SITE_URL: ${SITE_URL:-http://localhost:8000}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ADMIN_CHAT_IDS: ${TELEGRAM_ADMIN_CHAT_IDS:-}
+      REPAIRS_MAX_PARALLEL_APPOINTMENTS: ${REPAIRS_MAX_PARALLEL_APPOINTMENTS:-2}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-masterskay}
+      DB_USER: ${DB_USER:-masterskay_user}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      SEED_DATA: ${SEED_DATA:-0}
+    volumes:
+      - ./media:/app/media
+      - staticfiles:/app/staticfiles
+    ports:
+      - "8000:8000"
+
+  bot:
+    build:
+      context: .
+    platform: linux/arm64
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+    command: ["python","manage.py","run_tg_bot"]
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-127.0.0.1,localhost}
+      TIME_ZONE: ${TIME_ZONE:-Europe/Bratislava}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ADMIN_CHAT_IDS: ${TELEGRAM_ADMIN_CHAT_IDS:-}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-masterskay}
+      DB_USER: ${DB_USER:-masterskay_user}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+
+volumes:
+  db_data:
+  staticfiles:

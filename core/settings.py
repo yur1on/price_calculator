@@ -1,32 +1,52 @@
 """
 Настройки Django для проекта core.
-
-Сгенерировано командой 'django-admin startproject' (Django 5.2.5).
 Документация: https://docs.djangoproject.com/en/5.2/
 """
 
 from pathlib import Path
+import os
 
-# Базовая директория проекта
+# ──────────────────────────────────────────────────────────────
+# БАЗА
+# ──────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
 
-# ⚠️ В продакшене обязательно вынести в переменные окружения!
-SECRET_KEY = "django-insecure-naw19pjep&r2ge^oc+hnp%tcqenkqv&x140^dc+&2k!la1m6^-"
+# Опционально подхватываем .env локально (в Docker переменные уже передаются из env_file)
+try:
+    from dotenv import load_dotenv  # type: ignore
+    load_dotenv(BASE_DIR / ".env")
+except Exception:
+    pass
 
-# Режим разработки
-DEBUG = True
+# Секретный ключ
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-dev-key-change-me")
 
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+# Режим отладки
+DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 
+# Разрешённые хосты
 
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
 
-# Приложения
+# Базовый URL сайта (для ссылок в уведомлениях)
+SITE_URL = os.getenv("SITE_URL", "").rstrip("/")
+
+# CSRF trusted origins (должны быть полными origin с протоколом)
+_csrf_from_env = [o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+if _csrf_from_env:
+    CSRF_TRUSTED_ORIGINS = _csrf_from_env
+elif SITE_URL.startswith(("http://", "https://")):
+    CSRF_TRUSTED_ORIGINS = [SITE_URL]
+else:
+    CSRF_TRUSTED_ORIGINS = []
+
+# ──────────────────────────────────────────────────────────────
+# ПРИЛОЖЕНИЯ
+# ──────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
-    "unfold",  # обязательно до django.contrib.admin
-    "unfold.contrib.filters",  # опционально (диапазоны дат/чисел и т.п.)
-    "unfold.contrib.forms",  # опционально
+    "unfold",                 # до django.contrib.admin
+    "unfold.contrib.filters",
+    "unfold.contrib.forms",
 
     "django.contrib.admin",
     "django.contrib.auth",
@@ -39,19 +59,13 @@ INSTALLED_APPS = [
     "notify_tg",
 ]
 
-
-import os
-# 🔑 Токен Telegram-бота (Только для локальной разработки!)
-TELEGRAM_BOT_TOKEN = "8221103907:AAHD4RoedYbC2qfrWtN_5SzvxL4vIPbQnZY"
-TELEGRAM_ADMIN_CHAT_IDS = "486747175"
-
-# SITE_URL="http://127.0.0.1:8000"
-
-# Промежуточные слои (middleware)
+# ──────────────────────────────────────────────────────────────
+# MIDDLEWARE / ШАБЛОНЫ / WSGI
+# ──────────────────────────────────────────────────────────────
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # ← сразу после SecurityMiddleware
     "django.contrib.sessions.middleware.SessionMiddleware",
-    # Важно: LocaleMiddleware сразу после SessionMiddleware
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -62,11 +76,9 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "core.urls"
 
-# Шаблоны
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        # При желании можно хранить общие шаблоны в BASE_DIR / 'templates'
         "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
@@ -81,27 +93,39 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 
-# База данных (SQLite по умолчанию)
-# DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.sqlite3",
-#         "NAME": BASE_DIR / "db.sqlite3",
-#     }
-# }
+# ──────────────────────────────────────────────────────────────
+# БАЗА ДАННЫХ
+# ──────────────────────────────────────────────────────────────
+# По умолчанию используем PostgreSQL; хост по умолчанию — "db" (как в docker-compose).
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST", "db")  # локально можно поставить 127.0.0.1
+DB_PORT = os.getenv("DB_PORT", "5432")
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "masterskay",
-        "USER": "masterskay_user",
-        "PASSWORD": "54321",           # замени на свой
-        "HOST": "127.0.0.1",
-        "PORT": "5432",
+if DB_NAME and DB_USER and DB_PASSWORD:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": DB_NAME,
+            "USER": DB_USER,
+            "PASSWORD": DB_PASSWORD,
+            "HOST": DB_HOST,
+            "PORT": DB_PORT,
+        }
     }
-}
+else:
+    # Фолбэк на SQLite для быстрой локальной проверки без Postgres
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
-
-# Валидаторы паролей
+# ──────────────────────────────────────────────────────────────
+# ПАРОЛИ / I18N / TZ
+# ──────────────────────────────────────────────────────────────
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -109,27 +133,81 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# Интернационализация и локализация
-LANGUAGE_CODE = "ru"  # русский интерфейс в админке и шаблонах
-LANGUAGES = [
-    ("ru", "Русский"),
-]
+LANGUAGE_CODE = "ru"
+LANGUAGES = [("ru", "Русский")]
 USE_I18N = True
 
-# Таймзона проекта (можно поменять при необходимости)
-TIME_ZONE = "Europe/Bratislava"
+TIME_ZONE = os.getenv("TIME_ZONE", "Europe/Bratislava")
 USE_TZ = True
 
-# Статические файлы
-STATIC_URL = "static/"
-STATIC_URL = "static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]  # если кладёте статические в /static рядом с manage.py
-# Для продакшена:
-# STATIC_ROOT = BASE_DIR / "staticfiles"
+# ──────────────────────────────────────────────────────────────
+# STATIC & MEDIA
+# ──────────────────────────────────────────────────────────────
+
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+# В проде обычно собираем статику сюда (например, в Docker том):
+STATIC_ROOT = os.getenv("STATIC_ROOT", str(BASE_DIR / "staticfiles"))
+
+# В режиме разработки удобно иметь /static с исходниками
+_static_dir = BASE_DIR / "static"
+
+STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
+if not DEBUG:
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 
-# Тип автоинкрементного ключа по умолчанию
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# ──────────────────────────────────────────────────────────────
+# ПРОЧЕЕ
+# ──────────────────────────────────────────────────────────────
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Сколько заявок можно вести параллельно (1 = запрещать любые пересечения)
-REPAIRS_MAX_PARALLEL_APPOINTMENTS = 2
+# Кол-во параллельных заявок (ёмкость)
+REPAIRS_MAX_PARALLEL_APPOINTMENTS = int(os.getenv("REPAIRS_MAX_PARALLEL_APPOINTMENTS", "2"))
+
+# Параметры Telegram
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_ADMIN_CHAT_IDS = os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "")
+
+# Флаг автозасева демо-данных (используется командами/скриптами при старте)
+SEED_DATA = os.getenv("SEED_DATA", "0") in ("1", "true", "True")
+
+# ──────────────────────────────────────────────────────────────
+# SECURITY для продакшена (включаются когда DEBUG=False)
+# ──────────────────────────────────────────────────────────────
+if not DEBUG:
+    # Если стоим за прокси/Ingress и нужен корректный scheme
+    if os.getenv("ENABLE_SECURE_PROXY_SSL_HEADER", "1") in ("1", "true", "True"):
+        SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+        USE_X_FORWARDED_HOST = True
+
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = "DENY"
+
+# ──────────────────────────────────────────────────────────────
+# ЛОГИРОВАНИЕ (минимально удобное для dev/prod)
+# ──────────────────────────────────────────────────────────────
+LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {"format": "[{levelname}] {name}: {message}", "style": "{"},
+        "verbose": {"format": "{asctime} [{levelname}] {name}: {message}", "style": "{", "datefmt": "%Y-%m-%d %H:%M:%S"},
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose" if not DEBUG else "simple",
+        },
+    },
+    "root": {"handlers": ["console"], "level": LOG_LEVEL},
+}
