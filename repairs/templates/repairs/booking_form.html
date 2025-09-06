@@ -1,26 +1,74 @@
 {% extends "repairs/base.html" %}
 {% block title %}Бронирование — {{ model.brand.name }} {{ model.name }}{% endblock %}
+
 {% block content %}
-  <p><a href="{% url 'repairs:slot_select' brand_slug=model.brand.slug model_slug=model.slug repair_slug=repair_type.slug %}">← Другой слот</a></p>
-  <h1>Подтверждение бронирования</h1>
+<style>
+  .form-row{margin-bottom:10px}
+  .agree{
+    margin:12px 0 14px; padding:10px 12px; background:#f8fafc;
+    border:1px solid #e5e7eb; border-radius:10px; display:flex; gap:10px; align-items:flex-start;
+  }
+  .agree label{display:inline; cursor:pointer}
+  .agree a{color:#0f172a; text-decoration:underline}
+  .btn{display:inline-block;background:#111;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;border:1px solid #111}
+  .btn[disabled]{opacity:.5; cursor:not-allowed}
+</style>
 
-  <p>
-    <strong>Устройство:</strong> {{ model.brand.name }} {{ model.name }}<br>
-    <strong>Услуга:</strong> {{ repair_type.name }}<br>
-    <strong>Время:</strong> {{ slot|date:"d.m.Y H:i" }} ({{ duration }} мин)<br>
-    <strong>Цена:</strong> {{ price }} BYN
+<p><a href="{% url 'repairs:slot_select' brand_slug=model.brand.slug model_slug=model.slug repair_slug=repair_type.slug %}">← Другой слот</a></p>
+<h1>Подтверждение бронирования</h1>
 
-  </p>
+<p>
+  <strong>Устройство:</strong> {{ model.brand.name }} {{ model.name }}<br>
+  <strong>Услуга:</strong> {{ repair_type.name }}<br>
+  <strong>Время:</strong> {{ slot|date:"d.m.Y H:i" }} ({{ duration }} мин)<br>
+  <strong>Цена:</strong> {{ price }} BYN
+</p>
 
-  <form method="post" action="">
-    {% csrf_token %}
+<form method="post" action="">
+  {% csrf_token %}
+
+  <div class="form-row">
     <label>{{ form.customer_name.label }}{{ form.customer_name }}</label>
+    {% if form.customer_name.errors %}<div class="small muted">{{ form.customer_name.errors|striptags }}</div>{% endif %}
+  </div>
+
+  <div class="form-row">
     <label>{{ form.customer_phone.label }}{{ form.customer_phone }}</label>
+    {% if form.customer_phone.errors %}<div class="small muted">{{ form.customer_phone.errors|striptags }}</div>{% endif %}
+  </div>
+
+  <div class="form-row">
     <label>{{ form.referral_code.label }}{{ form.referral_code }}</label>
-    <button type="submit" class="btn">Записаться</button>
-  </form>
+    {% if form.referral_code.errors %}<div class="small muted">{{ form.referral_code.errors|striptags }}</div>{% endif %}
+  </div>
+
+  <!-- НОВОЕ: птичка согласия -->
+  <div class="agree">
+    {{ form.consent }}
+    <label for="id_consent">
+      Я подтверждаю, что ознакомлен(а) и согласен(сна) с
+      <a href="{% url 'terms' %}" target="_blank" rel="noopener">Условиями сервиса</a>
+      и
+      <a href="{% url 'privacy' %}" target="_blank" rel="noopener">Политикой конфиденциальности</a>
+    </label>
+  </div>
+  {% if form.consent.errors %}<div class="small muted">{{ form.consent.errors|striptags }}</div>{% endif %}
+
+  <button type="submit" class="btn" id="submitBtn">Записаться</button>
 
   {% if form.errors %}
-    <p class="small muted">Проверьте корректность введённых данных.</p>
+    <p class="small muted" style="margin-top:8px">Проверьте корректность введённых данных.</p>
   {% endif %}
+</form>
+
+<script>
+  // (опционально) блокируем кнопку до выставления галочки — чисто UX
+  const consent = document.getElementById('id_consent');
+  const submitBtn = document.getElementById('submitBtn');
+  if (consent && submitBtn){
+    const toggle = () => submitBtn.disabled = !consent.checked;
+    toggle();
+    consent.addEventListener('change', toggle, {passive:true});
+  }
+</script>
 {% endblock %}

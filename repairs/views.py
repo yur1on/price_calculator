@@ -1,20 +1,15 @@
 # repairs/views.py
 from __future__ import annotations
-from django.conf import settings
-from django.contrib import messages
-from typing import List
-from datetime import date, datetime, timedelta
-from decimal import Decimal
-from django.conf import settings
-from django.contrib import messages
-from django.db import transaction
-from django.shortcuts import render, get_object_or_404, redirect
-from django.utils import timezone
+
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from typing import List
 
+from django.conf import settings
+from django.contrib import messages
 from django.core.exceptions import FieldDoesNotExist
+from django.db import transaction
 from django.db.models import Q, Sum, Count
 from django.db.models.functions import Lower
 from django.shortcuts import render, get_object_or_404, redirect
@@ -32,20 +27,32 @@ from .models import (
     ReferralRedemption,
 )
 
-
 # ---------- утилиты ----------
 
 def _natural_key(s: str):
     """Ключ для натуральной сортировки: 'Model 2' < 'Model 10'."""
-    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s or "")]
+    return [int(t) if t.isdigit() else (t or "").lower() for t in re.split(r"(\d+)", s or "")]
 
+_num_re = re.compile(r"\d+")
+
+def _model_sort_key(m: PhoneModel):
+    """
+    Сортировка моделей:
+      1) сначала модели с числом в названии,
+      2) по убыванию числа (iPhone 16, 15, 14, ...),
+      3) затем модели без числа — по имени (a→z).
+    """
+    name = (m.name or "").strip()
+    mnum = _num_re.search(name)
+    has_num = 0 if mnum else 1                 # 0 — есть число (выше), 1 — нет (ниже)
+    num = int(mnum.group()) if mnum else -1    # большее число — свежее
+    return (has_num, -num, name.lower())
 
 def _parse_date_or(default_date: date, value: str | None) -> date:
     try:
         return datetime.fromisoformat(value).date() if value else default_date
     except ValueError:
         return default_date
-
 
 # ---------- шаг 1: бренды ----------
 
@@ -71,11 +78,10 @@ def brand_list(request):
         "selected_cat": sel,
     })
 
-
 # ---------- шаг 2: модели бренда ----------
 
 def model_list(request, brand_slug: str):
-    """Список моделей бренда по выбранной категории с натуральной сортировкой."""
+    """Список моделей бренда по выбранной категории с сортировкой «новые → старые»."""
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
 
     choices = list(PhoneModel.CATEGORY_CHOICES)
@@ -84,9 +90,9 @@ def model_list(request, brand_slug: str):
     if sel not in valid:
         sel = "phone"
 
-    # Берём из БД и сортируем в Python «по-человечески»
-    models_qs = list(brand.models.filter(category=sel))
-    models_qs.sort(key=lambda m: _natural_key(m.name))
+    # Берём из БД и сортируем в Python по описанному ключу
+    models_qs = list(brand.models.filter(category=sel).order_by())  # сбрасываем Meta.ordering
+    models_qs.sort(key=_model_sort_key)
 
     return render(request, "repairs/model_list.html", {
         "brand": brand,
@@ -94,7 +100,6 @@ def model_list(request, brand_slug: str):
         "categories": choices,
         "selected_cat": sel,
     })
-
 
 # ---------- шаг 3: услуги/цены модели ----------
 
@@ -113,7 +118,6 @@ def repair_list(request, brand_slug: str, model_slug: str):
         "model": model,
         "prices": prices,
     })
-
 
 # ---------- слоты и бронь ----------
 
@@ -201,7 +205,6 @@ def get_available_slots(
 
     return slots
 
-
 def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
     """Месячный календарь (6 недель)."""
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
@@ -258,6 +261,7 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
         "prev_month": prev_month,
         "next_month": next_month,
         "weeks": calendar_weeks,
+        "today": today,  # ← добавили это
     })
 
 
@@ -314,7 +318,7 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
     if request.method == "POST":
         form = BookingForm(request.POST)
         if form.is_valid():
-            # повторная проверка в транзакции — защита от гонок (на SQLite select_for_update не блокирует, но не мешает)
+            # повторная проверка в транзакции — защита от гонок
             with transaction.atomic():
                 overlaps = (Appointment.objects
                             .select_for_update()
@@ -362,7 +366,6 @@ def booking_success(request, appointment_id: int):
     """Страница подтверждения после успешного бронирования."""
     appointment = get_object_or_404(Appointment, id=appointment_id)
     return render(request, "repairs/booking_success.html", {"appointment": appointment})
-
 
 # ---------- отчёты по партнёрам ----------
 
@@ -421,7 +424,6 @@ def referrals_report(request):
         "status": status if has_status else "",
         "has_status": has_status,
     })
-
 
 def referrals_partner_report(request, code: str):
     """Деталка по одному партнёру (?from=YYYY-MM-DD&to=YYYY-MM-DD&status=...)."""

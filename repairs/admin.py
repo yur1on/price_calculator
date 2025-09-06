@@ -1,10 +1,11 @@
-"""Админка приложения repairs (обновлено под django-unfold)."""
+"""Админка приложения repairs (обновлено под django-unfold + скрываем текст в скобках)."""
+import re
 from django.contrib import admin, messages
 from django.utils import timezone
 from django.db.models import Sum
 from django.utils.html import format_html
 
-from unfold.admin import ModelAdmin  # <-- базовый класс от Unfold
+from unfold.admin import ModelAdmin  # базовый класс от Unfold
 
 from .models import (
     PhoneBrand, PhoneModel, RepairType, ModelRepairPrice,
@@ -12,15 +13,36 @@ from .models import (
     Technician, WorkingHour, TimeOff, Appointment,
 )
 
-# Если вы используете UNFOLD настройки (SITE_TITLE, и т.п.) — эти строки можно не трогать.
+# -------------------------------------------------------------------
+# Глобальные настройки заголовков админки (по желанию)
+# -------------------------------------------------------------------
 admin.site.site_header = "Мастерская — панель администратора"
 admin.site.site_title = "Админка Мастерской"
 admin.site.index_title = "Управление данными и заказами"
 
+# -------------------------------------------------------------------
+# Утилита: убираем все фрагменты " (....)" в строках
+# -------------------------------------------------------------------
+_PAR_RE = re.compile(r"\s*\([^)]*\)")
 
-# -----------------------
-# Бренды / Модели
-# -----------------------
+def strip_parens_text(s: str) -> str:
+    return _PAR_RE.sub("", s or "").strip()
+
+
+# -------------------------------------------------------------------
+# Mixin: заменяем подписи в ForeignKey(phone_model) на версии без скобок
+# -------------------------------------------------------------------
+class StripPhoneModelLabelsMixin:
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        field = super().formfield_for_foreignkey(db_field, request, **kwargs)
+        if field is not None and db_field.name == "phone_model":
+            field.label_from_instance = lambda m: strip_parens_text(getattr(m, "name", ""))
+        return field
+
+
+# -------------------------------------------------------------------
+# Инлайны
+# -------------------------------------------------------------------
 class ModelRepairPriceInline(admin.TabularInline):
     model = ModelRepairPrice
     extra = 0
@@ -29,6 +51,9 @@ class ModelRepairPriceInline(admin.TabularInline):
     show_change_link = True
 
 
+# -------------------------------------------------------------------
+# Бренды
+# -------------------------------------------------------------------
 @admin.register(PhoneBrand)
 class PhoneBrandAdmin(ModelAdmin):
     list_display = ("logo_thumb", "name", "slug")
@@ -45,14 +70,16 @@ class PhoneBrandAdmin(ModelAdmin):
                     obj.logo.url,
                 )
             except Exception:
-                # на случай отсутствия MEDIA настроек в dev
                 return "—"
         return "—"
 
 
+# -------------------------------------------------------------------
+# Модели устройств
+# -------------------------------------------------------------------
 @admin.register(PhoneModel)
 class PhoneModelAdmin(ModelAdmin):
-    list_display = ("name", "brand", "category", "slug")
+    list_display = ("name_no_parens", "brand", "category", "slug")
     list_filter = ("brand", "category")
     search_fields = ("name", "brand__name", "slug")
     prepopulated_fields = {"slug": ("name",)}
@@ -60,10 +87,14 @@ class PhoneModelAdmin(ModelAdmin):
     inlines = (ModelRepairPriceInline,)
     list_select_related = ("brand",)
 
+    @admin.display(ordering="name", description="Название")
+    def name_no_parens(self, obj: PhoneModel):
+        return strip_parens_text(obj.name)
 
-# -----------------------
-# Ремонты / Цены
-# -----------------------
+
+# -------------------------------------------------------------------
+# Типы ремонта
+# -------------------------------------------------------------------
 @admin.register(RepairType)
 class RepairTypeAdmin(ModelAdmin):
     list_display = ("name", "default_duration_min", "slug")
@@ -72,19 +103,26 @@ class RepairTypeAdmin(ModelAdmin):
     ordering = ("name",)
 
 
+# -------------------------------------------------------------------
+# Цены на ремонт (для конкретных моделей)
+# -------------------------------------------------------------------
 @admin.register(ModelRepairPrice)
-class ModelRepairPriceAdmin(ModelAdmin):
-    list_display = ("phone_model", "repair_type", "price", "duration_min", "is_active")
+class ModelRepairPriceAdmin(StripPhoneModelLabelsMixin, ModelAdmin):
+    list_display = ("phone_model_no_parens", "repair_type", "price", "duration_min", "is_active")
     list_filter = ("phone_model__brand", "repair_type", "is_active")
     search_fields = ("phone_model__name", "repair_type__name")
     list_select_related = ("phone_model", "phone_model__brand", "repair_type")
     ordering = ("phone_model__brand__name", "phone_model__name", "repair_type__name")
     autocomplete_fields = ("phone_model", "repair_type")
 
+    @admin.display(ordering="phone_model__name", description="Модель")
+    def phone_model_no_parens(self, obj: ModelRepairPrice):
+        return strip_parens_text(getattr(obj.phone_model, "name", ""))
 
-# -----------------------
-# Реферальные партнёры и начисления
-# -----------------------
+
+# -------------------------------------------------------------------
+# Реферальные партнёры
+# -------------------------------------------------------------------
 @admin.register(ReferralPartner)
 class ReferralPartnerAdmin(ModelAdmin):
     list_display = ("name", "code", "client_discount_pct", "partner_commission_pct", "expires_at", "max_uses")
@@ -92,6 +130,9 @@ class ReferralPartnerAdmin(ModelAdmin):
     ordering = ("name",)
 
 
+# -------------------------------------------------------------------
+# Начисления по рефералам
+# -------------------------------------------------------------------
 @admin.register(ReferralRedemption)
 class ReferralRedemptionAdmin(ModelAdmin):
     date_hierarchy = "created_at"
@@ -108,8 +149,7 @@ class ReferralRedemptionAdmin(ModelAdmin):
     ordering = ("-created_at",)
 
     @admin.display(description="Статус")
-    def status_badge(self, obj: ReferralRedemption):
-        # Небольшой бейдж в списке
+    def status_badge(self, obj: 'ReferralRedemption'):
         colors = {
             "pending": "#f59e0b",   # amber
             "accrued": "#10b981",   # emerald
@@ -153,9 +193,9 @@ class ReferralRedemptionAdmin(ModelAdmin):
         )
 
 
-# -----------------------
+# -------------------------------------------------------------------
 # Персонал и расписание
-# -----------------------
+# -------------------------------------------------------------------
 @admin.register(Technician)
 class TechnicianAdmin(ModelAdmin):
     list_display = ("name",)
@@ -179,20 +219,20 @@ class TimeOffAdmin(ModelAdmin):
     ordering = ("-start",)
 
 
-# -----------------------
-# Записи
-# -----------------------
+# -------------------------------------------------------------------
+# Записи (Appointment) — скрываем скобки у модели и в селектах
+# -------------------------------------------------------------------
 @admin.register(Appointment)
-class AppointmentAdmin(ModelAdmin):
+class AppointmentAdmin(StripPhoneModelLabelsMixin, ModelAdmin):
     date_hierarchy = "start"
     list_display = (
         "customer_name", "customer_phone",
-        "phone_model", "repair_type",
+        "phone_model_no_parens", "repair_type",
         "start", "end", "status_badge",
         "price_original", "discount_amount", "price_final",
     )
     list_filter = ("status", "phone_model__brand", "repair_type")
-    search_fields = ("customer_name", "customer_phone", "referral_code")
+    search_fields = ("customer_name", "customer_phone", "referral_code", "phone_model__name")
     list_select_related = ("phone_model", "phone_model__brand", "repair_type", "technician")
     autocomplete_fields = ("phone_model", "repair_type", "technician")
     ordering = ("-start",)
@@ -216,6 +256,10 @@ class AppointmentAdmin(ModelAdmin):
         }),
     )
     readonly_fields = ("created_at",)
+
+    @admin.display(ordering="phone_model__name", description="Модель")
+    def phone_model_no_parens(self, obj: Appointment):
+        return strip_parens_text(getattr(obj.phone_model, "name", ""))
 
     @admin.display(description="Статус")
     def status_badge(self, obj: Appointment):
