@@ -167,7 +167,9 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Кол-во параллельных заявок (ёмкость)
-REPAIRS_MAX_PARALLEL_APPOINTMENTS = int(os.getenv("REPAIRS_MAX_PARALLEL_APPOINTMENTS", "2"))
+REPAIRS_MAX_PARALLEL_APPOINTMENTS = int(os.getenv("REPAIRS_MAX_PARALLEL_APPOINTMENTS", "3"))
+# Сколько дней вперёд можно записываться
+REPAIRS_MAX_BOOK_AHEAD_DAYS = int(os.getenv("REPAIRS_MAX_BOOK_AHEAD_DAYS", "30"))
 
 # Параметры Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")

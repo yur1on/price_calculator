@@ -26,7 +26,7 @@ from .models import (
     ReferralPartner,
     ReferralRedemption,
 )
-
+MAX_BOOK_AHEAD_DAYS = int(getattr(settings, "REPAIRS_MAX_BOOK_AHEAD_DAYS", 30))
 # ---------- утилиты ----------
 
 def _natural_key(s: str):
@@ -206,13 +206,20 @@ def get_available_slots(
     return slots
 
 def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
-    """Месячный календарь (6 недель)."""
+    """Месячный календарь (6 недель) с лимитом записи на 30 дней вперёд,
+    скрытием дней до сегодня и удалением полностью «прошедших» верхних недель.
+    """
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
     model = get_object_or_404(PhoneModel, brand=brand, slug=model_slug)
     repair_type = get_object_or_404(RepairType, slug=repair_slug)
 
     tz = timezone.get_current_timezone()
     today = timezone.localdate()
+
+    # Запись доступна максимум на 30 дней вперёд (скользящее окно)
+    limit_date = today + timedelta(days=30)
+    limit_month_start = limit_date.replace(day=1)
+    current_month_start = today.replace(day=1)
 
     # month=YYYY-MM (например, 2025-08)
     month_str = request.GET.get("month")
@@ -221,23 +228,33 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
             y, m = month_str.split("-")
             month_start = date(int(y), int(m), 1)
         except Exception:
-            month_start = today.replace(day=1)
+            month_start = current_month_start
     else:
-        month_start = today.replace(day=1)
+        month_start = current_month_start
+
+    # Если запросили месяц позже лимитного — показываем лимитный
+    if month_start > limit_month_start:
+        month_start = limit_month_start
 
     # Начало сетки: понедельник недели, куда входит 1-е число
-    first_weekday = 0  # Mon
+    first_weekday = 0  # Пн
     offset = (month_start.weekday() - first_weekday) % 7
     grid_start = month_start - timedelta(days=offset)
 
-    # Доступные слоты на 6 недель (42 дня), сгруппуем по дате
+    # Доступные слоты на 6 недель (42 дня)
     days_span = 42
     all_slots = get_available_slots(model, repair_type, days=days_span, start_date=grid_start, tz=tz)
+
+    # Отфильтровать слоты, выходящие за предел limit_date
+    all_slots = [s for s in all_slots if s.date() <= limit_date]
+
+    # Сгрупповать слоты по дате
     slots_by_date: dict[date, list[datetime]] = {}
     for s in all_slots:
-        d = s.date()
+        d = timezone.localtime(s, tz).date()
         slots_by_date.setdefault(d, []).append(s)
 
+    # Построить 6 недель × 7 дней
     calendar_weeks = []
     for w in range(6):
         week = []
@@ -250,8 +267,23 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
             })
         calendar_weeks.append(week)
 
+    # Навигация по месяцам
     prev_month = (month_start - timedelta(days=1)).replace(day=1)
     next_month = (month_start + timedelta(days=32)).replace(day=1)
+
+    can_prev = month_start > current_month_start
+    can_next = next_month <= limit_month_start
+    is_current_month = (month_start.year == today.year and month_start.month == today.month)
+
+    # === Удаляем полностью «прошедшие» верхние недели (ТОЛЬКО для текущего месяца) ===
+    # Например, если сегодня 8-е, первая неделя с 1–7 числами уйдёт целиком.
+    if is_current_month:
+        while calendar_weeks:
+            first_week = calendar_weeks[0]
+            if all(cell["date"] < today for cell in first_week):
+                calendar_weeks.pop(0)
+            else:
+                break
 
     return render(request, "repairs/slot_select.html", {
         "brand": brand,
@@ -261,14 +293,23 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
         "prev_month": prev_month,
         "next_month": next_month,
         "weeks": calendar_weeks,
-        "today": today,  # ← добавили это
+        "today": today,
+        "is_current_month": is_current_month,
+        "limit_date": limit_date,
+        "can_prev": can_prev,
+        "can_next": can_next,
     })
 
 
 def book(request, brand_slug: str, model_slug: str, repair_slug: str):
     """
-    Создание брони для выбранного слота (с глобальной проверкой занятости и защитой от гонок).
+    Создание брони для выбранного слота (с глобальной проверкой занятости и защитой от гонок)
+    + ограничение: записываться можно максимум на N дней вперёд (по умолчанию 30).
     """
+    from django.conf import settings
+
+    MAX_BOOK_AHEAD_DAYS = int(getattr(settings, "REPAIRS_MAX_BOOK_AHEAD_DAYS", 30))
+
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
     model = get_object_or_404(PhoneModel, brand=brand, slug=model_slug)
     repair_type = get_object_or_404(RepairType, slug=repair_slug)
@@ -287,6 +328,24 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
             slot_dt = timezone.make_aware(slot_dt)
     except ValueError:
         messages.error(request, "Некорректный слот времени.")
+        return redirect("repairs:slot_select",
+                        brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
+
+    # Запрещаем прошлое
+    now = timezone.now()
+    if slot_dt <= now:
+        messages.error(request, "Нельзя записаться на прошедшее время.")
+        return redirect("repairs:slot_select",
+                        brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
+
+    # Лимит на дату записи: не дальше чем MAX_BOOK_AHEAD_DAYS от сегодняшней локальной даты
+    limit_date = timezone.localdate() + timedelta(days=MAX_BOOK_AHEAD_DAYS)
+    slot_local_date = timezone.localtime(slot_dt).date()
+    if slot_local_date > limit_date:
+        messages.error(
+            request,
+            f"Записываться можно максимум на {MAX_BOOK_AHEAD_DAYS} дней вперёд (до {limit_date.strftime('%d.%m.%Y')}).",
+        )
         return redirect("repairs:slot_select",
                         brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 
@@ -343,10 +402,11 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
                     referral_code=form.cleaned_data.get("referral_code", "").strip(),
                     price_original=price,
                 )
+                # Применяем реф.код и считаем финальную цену
                 app.apply_referral()
                 if not app.price_final:
                     app.price_final = app.price_original - app.discount_amount
-                app.save()  # ReferralRedemption создаст сигнал
+                app.save()  # (при сохранении может создаться ReferralRedemption по сигналу)
 
             return redirect("repairs:booking_success", appointment_id=app.id)
     else:
@@ -471,3 +531,23 @@ def referrals_partner_report(request, code: str):
         "status": status if has_status else "",
         "has_status": has_status,
     })
+
+
+def contacts(request):
+    ctx = {
+        "address": "246050, г. Гомель, ул. Гагарина, д. 55, каб. 50",
+        "phone": "+375 (44) 568-44-93",
+        "work_hours": [
+            ("Понедельник", "10:00–18:00"),
+            ("Вторник", "10:00–18:00"),
+            ("Среда", "10:00–18:00"),
+            ("Четверг", "10:00–18:00"),
+            ("Пятница", "10:00–18:00"),
+            ("Суббота", "10:00–18:00"),
+            ("Воскресенье", "выходной"),
+        ],
+        # ключевые фразы для поиска конкретно сервиса на Гагарина, 55
+        "gmaps_query": "ремонт телефонов, Гомель, Гагарина 55",
+        "ymaps_query": "ремонт телефонов Гагарина 55 Гомель",
+    }
+    return render(request, "repairs/contacts.html", ctx)

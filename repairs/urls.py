@@ -4,6 +4,8 @@ from . import views
 app_name = "repairs"
 
 urlpatterns = [
+    path("contacts/", views.contacts, name="contacts"),
+
     # СТАБИЛЬНЫЕ ОТЧЁТЫ — СНАЧАЛА
     path("reports/referrals/", views.referrals_report, name="referrals_report"),
     path("reports/referrals/<slug:code>/", views.referrals_partner_report, name="referrals_partner_report"),

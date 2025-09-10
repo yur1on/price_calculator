@@ -6,10 +6,10 @@
 {% now "Y-m" as ym_now %}
 
 <style>
-  /* Тема календаря */
+  /* ====== КАЛЕНДАРЬ ====== */
   #cal{
     --gap:12px; --r:14px; --brd:#e5e7eb; --muted:#64748b;
-    --ink:#0f172a; --ok:#10b981; --accent:#111; --bg:#fff
+    --ink:#0f172a; --ok:#10b981; --accent:#111; --bg:#fff; --hl:#f0fdfa;
   }
   #cal .toolbar{
     display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px
@@ -20,6 +20,7 @@
     border:1px solid var(--brd);background:#fff;color:#111;text-decoration:none
   }
   #cal .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  #cal .btn[aria-disabled="true"]{opacity:.5;pointer-events:none}
   #cal .btn:hover{opacity:.95}
   #cal .toolbar .group{display:flex;gap:8px;align-items:center}
 
@@ -30,11 +31,13 @@
 
   #cal .dow{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 
+  /* Ячейки */
   #cal .cell{
     background:var(--bg);border:1px solid var(--brd);border-radius:var(--r);
     min-height:120px;padding:10px;display:flex;flex-direction:column;gap:8px
   }
   #cal .cell .top{display:flex;justify-content:space-between;align-items:center}
+  #cal .cell.has-slots{background:var(--hl)}
   #cal .num{font-weight:700; display:flex; align-items:center; gap:6px}
   #cal .badge{font-size:12px;color:var(--muted)}
   #cal .badge.ok{color:var(--ok)}
@@ -43,7 +46,12 @@
   #cal .weekend{background:linear-gradient(0deg, rgba(249,250,251,.9), rgba(255,255,255,1))}
   #cal .today{border-color:#111; box-shadow:0 0 0 2px rgba(0,0,0,.05) inset}
 
-  /* Чипы слотов */
+  /* Плейсхолдер — оставляем место, но визуально «пусто» */
+  #cal .cell.cell--placeholder{
+    visibility:hidden; background:transparent; border-color:transparent; pointer-events:none;
+  }
+
+  /* Слоты */
   #cal .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
   #cal .chip{
     display:inline-flex;gap:6px;align-items:center;padding:6px 10px;border-radius:999px;
@@ -54,12 +62,12 @@
   #cal .chip.more{background:#fff;color:var(--ink);border:1px dashed var(--brd)}
   #cal .chip svg{width:18px;height:18px}
 
-  /* desktop: показываем 4 слота, остальное — под «ещё N» */
-  #cal .chips .slot-chip:nth-child(n+5){display:none}
+  /* Десктоп: показываем до 6 слотов */
+  #cal .chips .slot-chip:nth-child(n+7){display:none}
   #cal .chips.expanded .slot-chip{display:inline-flex}
   #cal .chips.expanded .more{display:none}
 
-  /* Метка дня недели для мобилок (внутри числа) */
+  /* Мобильная метка дня недели внутри числа */
   #cal .wday-mobile{
     display:none; font-size:11px; color:var(--muted);
     text-transform:uppercase; letter-spacing:.03em;
@@ -71,24 +79,23 @@
     #cal .toolbar h1{font-size:18px;order:3;width:100%;text-align:center}
     #cal .btn{padding:6px 10px;font-size:14px}
 
-    /* прячем заголовок с днями недели */
+    /* прячем заголовки дней недели */
     #cal .dow-row{display:none}
 
     /* мобильная метка дня недели включается */
     #cal .wday-mobile{display:inline-block}
 
-    /* уменьшаем отступы, чипы, и делаем 2 колонки */
+    /* компактнее карточки; сетка — 2 колонки без горизонтального скролла */
     #cal .cell{min-height:105px;padding:8px}
     #cal .chip{font-size:13px;padding:5px 9px}
     #cal .chip svg{width:16px;height:16px}
 
     #cal .cal-days{grid-template-columns:repeat(2,1fr);gap:10px}
 
-    /* на мобильном показываем 3 слота до раскрытия */
-    #cal .chips .slot-chip:nth-child(n+4){display:none}
+    /* на мобильном до 4 слотов до раскрытия */
+    #cal .chips .slot-chip:nth-child(n+5){display:none}
   }
 
-  /* очень узкие экраны — по 1 колонке */
   @media (max-width: 420px){
     #cal .cal-days{grid-template-columns:1fr}
   }
@@ -106,28 +113,46 @@
 
   <div class="toolbar">
     <div class="group">
-      <a class="btn" href="?month={{ prev_month|date:'Y-m' }}">
-        <svg viewBox="0 0 24 24" fill="none" width="18" height="18" aria-hidden="true">
-          <path d="M15 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Предыдущий
-      </a>
+      {% if can_prev %}
+        <a class="btn" href="?month={{ prev_month|date:'Y-m' }}">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18" aria-hidden="true">
+            <path d="M15 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Предыдущий
+        </a>
+      {% else %}
+        <span class="btn" aria-disabled="true">
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18" aria-hidden="true">
+            <path d="M15 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Предыдущий
+        </span>
+      {% endif %}
     </div>
 
     <h1>{{ month_start|date:"F Y" }}</h1>
 
     <div class="group">
       <a class="btn" href="?month={{ ym_now }}">Сегодня</a>
-      <a class="btn" href="?month={{ next_month|date:'Y-m' }}">
-        Следующий
-        <svg viewBox="0 0 24 24" fill="none" width="18" height="18" aria-hidden="true">
-          <path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </a>
+      {% if can_next %}
+        <a class="btn" href="?month={{ next_month|date:'Y-m' }}">
+          Следующий
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18" aria-hidden="true">
+            <path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+      {% else %}
+        <span class="btn" aria-disabled="true">
+          Следующий
+          <svg viewBox="0 0 24 24" fill="none" width="18" height="18" aria-hidden="true">
+            <path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      {% endif %}
     </div>
   </div>
 
-  <!-- Заголовки дней недели (скрываются на мобилках) -->
+  <!-- Заголовки дней недели (на мобилках скрыты) -->
   <div class="grid dow-row" style="margin-bottom:8px">
     <div class="dow">Пн</div><div class="dow">Вт</div><div class="dow">Ср</div>
     <div class="dow">Чт</div><div class="dow">Пт</div><div class="dow">Сб</div><div class="dow">Вс</div>
@@ -138,67 +163,96 @@
     {% for week in weeks %}
       {% for day in week %}
         {% with w=day.date|date:"w" %}
-        <div class="cell
-                    {% if not day.in_month %} out{% endif %}
-                    {% if day.date|date:'Y-m-d' == today_iso %} today{% endif %}
-                    {% if w == '6' or w == '0' %} weekend{% endif %}">
-          <div class="top">
-            <div class="num">
-              <span class="wday-mobile">
-                {% if w == '1' %}Пн{% elif w == '2' %}Вт{% elif w == '3' %}Ср
-                {% elif w == '4' %}Чт{% elif w == '5' %}Пт{% elif w == '6' %}Сб
-                {% else %}Вс{% endif %}
-              </span>
-              {{ day.date.day }}
-            </div>
-            <span class="badge {% if day.slots %}ok{% else %}zero{% endif %}">
-              {% if day.slots %}{{ day.slots|length }} слотов{% else %}нет слотов{% endif %}
-            </span>
-          </div>
+          {# в текущем месяце прячем дни до сегодня (ячейка-плейсхолдер сохраняет колонку) #}
+          {% if is_current_month and day.date < today %}
+            <div class="cell cell--placeholder" aria-hidden="true"></div>
+          {% else %}
+            <div class="cell
+                        {% if not day.in_month %} out{% endif %}
+                        {% if day.date|date:'Y-m-d' == today_iso %} today{% endif %}
+                        {% if w == '6' or w == '0' %} weekend{% endif %}
+                        {% if day.slots %} has-slots{% endif %}">
+              <div class="top">
+                <div class="num">
+                  <span class="wday-mobile">
+                    {% if w == '1' %}Пн{% elif w == '2' %}Вт{% elif w == '3' %}Ср
+                    {% elif w == '4' %}Чт{% elif w == '5' %}Пт{% elif w == '6' %}Сб
+                    {% else %}Вс{% endif %}
+                  </span>
+                  {{ day.date.day }}
+                </div>
+                <span class="badge {% if day.slots %}ok{% else %}zero{% endif %}">
+                  {% if day.slots %}{{ day.slots|length }} слотов{% else %}нет слотов{% endif %}
+                </span>
+              </div>
 
-          {% if day.slots %}
-            {% with total=day.slots|length more=day.slots|length|add:"-4" %}
-            <div class="chips" id="chips-{{ day.date|date:'Ymd' }}">
-              {% for s in day.slots %}
-                <a class="chip slot-chip"
-                   href="{% url 'repairs:book' brand_slug=model.brand.slug model_slug=model.slug repair_slug=repair_type.slug %}?slot={{ s|date:'c'|urlencode }}">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
-                    <path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  {{ s|date:"H:i" }}
-                </a>
-              {% endfor %}
+              {% if day.slots %}
+                {% with total=day.slots|length %}
+                <div class="chips" id="chips-{{ day.date|date:'Ymd' }}">
+                  {% for s in day.slots %}
+                    <a class="chip slot-chip"
+                       href="{% url 'repairs:book' brand_slug=model.brand.slug model_slug=model.slug repair_slug=repair_type.slug %}?slot={{ s|date:'c'|urlencode }}">
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+                        <path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      {{ s|date:"H:i" }}
+                    </a>
+                  {% endfor %}
 
-              {% if total > 4 %}
-                <button type="button" class="chip more" data-target="chips-{{ day.date|date:'Ymd' }}">+ ещё {{ more }}</button>
+                  {% with more=total|add:"-6" %}
+                    {% if more > 0 %}
+                      <button type="button" class="chip more" data-target="chips-{{ day.date|date:'Ymd' }}">+ ещё {{ more }}</button>
+                    {% endif %}
+                  {% endwith %}
+                </div>
+                {% endwith %}
+              {% else %}
+                <div class="chips">
+                  <span class="chip ghost" aria-disabled="true">Недоступно</span>
+                </div>
               {% endif %}
             </div>
-            {% endwith %}
-          {% else %}
-            <div class="chips">
-              <span class="chip ghost" aria-disabled="true">Недоступно</span>
-            </div>
           {% endif %}
-        </div>
         {% endwith %}
       {% endfor %}
     {% endfor %}
   </div>
 
-  <p style="margin-top:16px;color:#64748b">
+  <p class="small" style="margin-top:10px;color:#64748b">
     Модель: {{ model.brand.name }} {{ model.name }} • {{ repair_type.name }}
   </p>
+  {% if limit_date %}
+    <p class="small" style="margin-top:4px;color:#64748b">
+      Доступна запись до {{ limit_date|date:"d.m.Y" }}.
+    </p>
+  {% endif %}
 </div>
 
 <script>
-  // Раскрытие "ещё N" слотов
+  // Выравниваем высоты ячеек под самую высокую (чтобы сетка не «прыгала»)
+  function updateCellHeights() {
+    const cells = document.querySelectorAll('#cal .cal-days .cell');
+    let maxH = 0;
+    cells.forEach(c => {
+      c.style.minHeight = '';
+      maxH = Math.max(maxH, c.offsetHeight);
+    });
+    cells.forEach(c => { c.style.minHeight = maxH + 'px'; });
+  }
+  document.addEventListener('DOMContentLoaded', updateCellHeights);
+  window.addEventListener('resize', updateCellHeights);
+
+  // Раскрытие «ещё N»
   document.addEventListener('click', function(e){
     const btn = e.target.closest('.chip.more');
     if(!btn) return;
     const id = btn.getAttribute('data-target');
     const box = document.getElementById(id);
-    if(box){ box.classList.add('expanded'); }
+    if(box){
+      box.classList.add('expanded');
+      updateCellHeights();
+    }
   }, {passive:true});
 </script>
 {% endblock %}

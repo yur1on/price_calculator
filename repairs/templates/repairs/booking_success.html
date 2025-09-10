@@ -1,24 +1,235 @@
 {% extends "repairs/base.html" %}
 {% block title %}Запись создана{% endblock %}
+
 {% block content %}
+  <style>
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:14px}
+    .muted{color:#64748b}
+    .small{font-size:12px}
+    .info-list{margin:0 0 12px 0;padding-left:18px}
+
+    /* Кнопки (компактные и одинаковые по высоте) */
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      height:38px; padding:0 12px; border-radius:8px;
+      border:1px solid #111; background:#111; color:#fff;
+      text-decoration:none; font-size:14px; line-height:1; white-space:nowrap;
+    }
+    .btn.ghost{
+      background:#fff; color:#0f172a; border-color:#e5e7eb;
+    }
+    .btn i{font-size:16px; line-height:1}
+    .btn + .btn{margin-left:0}
+
+    .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+    .actions .btn{flex:0 0 auto}
+
+    /* Печать: оставляем только блок с подтверждением */
+    @media print{
+      header, footer, nav, .actions, .print-hide{display:none!important}
+      body{background:#fff}
+      .card{border:none;box-shadow:none}
+    }
+  </style>
+
   <h1>Запись оформлена ✅</h1>
   <p>Спасибо, {{ appointment.customer_name }}! Ваша запись подтверждена.</p>
 
-  <ul>
+  <ul class="info-list" id="print-area">
     <li><strong>Устройство:</strong> {{ appointment.phone_model.brand.name }} {{ appointment.phone_model.name }}</li>
     <li><strong>Услуга:</strong> {{ appointment.repair_type.name }}</li>
     <li><strong>Дата:</strong> {{ appointment.start|date:"d.m.Y" }}</li>
-    <li><strong>Время:</strong> {{ appointment.start|date:"H:i" }} – {{ appointment.end|date:"H:i" }}</li>
-<li><strong>Стоимость:</strong> {{ appointment.price_final }} BYN
-  {% if appointment.discount_amount > 0 %}
-    <span class="muted">(скидка −{{ appointment.discount_amount }} BYN)</span>
-  {% endif %}
-</li>
-
+    <li><strong>Время:</strong> к {{ appointment.start|date:"H:i" }}</li>
+    <li><strong>Стоимость:</strong> {{ appointment.price_final }} BYN
+      {% if appointment.discount_amount > 0 %}
+        <span class="muted">(скидка −{{ appointment.discount_amount }} BYN)</span>
+      {% endif %}
+    </li>
     <li><strong>Статус:</strong> {{ appointment.get_status_display }}</li>
-    <li><strong>ID брони:</strong> {{ appointment.id }}</li>
+    <li><strong>ID заявки:</strong> {{ appointment.id }}</li>
   </ul>
 
-  <p class="small muted">Адрес и условия гарантии можно разместить здесь.</p>
-  <p><a class="btn" href="{% url 'repairs:brand_list' %}">Новая заявка</a></p>
+  <!-- Контакты/адрес -->
+  <div class="card">
+    <strong>Как нас найти:</strong><br>
+    <div class="small" style="line-height:1.7">
+      <span class="muted">Адрес:</span> г. Гомель, ул. Гагарина, д. 55, каб. 50<br>
+      <span class="muted">Время работы:</span> Пн–Сб 10:00–18:00, Вс — выходной<br>
+      <span class="muted">Телефон:</span> <a href="tel:+375445684493">+375 (44) 568-44-93</a><br>
+      <a href="{% url 'repairs:contacts' %}">Перейти на страницу «Контакты»</a>
+    </div>
+  </div>
+
+  <!-- Быстрые действия: сохранить/поделиться (компактные кнопки) -->
+  <div class="actions">
+    <a id="tgShare" class="btn" href="#" rel="noopener" target="_blank">
+      <i class="fa-brands fa-telegram"></i> Telegram
+    </a>
+    <a id="mailShare" class="btn ghost" href="#" rel="noopener">
+      <i class="fa-solid fa-envelope"></i> E-mail
+    </a>
+    <button id="copyBtn" class="btn ghost" type="button">
+      <i class="fa-regular fa-copy"></i> Копировать
+    </button>
+    <a id="gcalBtn" class="btn ghost" href="#" target="_blank" rel="noopener">
+      <i class="fa-solid fa-calendar-plus"></i> Google Cal
+    </a>
+    <a id="icsBtn" class="btn ghost" href="#" download="tehsfera.ics">
+      <i class="fa-regular fa-calendar"></i> .ics
+    </a>
+    <button id="printBtn" class="btn ghost" type="button">
+      <i class="fa-solid fa-print"></i> PDF
+    </button>
+    <button id="nativeShare" class="btn ghost print-hide" type="button" style="display:none">
+      <i class="fa-solid fa-share-nodes"></i> Поделиться
+    </button>
+  </div>
+
+  <p style="margin-top:14px">
+    <a class="btn" href="{% url 'repairs:brand_list' %}">Новая заявка</a>
+  </p>
+
+  <!-- Данные для сборки текста/календаря -->
+  <div id="shareData"
+       data-url="{{ request.build_absolute_uri|cut:'?' }}"
+       data-model="{{ appointment.phone_model.brand.name }} {{ appointment.phone_model.name }}"
+       data-repair="{{ appointment.repair_type.name }}"
+       data-date="{{ appointment.start|date:'d.m.Y' }}"
+       data-time="{{ appointment.start|date:'H:i' }}"
+       data-price="{{ appointment.price_final }}"
+       data-id="{{ appointment.id }}"
+       data-start-iso="{{ appointment.start|date:'c' }}"
+       data-end-iso="{{ appointment.end|date:'c' }}"
+       data-location="246050, г. Гомель, ул. Гагарина, д. 55, каб. 50"></div>
+
+  <script>
+    (function(){
+      const el = document.getElementById('shareData');
+      if(!el) return;
+
+      // --- исходные данные ---
+      const data = {
+        url:  el.dataset.url || window.location.href,
+        model: el.dataset.model || '',
+        repair: el.dataset.repair || '',
+        date: el.dataset.date || '',
+        time: el.dataset.time || '',
+        price: el.dataset.price || '',
+        id: el.dataset.id || '',
+        startIso: el.dataset.startIso || '',
+        endIso: el.dataset.endIso || '',
+        location: el.dataset.location || ''
+      };
+
+      const text =
+`Запись на ремонт №${data.id}
+Устройство: ${data.model}
+Услуга: ${data.repair}
+Дата: ${data.date}
+Время: к ${data.time}
+Цена: ${data.price} BYN
+Ссылка: ${data.url}`;
+
+      // --- Telegram ---
+      const tg = document.getElementById('tgShare');
+      if (tg){
+        const tgUrl = "https://t.me/share/url?url=" + encodeURIComponent(data.url) +
+                      "&text=" + encodeURIComponent(text);
+        tg.href = tgUrl;
+      }
+
+      // --- Email (mailto) ---
+      const mail = document.getElementById('mailShare');
+      if (mail){
+        const subject = `Запись на ремонт №${data.id} — ${data.date} к ${data.time}`;
+        const mailUrl = "mailto:?subject=" + encodeURIComponent(subject) +
+                        "&body=" + encodeURIComponent(text);
+        mail.href = mailUrl;
+      }
+
+      // --- Копировать в буфер ---
+      const copyBtn = document.getElementById('copyBtn');
+      if (copyBtn && navigator.clipboard){
+        copyBtn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+            copyBtn.textContent = 'Скопировано!';
+            setTimeout(()=> copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> Копировать', 1500);
+          } catch(e){}
+        }, {passive:true});
+      }
+
+      // --- Печать / PDF ---
+      const printBtn = document.getElementById('printBtn');
+      if (printBtn){
+        printBtn.addEventListener('click', () => window.print(), {passive:true});
+      }
+
+      // --- Форматирование дат для календарей (UTC, YYYYMMDDTHHMMSSZ) ---
+      function toICS(dt){
+        const iso = new Date(dt.getTime()).toISOString().replace(/\.\d{3}Z$/, 'Z');
+        return iso.replace(/[-:]/g, '');
+      }
+
+      let start, end;
+      try { start = new Date(data.startIso); } catch(e){}
+      try { end = new Date(data.endIso); } catch(e){}
+      if (start && end && !isNaN(start) && !isNaN(end)){
+        const dtStart = toICS(start);
+        const dtEnd   = toICS(end);
+
+        // --- Google Calendar ---
+        const gcal = document.getElementById('gcalBtn');
+        if (gcal){
+          const gUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+                     + '&text=' + encodeURIComponent(`Ремонт: ${data.model} — ${data.repair}`)
+                     + '&dates=' + dtStart + '/' + dtEnd
+                     + '&details=' + encodeURIComponent(`Запись №${data.id}\n${data.url}`)
+                     + '&location=' + encodeURIComponent(data.location)
+                     + '&sf=true&output=xml';
+          gcal.href = gUrl;
+        }
+
+        // --- .ics-файл ---
+        const icsBtn = document.getElementById('icsBtn');
+        if (icsBtn){
+          const now = toICS(new Date());
+          const ics =
+`BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Tehsfera//Booking//RU
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:${data.id}@tehsfera
+DTSTAMP:${now}
+DTSTART:${dtStart}
+DTEND:${dtEnd}
+SUMMARY:Ремонт: ${data.model} — ${data.repair}
+DESCRIPTION:Запись №${data.id}\\nСсылка: ${data.url}
+LOCATION:${data.location}
+URL:${data.url}
+END:VEVENT
+END:VCALENDAR`;
+          const blob = new Blob([ics], {type:'text/calendar;charset=utf-8'});
+          const url = URL.createObjectURL(blob);
+          icsBtn.href = url;
+          icsBtn.download = `tehsfera-${data.id}.ics`;
+        }
+      }
+
+      // --- Web Share API ---
+      const btnNative = document.getElementById('nativeShare');
+      if (navigator.share && btnNative){
+        btnNative.style.display = 'inline-flex';
+        btnNative.addEventListener('click', function(){
+          navigator.share({
+            title: `Запись на ремонт №${data.id}`,
+            text: text,
+            url: data.url
+          }).catch(()=>{});
+        }, {passive:true});
+      }
+    })();
+  </script>
 {% endblock %}

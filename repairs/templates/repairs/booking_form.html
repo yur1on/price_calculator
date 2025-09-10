@@ -1,60 +1,134 @@
 {% extends "repairs/base.html" %}
-{% block title %}Бронирование — {{ model.brand.name }} {{ model.name }}{% endblock %}
+{% block title %}Подтверждение записи на ремонт — {{ model.brand.name }} {{ model.name }}{% endblock %}
 
 {% block content %}
 <style>
-  .form-row{margin-bottom:10px}
-  .agree{
-    margin:12px 0 14px; padding:10px 12px; background:#f8fafc;
-    border:1px solid #e5e7eb; border-radius:10px; display:flex; gap:10px; align-items:flex-start;
+#booking-summary{
+  font-size: 16px;          /* было 12px из .small */
+  line-height: 1.7;
+  margin: 10px 0 16px;
+}
+@media (min-width: 768px){
+  #booking-summary{ font-size: 17px; }
+}
+
+  /* Компактная форма */
+  #booking-form{max-width:560px}
+  #booking-form .form-row{margin-bottom:12px}
+  #booking-form .form-row label{
+    display:block; margin-bottom:6px; font-size:14px; color:#0f172a;
   }
-  .agree label{display:inline; cursor:pointer}
-  .agree a{color:#0f172a; text-decoration:underline}
-  .btn{display:inline-block;background:#111;color:#fff;padding:10px 14px;border-radius:10px;text-decoration:none;border:1px solid #111}
-  .btn[disabled]{opacity:.5; cursor:not-allowed}
+
+  /* Аккуратные инпуты */
+  #booking-form input[type="text"],
+  #booking-form input[type="tel"],
+  #booking-form input[type="search"],
+  #booking-form input[type="email"]{
+    width:100%;
+    height:42px;
+    padding:10px 12px;
+    border:1px solid #e5e7eb;
+    border-radius:10px;
+    font-size:15px;
+    background:#fff;
+    outline:none;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  #booking-form input:focus{
+    border-color:#111;
+    box-shadow:0 0 0 3px rgba(0,0,0,.06);
+  }
+
+  /* Ошибки полей */
+  #booking-form .field-error{
+    margin-top:6px; font-size:12px; color:#b91c1c;
+  }
+  #booking-form .has-error input{
+    border-color:#ef4444;
+    box-shadow:0 0 0 3px rgba(239,68,68,.08);
+  }
+
+  /* Блок согласия: аккуратный чекбокс и выравнивание */
+  #booking-form .agree{
+    margin:14px 0; padding:10px 12px; background:#f8fafc;
+    border:1px solid #e5e7eb; border-radius:10px;
+    display:flex; gap:10px; align-items:center;
+  }
+  #booking-form .agree input[type="checkbox"]{
+    width:18px; height:18px; flex:0 0 18px; margin:0;
+    accent-color:#111;            /* современная поддержка */
+  }
+  #booking-form .agree label{
+    display:inline; cursor:pointer; line-height:1.5;
+  }
+  #booking-form .agree a{ color:#0f172a; text-decoration:underline }
+
+  /* Кнопка */
+  #booking-form .btn{
+    display:inline-block; background:#111; color:#fff;
+    padding:10px 14px; border-radius:10px; text-decoration:none;
+    border:1px solid #111; font-size:15px;
+  }
+  #booking-form .btn[disabled]{opacity:.5; cursor:not-allowed}
 </style>
 
-<p><a href="{% url 'repairs:slot_select' brand_slug=model.brand.slug model_slug=model.slug repair_slug=repair_type.slug %}">← Другой слот</a></p>
-<h1>Подтверждение бронирования</h1>
-
 <p>
+  <a href="{% url 'repairs:slot_select' brand_slug=model.brand.slug model_slug=model.slug repair_slug=repair_type.slug %}">
+    ← Другой слот
+  </a>
+</p>
+
+<h1>Подтверждение записи на ремонт</h1>
+
+<p id="booking-summary">
   <strong>Устройство:</strong> {{ model.brand.name }} {{ model.name }}<br>
   <strong>Услуга:</strong> {{ repair_type.name }}<br>
   <strong>Время:</strong> {{ slot|date:"d.m.Y H:i" }} ({{ duration }} мин)<br>
   <strong>Цена:</strong> {{ price }} BYN
 </p>
 
-<form method="post" action="">
+
+<form id="booking-form" method="post" action="" novalidate>
   {% csrf_token %}
 
-  <div class="form-row">
-    <label>{{ form.customer_name.label }}{{ form.customer_name }}</label>
-    {% if form.customer_name.errors %}<div class="small muted">{{ form.customer_name.errors|striptags }}</div>{% endif %}
+  <div class="form-row {% if form.customer_name.errors %}has-error{% endif %}">
+    <label for="{{ form.customer_name.id_for_label }}">{{ form.customer_name.label }}</label>
+    {{ form.customer_name }}
+    {% if form.customer_name.errors %}
+      <div class="field-error">{{ form.customer_name.errors|striptags }}</div>
+    {% endif %}
   </div>
 
-  <div class="form-row">
-    <label>{{ form.customer_phone.label }}{{ form.customer_phone }}</label>
-    {% if form.customer_phone.errors %}<div class="small muted">{{ form.customer_phone.errors|striptags }}</div>{% endif %}
+  <div class="form-row {% if form.customer_phone.errors %}has-error{% endif %}">
+    <label for="{{ form.customer_phone.id_for_label }}">{{ form.customer_phone.label }}</label>
+    {{ form.customer_phone }}
+    {% if form.customer_phone.errors %}
+      <div class="field-error">{{ form.customer_phone.errors|striptags }}</div>
+    {% endif %}
   </div>
 
-  <div class="form-row">
-    <label>{{ form.referral_code.label }}{{ form.referral_code }}</label>
-    {% if form.referral_code.errors %}<div class="small muted">{{ form.referral_code.errors|striptags }}</div>{% endif %}
+  <div class="form-row {% if form.referral_code.errors %}has-error{% endif %}">
+    <label for="{{ form.referral_code.id_for_label }}">{{ form.referral_code.label }}</label>
+    {{ form.referral_code }}
+    {% if form.referral_code.errors %}
+      <div class="field-error">{{ form.referral_code.errors|striptags }}</div>
+    {% endif %}
   </div>
 
-  <!-- НОВОЕ: птичка согласия -->
   <div class="agree">
     {{ form.consent }}
     <label for="id_consent">
-      Я подтверждаю, что ознакомлен(а) и согласен(сна) с
+      Я подтверждаю, что ознакомлен(а) и согласен(а) с
       <a href="{% url 'terms' %}" target="_blank" rel="noopener">Условиями сервиса</a>
       и
       <a href="{% url 'privacy' %}" target="_blank" rel="noopener">Политикой конфиденциальности</a>
     </label>
   </div>
-  {% if form.consent.errors %}<div class="small muted">{{ form.consent.errors|striptags }}</div>{% endif %}
+  {% if form.consent.errors %}
+    <div class="field-error">{{ form.consent.errors|striptags }}</div>
+  {% endif %}
 
-  <button type="submit" class="btn" id="submitBtn">Записаться</button>
+  <button type="submit" class="btn" id="submitBtn">Подтвердить запись на ремонт</button>
 
   {% if form.errors %}
     <p class="small muted" style="margin-top:8px">Проверьте корректность введённых данных.</p>
@@ -62,11 +136,11 @@
 </form>
 
 <script>
-  // (опционально) блокируем кнопку до выставления галочки — чисто UX
+  // Блокируем кнопку, пока не стоит галочка согласия (UX)
   const consent = document.getElementById('id_consent');
   const submitBtn = document.getElementById('submitBtn');
   if (consent && submitBtn){
-    const toggle = () => submitBtn.disabled = !consent.checked;
+    const toggle = () => { submitBtn.disabled = !consent.checked; };
     toggle();
     consent.addEventListener('change', toggle, {passive:true});
   }
