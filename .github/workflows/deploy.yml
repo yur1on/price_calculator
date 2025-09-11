@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: SSH to VPS and deploy
+      - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -27,20 +27,21 @@ jobs:
 
             cd /home/deploy/apps/tehsfera
 
-            # Обновляем код до последнего коммита main
-            if git rev-parse --verify main >/dev/null 2>&1; then
-              git checkout main
+            # Если это «чистая» машина — клонируем.
+            if [ ! -d .git ]; then
+              git clone https://github.com/yur1on/price_calculator.git .
             fi
+
+            # Обновляемся до свежего main
             git fetch --all --prune
             git reset --hard origin/main
 
-            # Сборка и перезапуск контейнеров
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml build
-            docker compose -f docker-compose.prod.yml up -d
+            # Убедимся, что лежит .env.prod
+            test -f .env.prod || { echo "ERROR: /home/deploy/apps/tehsfera/.env.prod не найден"; exit 1; }
 
-            # Чистим висячие образы
-            docker image prune -f
+            # Пересборка и запуск
+            docker compose -f docker-compose.prod.yml up -d --build
 
-            # Быстрый статус
+            # Быстрый статус и немного диагностики
             docker compose -f docker-compose.prod.yml ps
+            git rev-parse HEAD
