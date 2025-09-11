@@ -5,6 +5,12 @@
 
 from pathlib import Path
 import os
+import mimetypes
+
+mimetypes.init()
+mimetypes.add_type("image/webp", ".webp", strict=True)
+mimetypes.add_type("image/avif", ".avif", strict=True)
+mimetypes.add_type("image/svg+xml", ".svg", strict=True)
 
 # ──────────────────────────────────────────────────────────────
 # БАЗА
