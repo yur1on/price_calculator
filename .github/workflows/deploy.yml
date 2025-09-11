@@ -1,0 +1,46 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-to-vps
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH to VPS and deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            cd /home/deploy/apps/tehsfera
+
+            # Обновляем код до последнего коммита main
+            if git rev-parse --verify main >/dev/null 2>&1; then
+              git checkout main
+            fi
+            git fetch --all --prune
+            git reset --hard origin/main
+
+            # Сборка и перезапуск контейнеров
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml build
+            docker compose -f docker-compose.prod.yml up -d
+
+            # Чистим висячие образы
+            docker image prune -f
+
+            # Быстрый статус
+            docker compose -f docker-compose.prod.yml ps
