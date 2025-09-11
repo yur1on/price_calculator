@@ -22,7 +22,9 @@ except Exception:
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-dev-key-change-me")
 
 # Режим отладки
-DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
+# DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
+# Режим отладки продакшен
+DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
 
 # Разрешённые хосты
 
@@ -137,7 +139,8 @@ LANGUAGE_CODE = "ru"
 LANGUAGES = [("ru", "Русский")]
 USE_I18N = True
 
-TIME_ZONE = os.getenv("TIME_ZONE", "Europe/Bratislava")
+TIME_ZONE = os.getenv("TIME_ZONE", "Europe/Minsk")
+
 USE_TZ = True
 
 # ──────────────────────────────────────────────────────────────
@@ -145,7 +148,6 @@ USE_TZ = True
 # ──────────────────────────────────────────────────────────────
 
 STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
 # В проде обычно собираем статику сюда (например, в Docker том):
 STATIC_ROOT = os.getenv("STATIC_ROOT", str(BASE_DIR / "staticfiles"))
 
