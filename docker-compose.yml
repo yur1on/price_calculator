@@ -1,7 +1,6 @@
 services:
   db:
-    image: mirror.gcr.io/library/postgres:16
-    platform: linux/arm64
+    image: postgres:16
     environment:
       POSTGRES_DB: ${DB_NAME:-masterskay}
       POSTGRES_USER: ${DB_USER:-masterskay_user}
@@ -17,21 +16,21 @@ services:
   web:
     build:
       context: .
-    platform: linux/arm64
     depends_on:
       db:
         condition: service_healthy
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-127.0.0.1,localhost}
-      TIME_ZONE: ${TIME_ZONE:-Europe/Bratislava}
-      SITE_URL: ${SITE_URL:-http://localhost:8000}
+      DJANGO_DEBUG: "false"
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-45.128.205.77,localhost,127.0.0.1}"
+      SITE_URL: "http://45.128.205.77"
+      DJANGO_CSRF_TRUSTED_ORIGINS: "http://45.128.205.77"
+      TIME_ZONE: ${TIME_ZONE:-Europe/Minsk}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_ADMIN_CHAT_IDS: ${TELEGRAM_ADMIN_CHAT_IDS:-}
       REPAIRS_MAX_PARALLEL_APPOINTMENTS: ${REPAIRS_MAX_PARALLEL_APPOINTMENTS:-2}
       DB_HOST: db
-      DB_PORT: 5432
+      DB_PORT: "5432"
       DB_NAME: ${DB_NAME:-masterskay}
       DB_USER: ${DB_USER:-masterskay_user}
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
@@ -39,13 +38,14 @@ services:
     volumes:
       - ./media:/app/media
       - staticfiles:/app/staticfiles
-    ports:
-      - "8000:8000"
+    # порт наружу не публикуем — к web ходит caddy
+    expose:
+      - "8000"
+    command: bash -lc "./docker/entrypoint.sh"
 
   bot:
     build:
       context: .
-    platform: linux/arm64
     depends_on:
       db:
         condition: service_healthy
@@ -54,17 +54,35 @@ services:
     command: ["python","manage.py","run_tg_bot"]
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-127.0.0.1,localhost}
-      TIME_ZONE: ${TIME_ZONE:-Europe/Bratislava}
+      DJANGO_DEBUG: "false"
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-45.128.205.77,localhost,127.0.0.1}"
+      TIME_ZONE: ${TIME_ZONE:-Europe/Minsk}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_ADMIN_CHAT_IDS: ${TELEGRAM_ADMIN_CHAT_IDS:-}
       DB_HOST: db
-      DB_PORT: 5432
+      DB_PORT: "5432"
       DB_NAME: ${DB_NAME:-masterskay}
       DB_USER: ${DB_USER:-masterskay_user}
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - ./media:/app/media
+
+  caddy:
+    image: caddy:2
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./media:/home/deploy/apps/tehsfera/media:ro
+      - staticfiles:/home/deploy/apps/tehsfera/staticfiles:ro
+      - caddy_data:/data
+      - caddy_config:/config
 
 volumes:
   db_data:
   staticfiles:
+  caddy_data:
+  caddy_config:
