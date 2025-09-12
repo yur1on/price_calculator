@@ -1,0 +1,21 @@
+tehsfera.by {
+  encode gzip zstd
+
+  handle_path /static/* {
+    root * /srv/static
+    file_server
+    header Cache-Control "public, max-age=604800, immutable"
+  }
+
+  handle_path /media/* {
+    root * /srv/media
+    file_server
+    header Cache-Control "public, max-age=86400, immutable"
+  }
+
+  reverse_proxy web:8000
+}
+
+www.tehsfera.by {
+  redir https://tehsfera.by{uri} permanent
+}

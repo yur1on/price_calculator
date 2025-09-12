@@ -21,10 +21,10 @@ services:
         condition: service_healthy
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret}
-      DJANGO_DEBUG: "false"
-      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-45.128.205.77,localhost,127.0.0.1}"
-      SITE_URL: "http://45.128.205.77"
-      DJANGO_CSRF_TRUSTED_ORIGINS: "http://45.128.205.77"
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-tehsfera.by,www.tehsfera.by,45.128.205.77,localhost,127.0.0.1}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-https://tehsfera.by,https://www.tehsfera.by}
+      SITE_URL: ${SITE_URL:-https://tehsfera.by}
       TIME_ZONE: ${TIME_ZONE:-Europe/Minsk}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_ADMIN_CHAT_IDS: ${TELEGRAM_ADMIN_CHAT_IDS:-}
@@ -38,7 +38,6 @@ services:
     volumes:
       - ./media:/app/media
       - staticfiles:/app/staticfiles
-    # порт наружу не публикуем — к web ходит caddy
     expose:
       - "8000"
     command: bash -lc "./docker/entrypoint.sh"
@@ -54,8 +53,8 @@ services:
     command: ["python","manage.py","run_tg_bot"]
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret}
-      DJANGO_DEBUG: "false"
-      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-45.128.205.77,localhost,127.0.0.1}"
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-tehsfera.by,www.tehsfera.by,45.128.205.77,localhost,127.0.0.1}
       TIME_ZONE: ${TIME_ZONE:-Europe/Minsk}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_ADMIN_CHAT_IDS: ${TELEGRAM_ADMIN_CHAT_IDS:-}
@@ -70,14 +69,15 @@ services:
   caddy:
     image: caddy:2
     depends_on:
-      - web
+      web:
+        condition: service_started
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./media:/home/deploy/apps/tehsfera/media:ro
-      - staticfiles:/home/deploy/apps/tehsfera/staticfiles:ro
+      - staticfiles:/srv/static:ro   # статика из web
+      - ./media:/srv/media:ro        # медиа
       - caddy_data:/data
       - caddy_config:/config
 
