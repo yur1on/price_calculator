@@ -46,10 +46,8 @@
   #cal .weekend{background:linear-gradient(0deg, rgba(249,250,251,.9), rgba(255,255,255,1))}
   #cal .today{border-color:#111; box-shadow:0 0 0 2px rgba(0,0,0,.05) inset}
 
-  /* Плейсхолдер — оставляем место, но визуально «пусто» */
-  #cal .cell.cell--placeholder{
-    visibility:hidden; background:transparent; border-color:transparent; pointer-events:none;
-  }
+  /* Плейсхолдер — теперь полностью исключён из потока, чтобы не было «дыр» */
+  #cal .cell.cell--placeholder{ display:none; }
 
   /* Слоты */
   #cal .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
@@ -85,7 +83,7 @@
     /* мобильная метка дня недели включается */
     #cal .wday-mobile{display:inline-block}
 
-    /* компактнее карточки; сетка — 2 колонки без горизонтального скролла */
+    /* компактнее карточки; сетка — 2 колонки */
     #cal .cell{min-height:105px;padding:8px}
     #cal .chip{font-size:13px;padding:5px 9px}
     #cal .chip svg{width:16px;height:16px}
@@ -95,7 +93,7 @@
     /* на мобильном до 4 слотов до раскрытия */
     #cal .chips .slot-chip:nth-child(n+5){display:none}
 
-    /* ВАЖНО: при раскрытии показать все слоты, перекрывая nth-child */
+    /* при раскрытии показать все слоты, перекрывая nth-child */
     #cal .chips.expanded .slot-chip{display:inline-flex !important;}
     #cal .chips.expanded .more{display:none !important;}
   }
@@ -167,7 +165,7 @@
     {% for week in weeks %}
       {% for day in week %}
         {% with w=day.date|date:"w" %}
-          {# в текущем месяце прячем дни до сегодня (ячейка-плейсхолдер сохраняет колонку) #}
+          {# раньше плейсхолдер держал колонку; теперь он скрыт (display:none) #}
           {% if is_current_month and day.date < today %}
             <div class="cell cell--placeholder" aria-hidden="true"></div>
           {% else %}
@@ -202,7 +200,7 @@
                       {{ s|date:"H:i" }}
                     </a>
                   {% endfor %}
-                  <!-- Кнопка "ещё N" — текст и видимость выставляются JS в зависимости от брейкпоинта -->
+                  <!-- Кнопка "ещё N" — текст и видимость выставляются JS -->
                   <button type="button" class="chip more" data-target="chips-{{ day.date|date:'Ymd' }}" hidden>+ ещё</button>
                 </div>
               {% else %}
@@ -228,15 +226,19 @@
 </div>
 
 <script>
-  // Выравниваем высоты ячеек под самую высокую (чтобы сетка не «прыгала»)
+  // Выравниваем высоты ячеек под самую высокую (без скрытых плейсхолдеров)
   function updateCellHeights() {
     const cells = document.querySelectorAll('#cal .cal-days .cell');
     let maxH = 0;
     cells.forEach(c => {
+      if (c.classList.contains('cell--placeholder')) return;
       c.style.minHeight = '';
       maxH = Math.max(maxH, c.offsetHeight);
     });
-    cells.forEach(c => { c.style.minHeight = maxH + 'px'; });
+    cells.forEach(c => {
+      if (c.classList.contains('cell--placeholder')) return;
+      c.style.minHeight = maxH + 'px';
+    });
   }
 
   // Считать, сколько слотов скрыто (из-за nth-child на текущей ширине),
@@ -252,10 +254,7 @@
       }
 
       const hidden = Array.from(box.querySelectorAll('.slot-chip'))
-        .filter(el => {
-          const cs = getComputedStyle(el);
-          return cs.display === 'none';
-        }).length;
+        .filter(el => getComputedStyle(el).display === 'none').length;
 
       if (hidden > 0) {
         btn.textContent = `+ ещё ${hidden}`;
@@ -283,8 +282,8 @@
     const box = document.getElementById(id);
     if(box){
       box.classList.add('expanded');
-      updateCellHeights();
       updateMoreButtons();
+      updateCellHeights();
     }
   }, {passive:true});
 </script>

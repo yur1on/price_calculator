@@ -11,6 +11,7 @@
   <title>{% block title %}Ремонт телефонов{% endblock %}</title>
   <style>
     :root {
+      --container: 1200px; /* ← было 1000px */
       --gap: 16px;
       --radius: 14px;
       --ink: #0f172a;
@@ -19,6 +20,7 @@
       --brd2: #cbd5e1;
     }
     * { box-sizing: border-box; }
+
     /* Фон: mesh */
     body {
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
@@ -35,7 +37,7 @@
 
     /* Шапка */
     header { background: #111; color: #fff; }
-    .wrap { max-width: 1000px; margin: 0 auto; padding: 14px 20px; }
+    .wrap { max-width: var(--container); margin: 0 auto; padding: 14px 20px; }
     header .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     header a { color: #fff; text-decoration: none; }
     header nav a { opacity: .95; }
@@ -43,7 +45,7 @@
     header nav a:hover { opacity: 1; text-decoration: underline; }
 
     /* Контент */
-    main { max-width: 1000px; margin: 0 auto; padding: 20px; }
+    main { max-width: var(--container); margin: 0 auto; padding: 20px; }
 
     /* Общие элементы */
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--gap); }
@@ -84,14 +86,12 @@
     footer .social a:hover { background: rgba(255,255,255,.06); }
     footer .social a i {
       font-size: 20px; line-height: 1;
-      font-family: "Font Awesome 6 Brands"; /* Явно указываем шрифт для брендов */
+      font-family: "Font Awesome 6 Brands";
       font-weight: 400;
     }
 
-    /* Instagram — упрощённый стиль */
-    footer .social a.ig i {
-      color: #d6249f; /* Основной цвет Instagram */
-    }
+    /* Instagram */
+    footer .social a.ig i { color: #d6249f; }
     footer .social a.ig:hover i { color: #e1306c; }
 
     /* TikTok */
@@ -106,8 +106,6 @@
       footer .grid { grid-template-columns: 1fr; }
       .f-bottom { flex-direction: column; align-items: flex-start; }
     }
-
-
   </style>
 </head>
 <body>
@@ -116,7 +114,7 @@
       <div class="row">
         <a href="{% url 'repairs:brand_list' %}"><strong>Tehsfera</strong></a>
         <nav>
-           <a href="{% url 'repairs:contacts' %}">Контакты</a>
+          <a href="{% url 'repairs:contacts' %}">Контакты</a>
           <a href="{% url 'repairs:brand_list' %}">Стоимость ремонта</a>
           {% if request.user.is_staff %}<a href="{% url 'repairs:referrals_report' %}">Отчёт партнёров</a>{% endif %}
           {% if request.user.is_authenticated and request.user.is_staff %}
@@ -177,7 +175,5 @@
       </div>
     </div>
   </footer>
-
-
 </body>
 </html>
