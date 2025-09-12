@@ -94,6 +94,10 @@
 
     /* на мобильном до 4 слотов до раскрытия */
     #cal .chips .slot-chip:nth-child(n+5){display:none}
+
+    /* ВАЖНО: при раскрытии показать все слоты, перекрывая nth-child */
+    #cal .chips.expanded .slot-chip{display:inline-flex !important;}
+    #cal .chips.expanded .more{display:none !important;}
   }
 
   @media (max-width: 420px){
@@ -187,7 +191,6 @@
               </div>
 
               {% if day.slots %}
-                {% with total=day.slots|length %}
                 <div class="chips" id="chips-{{ day.date|date:'Ymd' }}">
                   {% for s in day.slots %}
                     <a class="chip slot-chip"
@@ -199,14 +202,9 @@
                       {{ s|date:"H:i" }}
                     </a>
                   {% endfor %}
-
-                  {% with more=total|add:"-6" %}
-                    {% if more > 0 %}
-                      <button type="button" class="chip more" data-target="chips-{{ day.date|date:'Ymd' }}">+ ещё {{ more }}</button>
-                    {% endif %}
-                  {% endwith %}
+                  <!-- Кнопка "ещё N" — текст и видимость выставляются JS в зависимости от брейкпоинта -->
+                  <button type="button" class="chip more" data-target="chips-{{ day.date|date:'Ymd' }}" hidden>+ ещё</button>
                 </div>
-                {% endwith %}
               {% else %}
                 <div class="chips">
                   <span class="chip ghost" aria-disabled="true">Недоступно</span>
@@ -240,8 +238,42 @@
     });
     cells.forEach(c => { c.style.minHeight = maxH + 'px'; });
   }
-  document.addEventListener('DOMContentLoaded', updateCellHeights);
-  window.addEventListener('resize', updateCellHeights);
+
+  // Считать, сколько слотов скрыто (из-за nth-child на текущей ширине),
+  // и обновить текст/видимость кнопки "+ ещё N"
+  function updateMoreButtons() {
+    document.querySelectorAll('#cal .chips').forEach(box => {
+      const btn = box.querySelector('.chip.more');
+      if (!btn) return;
+
+      if (box.classList.contains('expanded')) {
+        btn.hidden = true;
+        return;
+      }
+
+      const hidden = Array.from(box.querySelectorAll('.slot-chip'))
+        .filter(el => {
+          const cs = getComputedStyle(el);
+          return cs.display === 'none';
+        }).length;
+
+      if (hidden > 0) {
+        btn.textContent = `+ ещё ${hidden}`;
+        btn.hidden = false;
+      } else {
+        btn.hidden = true;
+      }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    updateMoreButtons();
+    updateCellHeights();
+  });
+  window.addEventListener('resize', () => {
+    updateMoreButtons();
+    updateCellHeights();
+  });
 
   // Раскрытие «ещё N»
   document.addEventListener('click', function(e){
@@ -252,6 +284,7 @@
     if(box){
       box.classList.add('expanded');
       updateCellHeights();
+      updateMoreButtons();
     }
   }, {passive:true});
 </script>
