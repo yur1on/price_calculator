@@ -31,122 +31,179 @@ MAX_BOOK_AHEAD_DAYS = int(getattr(settings, "REPAIRS_MAX_BOOK_AHEAD_DAYS", 30))
 
 
 
-# --- ВЕРХ ФАЙЛА (рядом с другими regex) ---
+# ---------- UNIVERSAL NAME PARSING & SORT KEY ----------
+
 _num_re = re.compile(r"\d+")
 
-# Samsung
-_samsung_strip_re = re.compile(r"\b(samsung|galaxy)\b", re.I)
-_samsung_family_re = re.compile(r"\b(a|s|m|f|note|tab)\s*-?\s*(\d{1,4})\b", re.I)
+# Универсально срезаем всё в круглых скобках (обычно коды: SM-, RMX- и т.п.)
+_paren_re = re.compile(r"\([^)]*\)")
 
-# Apple
-_apple_brand_re = re.compile(r"\b(apple|iphone)\b", re.I)
-_apple_digits_re = re.compile(r"\b(\d{1,2})\b")                         # 6, 11, 14...
-_apple_suffix_s_re = re.compile(r"\b(\d{1,2})\s*s\b|\b(\d{1,2})s\b", re.I)  # 6 s / 6s
-_apple_x_family_re = re.compile(r"\bx(r|s)?\b", re.I)                    # X / XR / XS
+# iPhone (особое правило: X=10, XR/XS и варианты)
+_apple_brand_re   = re.compile(r"\b(apple|iphone)\b", re.I)
+_apple_digits_re  = re.compile(r"\b(\d{1,2})\b")
+_apple_suffix_s_re= re.compile(r"\b(\d{1,2})\s*s\b|\b(\d{1,2})s\b", re.I)
+_apple_x_family_re= re.compile(r"\bx(r|s)?\b", re.I)
+
+def _apple_key(name: str, brand: str):
+    name_lc, brand_lc = (name or "").lower(), (brand or "").lower()
+    if not (_apple_brand_re.search(name_lc) or _apple_brand_re.search(brand_lc)):
+        return None
+
+    gen, hint = None, ""
+    m = _apple_x_family_re.search(name_lc)
+    if m:
+        gen = 10
+        hint = {"r": "xr", "s": "xs"}.get((m.group(1) or "").lower(), "x")
+
+    if gen is None:
+        sfx = _apple_suffix_s_re.search(name_lc)
+        if sfx:
+            gen = int((sfx.group(1) or sfx.group(2)))
+            hint = "s"
+
+    if gen is None:
+        d = _apple_digits_re.search(name_lc)
+        if d:
+            gen = int(d.group(1))
+
+    vmap = {
+        "pro max": 0, "ultra":1, "pro":2, "plus":3, "max":4,
+        "xs":5, "xr":6, "s":7, "se":8, "mini":9, "c":10, "x":11, "":12,
+    }
+    variant = ""
+    t = name_lc
+    if   "pro max" in t: variant = "pro max"
+    elif "pro"     in t: variant = "pro"
+    elif "plus"    in t: variant = "plus"
+    elif "max"     in t: variant = "max"
+    elif "mini"    in t: variant = "mini"
+    elif re.search(r"\bse\b", t): variant = "se"
+    elif re.search(r"\bc\b", t):  variant = "c"
+    if not variant and hint: variant = hint
+
+    if gen is None:
+        return (2, 1, 0, name_lc)  # хвост яблочной группы
+
+    return (1, -gen, vmap.get(variant, 12), name_lc)
+
+# Универсальные варианты по "силе": чем меньше число — тем выше в списке
+_VARIANT_RANKS = {
+    "ultra":0, "pro max":1, "pro+":2, "pro plus":2, "pro":3,
+    "max":4, "plus":5, "edge":6, "player":7, "prime":8,
+    "s":9, "fe":10, "se":11, "lite":12, "core":13, "5g":14, "base":15
+}
+
+# Поиск варианта в свободном тексте и суффикса после цифр (s/e)
+def _variant_rank(text_lc: str, suffix_after_number: str = "") -> int:
+    toks = set()
+    suf = (suffix_after_number or "").lower()
+    if suf in {"s","e"}:
+        toks.add(suf)
+    t = f" {text_lc} "
+    if " ultra" in t: toks.add("ultra")
+    if " pro max" in t: toks.add("pro max")
+    if " pro+" in t or " pro plus" in t: toks.add("pro+")
+    if re.search(r"\bpro\b", t): toks.add("pro")
+    if re.search(r"\bmax\b", t): toks.add("max")
+    if re.search(r"\bplus\b", t) or "+" in t: toks.add("plus")
+    if re.search(r"\bedge\b", t): toks.add("edge")
+    if re.search(r"\bplayer\b", t): toks.add("player")
+    if re.search(r"\bprime\b", t): toks.add("prime")
+    if re.search(r"\bfe\b", t): toks.add("fe")
+    if re.search(r"\bse\b", t): toks.add("se")
+    if re.search(r"\blite\b", t): toks.add("lite")
+    if re.search(r"\bcore\b", t): toks.add("core")
+    if re.search(r"\b5g\b", t): toks.add("5g")
+    if not toks:
+        toks.add("base")
+    return min(_VARIANT_RANKS.get(x, 99) for x in toks)
+
+# Нормализация имени для парсинга
+def _normalize_name(name: str) -> str:
+    base = _paren_re.sub(" ", name or "")
+    base = re.sub(r"[^\w\+\- ]+", " ", base, flags=re.U)  # оставляем буквы/цифры/+/-
+    base = re.sub(r"\s+", " ", base).strip()
+    return base
+
+# Универсальный парсер "семья + номер + суффикс"
+def _parse_family_number(text: str):
+    """
+    Возвращает (family_key:str, number:int, suffix_after_number:str) или (None,None,None)
+    Примеры:
+      'C67'           -> ('c', 67, '')
+      'Narzo 70 Pro'  -> ('narzo', 70, '')
+      'X50 Pro'       -> ('x', 50, '')
+      'GT Neo 5 240W' -> ('gt neo', 5, '')
+      'A52s 5G'       -> ('a', 52, 's')
+      '14 Pro'        -> ('', 14, '')
+    """
+    s = _normalize_name(text).lower()
+
+    # 1) Слитно: 'a52s', 'c30s', 'x50m' и т.п.
+    m = re.search(r"\b([a-z]+)(\d{1,3})([a-z]{1,2})?\b", s)
+    if m:
+        family = m.group(1)
+        num = int(m.group(2))
+        suf = (m.group(3) or "")
+        return (family, num, suf)
+
+    # 2) Два слова перед числом: 'gt neo 5', 'galaxy a 53'
+    m = re.search(r"\b([a-z]+)\s+([a-z]+)\s+(\d{1,3})\b", s)
+    if m:
+        family = f"{m.group(1)} {m.group(2)}"
+        num = int(m.group(3))
+        return (family, num, "")
+
+    # 3) Одно слово перед числом: 'narzo 70', 'note 60x'
+    m = re.search(r"\b([a-z]+)\s+(\d{1,3})([a-z]{1,2})?\b", s)
+    if m:
+        family = m.group(1)
+        num = int(m.group(2))
+        suf = (m.group(3) or "")
+        return (family, num, suf)
+
+    # 4) Чисто число в начале: '14 Pro'
+    m = re.search(r"\b(\d{1,3})\b", s)
+    if m:
+        return ("", int(m.group(1)), "")
+
+    return (None, None, None)
+
+def _family_order_key(family: str) -> tuple:
+    """Семьи упорядочиваем: сначала короткие буквенные (A/C/S/X/M...), затем прочие по алфавиту."""
+    if family is None:
+        return (2, "zzz")
+    simple = bool(re.fullmatch(r"[a-z]", family)) or bool(re.fullmatch(r"[a-z]{1,2}", family))
+    return (0 if simple else 1, family or "")
 
 def _model_sort_key(m: PhoneModel):
     """
-    Кастомная сортировка:
-    - Samsung/Galaxy: A→S→M→F→Note→Tab; внутри семьи — номер по убыванию.
-    - Apple/iPhone: поколение по убыванию; варианты: Pro Max > Pro > Plus > Max > s > SE > mini > c > base.
-    - Остальные: «есть число» выше, затем число по убыванию, затем имя.
+    Универсальная сортировка:
+      1) iPhone — по поколению (X=10) ↓, затем варианты.
+      2) Остальные — семья (лексикографически; простые A/C/S/X впереди) → номер ↓ → "сила" варианта → имя.
+      3) Если числа не нашли — в самый низ по имени.
     """
     name = (m.name or "").strip()
+    brand = getattr(m.brand, "name", "") or ""
     name_lc = name.lower()
-    brand_lc = (getattr(m.brand, "name", "") or "").lower()
 
-    # ---------- SAMSUNG / GALAXY ----------
-    if "samsung" in brand_lc or "galaxy" in name_lc:
-        core = _samsung_strip_re.sub("", name_lc).strip()
-        m1 = _samsung_family_re.search(core)
-        if m1:
-            family = m1.group(1).lower()
-            num = int(m1.group(2))
-            family_order = {"a": 0, "s": 1, "m": 2, "f": 3, "note": 4, "tab": 5}
-            fam_idx = family_order.get(family, 98)
-            return (0, fam_idx, -num, name_lc)
+    # iPhone — отдельные правила поколений
+    apple_key = _apple_key(name, brand)
+    if apple_key is not None:
+        return apple_key
 
-    # ---------- APPLE / IPHONE ----------
-    if _apple_brand_re.search(brand_lc) or _apple_brand_re.search(name_lc):
-        gen = None
-        variant_hint = ""
+    # Общий случай
+    fam, num, suf = _parse_family_number(name)
+    if num is not None:
+        # ранжируем варианты
+        var_rank = _variant_rank(name_lc, suf)
+        return (0, _family_order_key(fam), -num, var_rank, name_lc)
 
-        # X / XR / XS → поколение 10
-        x_match = _apple_x_family_re.search(name_lc)
-        if x_match:
-            gen = 10
-            tail = (x_match.group(1) or "").lower()
-            if tail == "r":
-                variant_hint = "xr"
-            elif tail == "s":
-                variant_hint = "xs"
-            else:
-                variant_hint = "x"
-
-        # 6s / 5s и т.п. — тут СРАЗУ ставим и поколение, и вариант
-        if gen is None:
-            s_match = _apple_suffix_s_re.search(name_lc)
-            if s_match:
-                gen = int((s_match.group(1) or s_match.group(2)))
-                variant_hint = "s"
-
-        # Обычные цифры поколения (если ещё не определили)
-        if gen is None:
-            d = _apple_digits_re.search(name_lc)
-            if d:
-                gen = int(d.group(1))
-
-        # Карта приоритетов вариантов
-        vmap = {
-            "pro max": 0,
-            "ultra":   1,
-            "pro":     2,
-            "plus":    3,
-            "max":     4,
-            "xs":      5,
-            "xr":      6,
-            "s":       7,
-            "se":      8,
-            "mini":    9,
-            "c":       10,
-            "x":       11,
-            "":        12,
-        }
-
-        # Вычисляем реальный variant по тексту
-        text = name_lc
-        variant = ""
-        if "pro max" in text:
-            variant = "pro max"
-        elif "pro" in text:
-            variant = "pro"
-        elif "plus" in text:
-            variant = "plus"
-        elif "max" in text:
-            variant = "max"
-        elif "mini" in text:
-            variant = "mini"
-        elif " se" in text or text.endswith("se") or "se " in text:
-            variant = "se"
-        elif " c" in text or text.endswith("c") or "c " in text:
-            variant = "c"
-
-        # Подсказка от X/XS/XR/«s»-суффикса
-        if variant == "" and variant_hint:
-            variant = variant_hint
-
-        # Если поколение так и не нашли — в конец яблочной группы
-        if gen is None:
-            return (2, 1, 0, name_lc)
-
-        # Главный порядок: поколение по убыванию, затем вариант
-        return (1, -gen, vmap.get(variant, 12), name_lc)
-
-    # ---------- ПРОЧИЕ БРЕНДЫ ----------
-    mnum = _num_re.search(name)
+    # fallback: если числа нет, но есть что-то вроде 'Model Z'
+    mnum = _num_re.search(_normalize_name(name))
     has_num = 0 if mnum else 1
     num = int(mnum.group()) if mnum else -1
-    return (3, has_num, -num, name_lc)
+    return (3, (2, "zzz"), -num, 99, name_lc)
 
 def _natural_key(s: str):
     """Ключ для натуральной сортировки: 'Model 2' < 'Model 10'."""
