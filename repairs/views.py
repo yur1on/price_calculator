@@ -31,14 +31,12 @@ MAX_BOOK_AHEAD_DAYS = int(getattr(settings, "REPAIRS_MAX_BOOK_AHEAD_DAYS", 30))
 
 
 
-# ---------- UNIVERSAL NAME PARSING & SORT KEY ----------
+# ---------- UNIVERSAL NAME PARSING & SORT KEY (with GT grouping) ----------
 
 _num_re = re.compile(r"\d+")
-
-# Универсально срезаем всё в круглых скобках (обычно коды: SM-, RMX- и т.п.)
 _paren_re = re.compile(r"\([^)]*\)")
 
-# iPhone (особое правило: X=10, XR/XS и варианты)
+# --- iPhone: отдельная логика поколений ---
 _apple_brand_re   = re.compile(r"\b(apple|iphone)\b", re.I)
 _apple_digits_re  = re.compile(r"\b(\d{1,2})\b")
 _apple_suffix_s_re= re.compile(r"\b(\d{1,2})\s*s\b|\b(\d{1,2})s\b", re.I)
@@ -82,18 +80,17 @@ def _apple_key(name: str, brand: str):
     if not variant and hint: variant = hint
 
     if gen is None:
-        return (2, 1, 0, name_lc)  # хвост яблочной группы
+        return (2, 1, 0, name_lc)  # яблочные «без поколения» в хвост яблочной группы
 
     return (1, -gen, vmap.get(variant, 12), name_lc)
 
-# Универсальные варианты по "силе": чем меньше число — тем выше в списке
+# --- вариативность (универсально) ---
 _VARIANT_RANKS = {
     "ultra":0, "pro max":1, "pro+":2, "pro plus":2, "pro":3,
     "max":4, "plus":5, "edge":6, "player":7, "prime":8,
     "s":9, "fe":10, "se":11, "lite":12, "core":13, "5g":14, "base":15
 }
 
-# Поиск варианта в свободном тексте и суффикса после цифр (s/e)
 def _variant_rank(text_lc: str, suffix_after_number: str = "") -> int:
     toks = set()
     suf = (suffix_after_number or "").lower()
@@ -118,92 +115,107 @@ def _variant_rank(text_lc: str, suffix_after_number: str = "") -> int:
         toks.add("base")
     return min(_VARIANT_RANKS.get(x, 99) for x in toks)
 
-# Нормализация имени для парсинга
 def _normalize_name(name: str) -> str:
     base = _paren_re.sub(" ", name or "")
-    base = re.sub(r"[^\w\+\- ]+", " ", base, flags=re.U)  # оставляем буквы/цифры/+/-
+    base = re.sub(r"[^\w\+\- ]+", " ", base, flags=re.U)
     base = re.sub(r"\s+", " ", base).strip()
     return base
 
-# Универсальный парсер "семья + номер + суффикс"
 def _parse_family_number(text: str):
     """
-    Возвращает (family_key:str, number:int, suffix_after_number:str) или (None,None,None)
-    Примеры:
-      'C67'           -> ('c', 67, '')
-      'Narzo 70 Pro'  -> ('narzo', 70, '')
-      'X50 Pro'       -> ('x', 50, '')
-      'GT Neo 5 240W' -> ('gt neo', 5, '')
-      'A52s 5G'       -> ('a', 52, 's')
-      '14 Pro'        -> ('', 14, '')
+    ('family', number:int, suffix_after_number:str) | (None,None,None)
+    понимает: A52s, C30s, Narzo 70 Pro, GT Neo 5 240W, Galaxy A 53, 14 Pro, ...
     """
     s = _normalize_name(text).lower()
 
-    # 1) Слитно: 'a52s', 'c30s', 'x50m' и т.п.
+    # слитно: 'a52s', 'c30s', 'x50m'
     m = re.search(r"\b([a-z]+)(\d{1,3})([a-z]{1,2})?\b", s)
     if m:
-        family = m.group(1)
-        num = int(m.group(2))
-        suf = (m.group(3) or "")
-        return (family, num, suf)
+        return (m.group(1), int(m.group(2)), m.group(3) or "")
 
-    # 2) Два слова перед числом: 'gt neo 5', 'galaxy a 53'
+    # двусловная семья перед числом: 'gt neo 5', 'galaxy a 53'
     m = re.search(r"\b([a-z]+)\s+([a-z]+)\s+(\d{1,3})\b", s)
     if m:
-        family = f"{m.group(1)} {m.group(2)}"
-        num = int(m.group(3))
-        return (family, num, "")
+        return (f"{m.group(1)} {m.group(2)}", int(m.group(3)), "")
 
-    # 3) Одно слово перед числом: 'narzo 70', 'note 60x'
+    # одно слово перед числом: 'narzo 70', 'note 60x'
     m = re.search(r"\b([a-z]+)\s+(\d{1,3})([a-z]{1,2})?\b", s)
     if m:
-        family = m.group(1)
-        num = int(m.group(2))
-        suf = (m.group(3) or "")
-        return (family, num, suf)
+        return (m.group(1), int(m.group(2)), m.group(3) or "")
 
-    # 4) Чисто число в начале: '14 Pro'
+    # «14 Pro»
     m = re.search(r"\b(\d{1,3})\b", s)
     if m:
         return ("", int(m.group(1)), "")
 
     return (None, None, None)
 
-def _family_order_key(family: str) -> tuple:
-    """Семьи упорядочиваем: сначала короткие буквенные (A/C/S/X/M...), затем прочие по алфавиту."""
-    if family is None:
-        return (2, "zzz")
-    simple = bool(re.fullmatch(r"[a-z]", family)) or bool(re.fullmatch(r"[a-z]{1,2}", family))
-    return (0 if simple else 1, family or "")
+# --- НОВОЕ: извлекаем primary/subfamily, чтобы склеить GT и GT Neo ---
+def _family_primary_sub(fam: str) -> tuple[str,str]:
+    if not fam:
+        return ("", "")
+    parts = fam.split()
+    if len(parts) == 1:
+        return (parts[0], "")
+    # Спец-правила, чтобы группы выглядели «ожидаемо»
+    if parts[0] == "gt":
+        # 'gt neo', 'gt master' => primary 'gt', sub: 'neo' | 'master'
+        return ("gt", " ".join(parts[1:]))
+    if parts[0] == "galaxy" and len(parts) >= 2:
+        # у Samsung хотим группировку по A/S/… (а не по слову 'galaxy')
+        return (parts[1], " ".join(parts[2:]))
+    # общее эвристическое правило
+    if len(parts[-1]) <= 3:
+        return (parts[-1], " ".join(parts[:-1]))
+    return (parts[0], " ".join(parts[1:]))
+
+def _subfamily_rank(primary: str, sub: str) -> int:
+    sub = (sub or "").strip()
+    if primary == "gt":
+        # base GT (пустой sub) → затем GT Neo → затем GT Master → прочее
+        table = {"": 0, "neo": 1, "master": 2}
+        return table.get(sub, 3)
+    return 0
+
+def _family_order_key(primary: str) -> tuple:
+    """
+    Порядок групп сверху: короткие серии + 'gt', затем прочие по алфавиту.
+    Пустую семью ('') отправляем в самый низ (для «14 Pro» и т.п.).
+    """
+    if not primary:
+        return (9, "zzz")
+    simple = (
+        bool(re.fullmatch(r"[a-z]{1,2}", primary)) or
+        primary in {"gt"}
+    )
+    return (0 if simple else 1, primary)
 
 def _model_sort_key(m: PhoneModel):
     """
-    Универсальная сортировка:
-      1) iPhone — по поколению (X=10) ↓, затем варианты.
-      2) Остальные — семья (лексикографически; простые A/C/S/X впереди) → номер ↓ → "сила" варианта → имя.
-      3) Если числа не нашли — в самый низ по имени.
+    1) iPhone — по поколению (X=10) ↓, затем вариант.
+    2) Остальные — primary-семья → подсемейство (для GT) → номер ↓ → «сила» варианта → имя.
+    3) Без числа — в хвост по имени.
     """
     name = (m.name or "").strip()
     brand = getattr(m.brand, "name", "") or ""
     name_lc = name.lower()
 
-    # iPhone — отдельные правила поколений
+    # iPhone как раньше
     apple_key = _apple_key(name, brand)
     if apple_key is not None:
         return apple_key
 
-    # Общий случай
     fam, num, suf = _parse_family_number(name)
     if num is not None:
-        # ранжируем варианты
+        primary, sub = _family_primary_sub(fam or "")
         var_rank = _variant_rank(name_lc, suf)
-        return (0, _family_order_key(fam), -num, var_rank, name_lc)
+        return (0, _family_order_key(primary), _subfamily_rank(primary, sub), -num, var_rank, name_lc)
 
-    # fallback: если числа нет, но есть что-то вроде 'Model Z'
+    # fallback, если совсем без чисел
     mnum = _num_re.search(_normalize_name(name))
     has_num = 0 if mnum else 1
     num = int(mnum.group()) if mnum else -1
-    return (3, (2, "zzz"), -num, 99, name_lc)
+    return (3, (9, "zzz"), -num, 99, name_lc)
 
 def _natural_key(s: str):
     """Ключ для натуральной сортировки: 'Model 2' < 'Model 10'."""
