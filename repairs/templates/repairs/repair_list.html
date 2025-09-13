@@ -3,13 +3,36 @@
 
 {% block content %}
   <style>
-    /* не даём длинным названиям растягивать ячейку */
-    .table td:first-child { word-break: break-word; }
+    /* ——— КНОПКА НАЗАД ——— */
+    .back-wrap{margin:2px 0 12px}
+    .btn-back{
+      --bg:#fff; --ink:#111; --brd:#000;
+      display:inline-flex; align-items:center; gap:10px;
+      padding:12px 16px; border-radius:12px;
+      border:1px solid var(--brd); background:var(--bg); color:var(--ink);
+      text-decoration:none; line-height:1; font-weight:600;
+      transition:background .2s,color .2s,box-shadow .2s,transform .15s,border-color .2s;
+      will-change: transform;
+    }
+    .btn-back svg{width:18px;height:18px;stroke:currentColor;transition:transform .2s}
+    .btn-back:hover{
+      background:#111; color:#fff; border-color:#111;
+      box-shadow:0 6px 14px rgba(0,0,0,.08);
+    }
+    .btn-back:hover svg{transform:translateX(-2px)}
+    .btn-back:active{transform:translateY(1px)}
+    .btn-back:focus-visible{outline:3px solid #111; outline-offset:2px}
 
-    /* Мобильная карточная версия таблицы */
+    /* ——— ТАБЛИЦА ——— */
+    .table td:first-child { word-break: break-word; }
+    /* Услуга и цена — акценты */
+    .table td:nth-child(1) { font-weight: 700; font-size: 1.05em; }
+    .table td:nth-child(2) { font-weight: 700; color: #16a34a; } /* зелёный */
+
+    /* Мобильная карточная версия */
     @media (max-width: 640px){
       .table { border: 0; background: transparent; }
-      .table thead { display: none; }                 /* убираем заголовок */
+      .table thead { display: none; }
       .table tbody { display: block; }
       .table tr {
         display: block;
@@ -26,12 +49,12 @@
         padding: 6px 0;
         border: 0;
       }
-      /* подписи к полям через ::before */
+      .table td:not(:nth-child(4)):not(:last-child) { border-bottom: 1px solid var(--brd); }
+
       .table td:nth-child(1)::before { content: "Услуга";   font-weight: 600; color: var(--muted); }
       .table td:nth-child(2)::before { content: "Цена";     font-weight: 600; color: var(--muted); }
       .table td:nth-child(3)::before { content: "Срок";     font-weight: 600; color: var(--muted); }
 
-      /* ячейка с кнопкой — на всю ширину; метка не нужна */
       .table td:nth-child(4) {
         grid-template-columns: 1fr;
         padding-top: 10px;
@@ -41,18 +64,27 @@
         display: block;
         width: 100%;
         text-align: center;
-        white-space: nowrap; /* аккуратнее смотрится как цельная кнопка */
+        white-space: nowrap;
       }
+      /* Кнопка назад — на всю ширину на мобильном */
+      .btn-back{width:100%; justify-content:center}
     }
 
-    /* ещё компактнее на очень узких экранах */
     @media (max-width: 360px){
-      .table td { grid-template-columns: 1fr; } /* метка сверху, значение ниже */
+      .table td { grid-template-columns: 1fr; }
       .table td::before { margin-bottom: 4px; }
     }
   </style>
 
-  <p><a href="{% url 'repairs:model_list' brand_slug=model.brand.slug %}">← Назад к моделям</a></p>
+  <div class="back-wrap">
+    <a class="btn-back" href="{% url 'repairs:model_list' brand_slug=model.brand.slug %}">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M15 19l-7-7 7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    <span>Назад к моделям</span>
+    </a>
+  </div>
+
   <h1>{{ model.brand.name }} {{ model.name }} — ремонт</h1>
 
   <table class="table">

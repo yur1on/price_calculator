@@ -43,12 +43,15 @@
   }
   .card{
     display:flex;align-items:center;gap:14px;
-    background:var(--card);border:1px solid var(--brd);border-radius:var(--radius);
+    background:var(--card);
+    border:1px solid #000;            /* ← чёрная обводка карточек */
+    border-radius:var(--radius);
     padding:14px 16px;text-decoration:none;color:var(--ink);
-    transition:.2s border-color,.2s transform,.2s box-shadow;
+    transition:.2s transform,.2s box-shadow,.2s background-color,.2s border-color;
   }
   .card:hover{
-    border-color:var(--brd-hover);transform:translateY(-2px);
+    border-color:#000;                 /* подчёркиваем обводку на ховере */
+    transform:translateY(-2px);
     box-shadow:0 8px 20px rgba(2,8,23,.06);
   }
 
@@ -89,7 +92,7 @@
 <!-- Фильтр категорий -->
 <div class="toolbar">
   <div>
-        <h1>Выберите устройство, которое хотите отремонтировать</h1>
+    <h1>Выберите устройство, которое хотите отремонтировать</h1>
     <div class="chips-label">Категория устройства</div>
     <div class="chips">
       {% for key,label in categories %}
@@ -111,7 +114,6 @@
       <a class="card" href="{% url 'repairs:model_list' brand_slug=b.slug %}?cat={{ selected_cat }}">
         <span class="avatar">
           {% if b.logo %}
-            {# фиксируем размеры для уменьшения «скачков» контента #}
             <img src="{{ b.logo.url }}" alt="{{ b.name }}" width="52" height="52" loading="lazy" decoding="async">
           {% else %}
             <span class="letter">{{ b.name|first|upper }}</span>
