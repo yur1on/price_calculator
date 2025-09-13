@@ -29,24 +29,128 @@ from .models import (
 MAX_BOOK_AHEAD_DAYS = int(getattr(settings, "REPAIRS_MAX_BOOK_AHEAD_DAYS", 30))
 # ---------- утилиты ----------
 
-def _natural_key(s: str):
-    """Ключ для натуральной сортировки: 'Model 2' < 'Model 10'."""
-    return [int(t) if t.isdigit() else (t or "").lower() for t in re.split(r"(\d+)", s or "")]
 
+
+# --- ВЕРХ ФАЙЛА (рядом с другими regex) ---
 _num_re = re.compile(r"\d+")
+
+# Samsung
+_samsung_strip_re = re.compile(r"\b(samsung|galaxy)\b", re.I)
+_samsung_family_re = re.compile(r"\b(a|s|m|f|note|tab)\s*-?\s*(\d{1,4})\b", re.I)
+
+# Apple
+_apple_brand_re = re.compile(r"\b(apple|iphone)\b", re.I)
+_apple_digits_re = re.compile(r"\b(\d{1,2})\b")                         # 6, 11, 14...
+_apple_suffix_s_re = re.compile(r"\b(\d{1,2})\s*s\b|\b(\d{1,2})s\b", re.I)  # 6 s / 6s
+_apple_x_family_re = re.compile(r"\bx(r|s)?\b", re.I)                    # X / XR / XS
 
 def _model_sort_key(m: PhoneModel):
     """
-    Сортировка моделей:
-      1) сначала модели с числом в названии,
-      2) по убыванию числа (iPhone 16, 15, 14, ...),
-      3) затем модели без числа — по имени (a→z).
+    Кастомная сортировка:
+    - Samsung/Galaxy: A→S→M→F→Note→Tab; внутри семьи — номер по убыванию.
+    - Apple/iPhone: поколение по убыванию; варианты: Pro Max > Pro > Plus > Max > s > SE > mini > c > base.
+    - Остальные: «есть число» выше, затем число по убыванию, затем имя.
     """
     name = (m.name or "").strip()
+    name_lc = name.lower()
+    brand_lc = (getattr(m.brand, "name", "") or "").lower()
+
+    # ---------- SAMSUNG / GALAXY ----------
+    if "samsung" in brand_lc or "galaxy" in name_lc:
+        core = _samsung_strip_re.sub("", name_lc).strip()
+        m1 = _samsung_family_re.search(core)
+        if m1:
+            family = m1.group(1).lower()
+            num = int(m1.group(2))
+            family_order = {"a": 0, "s": 1, "m": 2, "f": 3, "note": 4, "tab": 5}
+            fam_idx = family_order.get(family, 98)
+            return (0, fam_idx, -num, name_lc)
+
+    # ---------- APPLE / IPHONE ----------
+    if _apple_brand_re.search(brand_lc) or _apple_brand_re.search(name_lc):
+        gen = None
+        variant_hint = ""
+
+        # X / XR / XS → поколение 10
+        x_match = _apple_x_family_re.search(name_lc)
+        if x_match:
+            gen = 10
+            tail = (x_match.group(1) or "").lower()
+            if tail == "r":
+                variant_hint = "xr"
+            elif tail == "s":
+                variant_hint = "xs"
+            else:
+                variant_hint = "x"
+
+        # 6s / 5s и т.п. — тут СРАЗУ ставим и поколение, и вариант
+        if gen is None:
+            s_match = _apple_suffix_s_re.search(name_lc)
+            if s_match:
+                gen = int((s_match.group(1) or s_match.group(2)))
+                variant_hint = "s"
+
+        # Обычные цифры поколения (если ещё не определили)
+        if gen is None:
+            d = _apple_digits_re.search(name_lc)
+            if d:
+                gen = int(d.group(1))
+
+        # Карта приоритетов вариантов
+        vmap = {
+            "pro max": 0,
+            "ultra":   1,
+            "pro":     2,
+            "plus":    3,
+            "max":     4,
+            "xs":      5,
+            "xr":      6,
+            "s":       7,
+            "se":      8,
+            "mini":    9,
+            "c":       10,
+            "x":       11,
+            "":        12,
+        }
+
+        # Вычисляем реальный variant по тексту
+        text = name_lc
+        variant = ""
+        if "pro max" in text:
+            variant = "pro max"
+        elif "pro" in text:
+            variant = "pro"
+        elif "plus" in text:
+            variant = "plus"
+        elif "max" in text:
+            variant = "max"
+        elif "mini" in text:
+            variant = "mini"
+        elif " se" in text or text.endswith("se") or "se " in text:
+            variant = "se"
+        elif " c" in text or text.endswith("c") or "c " in text:
+            variant = "c"
+
+        # Подсказка от X/XS/XR/«s»-суффикса
+        if variant == "" and variant_hint:
+            variant = variant_hint
+
+        # Если поколение так и не нашли — в конец яблочной группы
+        if gen is None:
+            return (2, 1, 0, name_lc)
+
+        # Главный порядок: поколение по убыванию, затем вариант
+        return (1, -gen, vmap.get(variant, 12), name_lc)
+
+    # ---------- ПРОЧИЕ БРЕНДЫ ----------
     mnum = _num_re.search(name)
-    has_num = 0 if mnum else 1                 # 0 — есть число (выше), 1 — нет (ниже)
-    num = int(mnum.group()) if mnum else -1    # большее число — свежее
-    return (has_num, -num, name.lower())
+    has_num = 0 if mnum else 1
+    num = int(mnum.group()) if mnum else -1
+    return (3, has_num, -num, name_lc)
+
+def _natural_key(s: str):
+    """Ключ для натуральной сортировки: 'Model 2' < 'Model 10'."""
+    return [int(t) if t.isdigit() else (t or "").lower() for t in re.split(r"(\d+)", s or "")]
 
 def _parse_date_or(default_date: date, value: str | None) -> date:
     try:
