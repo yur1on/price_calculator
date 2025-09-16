@@ -379,18 +379,37 @@ def get_available_slots(
     return slots
 
 def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
-    """Месячный календарь (6 недель) с лимитом записи на 30 дней вперёд,
+    """
+    Месячный календарь (6 недель) с лимитом записи на 30 дней вперёд,
     скрытием дней до сегодня и удалением полностью «прошедших» верхних недель.
+
+    ДОП: если длительность услуги > 560 мин, запись недоступна — редирект на список услуг с сообщением.
     """
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
     model = get_object_or_404(PhoneModel, brand=brand, slug=model_slug)
     repair_type = get_object_or_404(RepairType, slug=repair_slug)
 
+    # --- Правило «по согласованию»: блокируем выбор слота, если длительность > 560
+    try:
+        price_entry = ModelRepairPrice.objects.get(
+            phone_model=model, repair_type=repair_type, is_active=True
+        )
+        effective_duration_min = price_entry.duration_min
+    except ModelRepairPrice.DoesNotExist:
+        effective_duration_min = repair_type.default_duration_min
+
+    if effective_duration_min and effective_duration_min > 560:
+        messages.info(
+            request,
+            "Запись на эту услугу возможна только по согласованию. Позвоните нам, пожалуйста."
+        )
+        return redirect("repairs:repair_list", brand_slug=brand.slug, model_slug=model.slug)
+
     tz = timezone.get_current_timezone()
     today = timezone.localdate()
 
     # Запись доступна максимум на 30 дней вперёд (скользящее окно)
-    limit_date = today + timedelta(days=30)
+    limit_date = today + timedelta(days=MAX_BOOK_AHEAD_DAYS)
     limit_month_start = limit_date.replace(day=1)
     current_month_start = today.replace(day=1)
 
@@ -449,7 +468,6 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
     is_current_month = (month_start.year == today.year and month_start.month == today.month)
 
     # === Удаляем полностью «прошедшие» верхние недели (ТОЛЬКО для текущего месяца) ===
-    # Например, если сегодня 8-е, первая неделя с 1–7 числами уйдёт целиком.
     if is_current_month:
         while calendar_weeks:
             first_week = calendar_weeks[0]
@@ -477,7 +495,9 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
 def book(request, brand_slug: str, model_slug: str, repair_slug: str):
     """
     Создание брони для выбранного слота (с глобальной проверкой занятости и защитой от гонок)
-    + ограничение: записываться можно максимум на N дней вперёд (по умолчанию 30).
+    + ограничение: запись максимум на MAX_BOOK_AHEAD_DAYS вперёд.
+
+    ДОП: если длительность услуги > 560 мин — онлайн-запись запрещена.
     """
     from django.conf import settings
 
@@ -486,6 +506,19 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
     model = get_object_or_404(PhoneModel, brand=brand, slug=model_slug)
     repair_type = get_object_or_404(RepairType, slug=repair_slug)
+
+    # --- Правило «по согласованию»: блокируем онлайн-бронирование, если длительность > 560
+    try:
+        price_entry_for_check = ModelRepairPrice.objects.get(
+            phone_model=model, repair_type=repair_type, is_active=True
+        )
+        effective_duration_min = price_entry_for_check.duration_min
+    except ModelRepairPrice.DoesNotExist:
+        effective_duration_min = repair_type.default_duration_min
+
+    if effective_duration_min and effective_duration_min > 560:
+        messages.error(request, "Онлайн-запись на эту услугу недоступна. Срок по согласованию.")
+        return redirect("repairs:repair_list", brand_slug=brand.slug, model_slug=model.slug)
 
     # слот обязателен
     slot_str = request.GET.get("slot")
@@ -511,7 +544,7 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
         return redirect("repairs:slot_select",
                         brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 
-    # Лимит на дату записи: не дальше чем MAX_BOOK_AHEAD_DAYS от сегодняшней локальной даты
+    # Лимит на дату записи
     limit_date = timezone.localdate() + timedelta(days=MAX_BOOK_AHEAD_DAYS)
     slot_local_date = timezone.localtime(slot_dt).date()
     if slot_local_date > limit_date:
@@ -579,7 +612,7 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
                 app.apply_referral()
                 if not app.price_final:
                     app.price_final = app.price_original - app.discount_amount
-                app.save()  # (при сохранении может создаться ReferralRedemption по сигналу)
+                app.save()
 
             return redirect("repairs:booking_success", appointment_id=app.id)
     else:
@@ -594,6 +627,7 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
         "price": price,
         "form": form,
     })
+
 
 def booking_success(request, appointment_id: int):
     """Страница подтверждения после успешного бронирования."""

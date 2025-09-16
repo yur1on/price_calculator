@@ -24,10 +24,48 @@
     .btn-back:focus-visible{outline:3px solid #111; outline-offset:2px}
 
     /* ——— ТАБЛИЦА ——— */
+    .table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--brd); border-radius:12px; overflow:hidden; }
+    .table th, .table td { padding:12px 14px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+    .table tr:last-child td{ border-bottom:0; }
     .table td:first-child { word-break: break-word; }
-    /* Услуга и цена — акценты */
     .table td:nth-child(1) { font-weight: 700; font-size: 1.05em; }
-    .table td:nth-child(2) { font-weight: 700; color: #16a34a; } /* зелёный */
+    .table td:nth-child(2) { font-weight: 700; color: #16a34a; }
+    .muted{color:#6b7280}
+
+    /* ——— КНОПКИ ——— */
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;border:1px solid #111;background:#111;color:#fff;text-decoration:none;font-weight:600;line-height:1;transition:opacity .2s,transform .15s}
+    .btn:hover{opacity:.9}
+    .btn:active{transform:translateY(1px)}
+    .btn.is-disabled{
+      pointer-events: none;
+      opacity: .55;
+      filter: grayscale(20%);
+      cursor: not-allowed;
+      background:#cfcfcf; color:#666; border-color:#cfcfcf;
+    }
+
+    /* ——— ПОДСКАЗКА ДЛЯ «ПО СОГЛАСОВАНИЮ» ——— */
+    .tooltip{ position: relative; display:inline-flex; align-items:center; gap:6px; cursor: help; }
+    .tooltip .tip{
+      position:absolute;
+      left:50%; bottom:calc(100% + 10px);
+      transform:translate(-50%,-4px);
+      background:#111; color:#fff;
+      padding:8px 10px; border-radius:8px;
+      font-size:.9rem; line-height:1.25;
+      box-shadow:0 8px 22px rgba(0,0,0,.18);
+      white-space: nowrap;
+      opacity:0; pointer-events:none;
+      transition:opacity .15s ease, transform .15s ease;
+      z-index:50;
+    }
+    .tooltip .tip::after{
+      content:""; position:absolute; top:100%; left:50%;
+      transform:translateX(-50%);
+      border:6px solid transparent; border-top-color:#111;
+    }
+    .tooltip:hover .tip,
+    .tooltip:focus-within .tip{ opacity:1; transform:translate(-50%,-8px); }
 
     /* Мобильная карточная версия */
     @media (max-width: 640px){
@@ -44,7 +82,7 @@
       }
       .table td {
         display: grid;
-        grid-template-columns: 120px 1fr; /* метка | значение */
+        grid-template-columns: 120px 1fr;
         gap: 8px;
         padding: 6px 0;
         border: 0;
@@ -66,13 +104,13 @@
         text-align: center;
         white-space: nowrap;
       }
-      /* Кнопка назад — на всю ширину на мобильном */
       .btn-back{width:100%; justify-content:center}
     }
 
     @media (max-width: 360px){
       .table td { grid-template-columns: 1fr; }
       .table td::before { margin-bottom: 4px; }
+      .tooltip .tip{ white-space: normal; max-width: 260px; text-align: center; }
     }
   </style>
 
@@ -81,7 +119,7 @@
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M15 19l-7-7 7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-    <span>Назад к моделям</span>
+      <span>Назад к моделям</span>
     </a>
   </div>
 
@@ -98,17 +136,37 @@
     </thead>
     <tbody>
       {% for price in prices %}
+        {% with dur=price.duration_min|default_if_none:0 %}
         <tr>
           <td>{{ price.repair_type.name }}</td>
           <td>{{ price.price }} BYN</td>
-          <td>{{ price.duration_min }} мин</td>
+
           <td>
-            <a class="btn"
-               href="{% url 'repairs:slot_select' brand_slug=model.brand.slug model_slug=model.slug repair_slug=price.repair_type.slug %}">
-              Выбрать время
-            </a>
+            {% if dur|add:0 > 560 %}
+              <span class="tooltip" tabindex="0"
+                    aria-label="Запчасть под заказ — все подробности узнайте по номеру +375445684493.">
+                <span class="agree-text">по согласованию</span>
+                <span class="tip" role="tooltip">
+                  Запчасть под заказ — все подробности узнайте по номеру +375445684493.
+                </span>
+              </span>
+            {% else %}
+              {{ dur }} мин
+            {% endif %}
+          </td>
+
+          <td>
+            {% if dur|add:0 > 560 %}
+              <span class="btn is-disabled" aria-disabled="true" tabindex="-1">Выбрать время</span>
+            {% else %}
+              <a class="btn"
+                 href="{% url 'repairs:slot_select' brand_slug=model.brand.slug model_slug=model.slug repair_slug=price.repair_type.slug %}">
+                Выбрать время
+              </a>
+            {% endif %}
           </td>
         </tr>
+        {% endwith %}
       {% empty %}
         <tr><td colspan="4" class="muted">Для этой модели нет активных услуг.</td></tr>
       {% endfor %}
