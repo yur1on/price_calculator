@@ -1,82 +1,106 @@
 {% extends "repairs/base.html" %}
+{% load static %}
 {% block title %}Выбор бренда{% endblock %}
 {% block content %}
 <style>
   :root{
-    --bg:#0b1220;       /* фон hero-градиента */
-    --ink:#0f172a;      /* основной текст */
-    --muted:#64748b;    /* вторичный текст */
-    --card:#ffffff;     /* карточки */
-    --brd:#e5e7eb;      /* бордер карточек/инпутов */
-    --brd-hover:#cbd5e1;
-    --accent:#0ea5e9;   /* акцент (чипы/лого-фон по умолчанию) */
-    --radius:14px;
-    --gap:16px;
+    --bg:#0b1220; --ink:#0f172a; --muted:#64748b; --card:#ffffff;
+    --brd:#e5e7eb; --brd-hover:#cbd5e1; --accent:#0ea5e9;
+    --radius:14px; --gap:16px;
   }
 
   /* ——— Hero ——— */
   .hero{
     background: radial-gradient(1200px 600px at 10% 0%, #111 0%, #1f2937 40%, #0ea5e9 140%);
     color:#fff;border-radius:18px;padding:28px 24px;margin:0 0 22px;
-    box-shadow: 0 10px 30px rgba(2,8,23,.2);
+    box-shadow:0 10px 30px rgba(2,8,23,.2);
   }
   .hero h1{font-size:30px;line-height:1.15;margin:0 0 10px;letter-spacing:.2px}
   .hero p{margin:0;opacity:.9;max-width:760px;font-size:16px}
 
   /* ——— Категории ——— */
-  .toolbar{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin:6px 0 18px}
-  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .toolbar{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin:6px 0 18px;max-width:100%;box-sizing:border-box}
+  .chips{display:flex;flex-wrap:wrap;gap:12px;max-width:100%;box-sizing:border-box}
+
+  /* Базовая кнопка-чип с градиентной рамкой */
   .chip{
-    padding:10px 14px;border:1px solid var(--brd);border-radius:999px;
-    text-decoration:none;color:var(--ink);background:#fff;font-weight:600;
-    transition:.18s background,.18s color,.18s border-color,.18s transform;
+    --g1:#60a5fa; --g2:#a78bfa; --g3:#0ea5e9;   /* дефолтные цвета, переопределяются классами ниже */
+    position:relative;
+    display:inline-flex;align-items:center;gap:10px;
+    padding:8px 18px;
+    border:0; border-radius:16px;
+    color:var(--ink);
+    background:
+      linear-gradient(#fff,#fff) padding-box,
+      linear-gradient(135deg,var(--g1),var(--g2),var(--g3)) border-box;
+    border:2px solid transparent;
+    font-weight:600;font-size:15px;line-height:1;
+    text-decoration:none;
+    transition:transform .18s, box-shadow .18s, color .18s, background .18s, opacity .18s;
+    box-shadow:0 6px 14px rgba(2,8,23,.06);
+    -webkit-tap-highlight-color: transparent;
   }
-  .chip:hover{transform:translateY(-1px)}
-  .chip.active{background:#111;color:#fff;border-color:#111}
+  .chip *{-webkit-tap-highlight-color: transparent}
+  .chip:hover{transform:translateY(-1px); box-shadow:0 10px 22px rgba(2,8,23,.09)}
+  .chip:active{opacity:.96; transform:translateY(0)}
+  .chip:focus-visible{outline:3px solid #111; outline-offset:2px}
+
+  /* Активная: заливаем градиентом, текст белый */
+  .chip.active{
+    color:#fff;
+    background: linear-gradient(135deg,var(--g1),var(--g2),var(--g3));
+    box-shadow:0 10px 24px rgba(2,8,23,.16);
+  }
+
+
+  /* Иконка (ваши картинки) — белая «плитка», чтобы не темнела */
+  .chip .icon{
+    width:38px;height:38px;display:inline-grid;place-items:center;
+    background:#fff;border-radius:7px;padding:0px;
+    box-shadow:0 0 0 1px rgba(0,0,0,.12) inset;
+  }
+  .chip .img-icon{width:100%;height:100%;object-fit:contain;border-radius:5px;display:block}
+  .chip.active .icon{ box-shadow:0 0 0 1px rgba(255,255,255,.78) inset; background:rgba(255,255,255,.98) }
+
   .chips-label{font-size:13px;color:var(--muted);margin:0 0 6px}
 
   /* ——— Сетка брендов ——— */
-  .grid{
-    display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
-    gap:var(--gap);
-  }
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:var(--gap)}
   .card{
-    display:flex;align-items:center;gap:14px;
-    background:var(--card);
-    border:1px solid #000;            /* ← чёрная обводка карточек */
-    border-radius:var(--radius);
-    padding:14px 16px;text-decoration:none;color:var(--ink);
+    display:flex;align-items:center;gap:14px;background:var(--card);
+    border:1px solid #000;border-radius:var(--radius);padding:14px 16px;
+    text-decoration:none;color:var(--ink);
     transition:.2s transform,.2s box-shadow,.2s background-color,.2s border-color;
   }
-  .card:hover{
-    border-color:#000;                 /* подчёркиваем обводку на ховере */
-    transform:translateY(-2px);
-    box-shadow:0 8px 20px rgba(2,8,23,.06);
-  }
+  .card:hover{border-color:#000;transform:translateY(-2px);box-shadow:0 8px 20px rgba(2,8,23,.06)}
 
   .avatar{
     width:52px;height:52px;border-radius:12px;overflow:hidden;flex:0 0 52px;
     background:#fff;border:1px solid var(--brd);display:grid;place-items:center;
   }
-  .avatar img{
-    width:100%;height:100%;object-fit:contain;background:#fff;
-  }
+  .avatar img{width:100%;height:100%;object-fit:contain;background:#fff}
   .avatar .letter{
     width:100%;height:100%;display:grid;place-items:center;
-    background:linear-gradient(135deg, var(--accent), #60a5fa);
-    color:#fff;font-weight:800;font-size:18px;
+    background:linear-gradient(135deg,var(--accent),#60a5fa);color:#fff;font-weight:800;font-size:18px;
   }
 
   .title{font-weight:800;letter-spacing:.2px}
   .sub{font-size:12px;color:var(--muted);margin-top:2px}
-
   .section-title{margin:2px 0 10px;font-size:18px;letter-spacing:.2px}
 
-  /* ——— Адаптив ——— */
+  /* ——— Адаптив (мобильные размеры НЕ меняем) ——— */
   @media (max-width:760px){
     .hero{padding:22px 18px}
     .hero h1{font-size:24px}
+    .toolbar{padding:0 4px}
+    .chips{gap:6px}
+    .chip{padding:6px 8px;font-size:13px; border-width:2px} /* размеры как раньше */
+    .chip .icon{width:18px;height:18px;padding:1px;border-radius:5px}
+    .chip .img-icon{border-radius:3px}
+  }
+  @media (max-width:360px){
+    .chip{padding:5px 6px;font-size:12px}
+    .chip .icon{width:16px;height:16px}
   }
   @media (max-width:560px){
     .grid{grid-template-columns:1fr}
@@ -95,12 +119,25 @@
     <h1>Выберите устройство, которое хотите отремонтировать</h1>
     <div class="chips-label">Категория устройства</div>
     <div class="chips">
-      {% for key,label in categories %}
-        {% if selected_cat == key %}
-          <span class="chip active">{{ label }}</span>
-        {% else %}
-          <a class="chip" href="?cat={{ key }}">{{ label }}</a>
-        {% endif %}
+      {% for key, label in categories %}
+        {# ожидаются ключи: phone / tablet / watch; файлы: static/repairs/icons/cat-<key>.png #}
+        {% with src='repairs/icons/cat-'|add:key|add:'.png' %}
+          {% if selected_cat == key %}
+            <span class="chip chip--{{ key }} active" aria-current="true">
+              <span class="icon" aria-hidden="true">
+                <img class="img-icon" src="{% static src %}" alt="">
+              </span>
+              {{ label }}
+            </span>
+          {% else %}
+            <a class="chip chip--{{ key }}" href="?cat={{ key }}">
+              <span class="icon" aria-hidden="true">
+                <img class="img-icon" src="{% static src %}" alt="">
+              </span>
+              {{ label }}
+            </a>
+          {% endif %}
+        {% endwith %}
       {% endfor %}
     </div>
   </div>

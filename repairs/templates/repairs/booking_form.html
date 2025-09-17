@@ -3,116 +3,189 @@
 
 {% block content %}
 <style>
-#booking-summary{
-  font-size: 16px;          /* было 12px из .small */
-  line-height: 1.7;
-  margin: 10px 0 16px;
-}
-@media (min-width: 768px){
-  #booking-summary{ font-size: 17px; }
-}
-
-  /* Компактная форма */
-  #booking-form{max-width:560px}
-  #booking-form .form-row{margin-bottom:12px}
-  #booking-form .form-row label{
-    display:block; margin-bottom:6px; font-size:14px; color:#0f172a;
+  :root{
+    --ink:#0f172a; --muted:#64748b; --brd:#e5e7eb;
+    --g1:#22d3ee; --g2:#06b6d4; --g3:#0284c7;
+    --radius:14px;
   }
 
-  /* Аккуратные инпуты */
-  #booking-form input[type="text"],
-  #booking-form input[type="tel"],
-  #booking-form input[type="search"],
-  #booking-form input[type="email"]{
+  .back-link{
+    display:inline-flex;align-items:center;gap:10px;
+    padding:10px 12px;border:1px solid #000;border-radius:12px;
+    background:#fff;color:#111;text-decoration:none;font-weight:600;line-height:1;
+    transition:background .2s,color .2s,transform .15s,box-shadow .2s;
+  }
+  .back-link svg{width:18px;height:18px;stroke:currentColor;transition:transform .2s}
+  .back-link:hover{background:#111;color:#fff;box-shadow:0 6px 14px rgba(0,0,0,.08)}
+  .back-link:hover svg{transform:translateX(-2px)}
+  .back-wrap{margin:2px 0 14px}
+
+  h1{margin:0 0 10px}
+
+  /* ——— Карточка-резюме (лево, ширина как у формы) ——— */
+  .summary{
     width:100%;
-    height:42px;
-    padding:10px 12px;
-    border:1px solid #e5e7eb;
-    border-radius:10px;
-    font-size:15px;
-    background:#fff;
-    outline:none;
+    max-width:720px;                 /* как форма */
+    margin:8px 0 18px;               /* ← слева, без auto */
+    background:
+      linear-gradient(#fff,#fff) padding-box,
+      linear-gradient(135deg,var(--g1),var(--g2),var(--g3)) border-box;
+    border:2px solid transparent;border-radius:16px;
+    box-shadow:0 10px 24px rgba(2,8,23,.08);
+    padding:16px;
+  }
+  .summary-title{margin:0 0 10px;font-weight:800;letter-spacing:.2px}
+
+  /* Детали всегда в один столбик */
+  .summary-items{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:10px 16px;
+  }
+  .summary-item{display:flex;gap:10px;align-items:flex-start}
+  .summary-item .ic{flex:0 0 22px;width:22px;height:22px;border-radius:8px;
+    display:grid;place-items:center;background:#f8fafc;border:1px solid var(--brd)}
+  .summary-item .ic svg{width:16px;height:16px;stroke:#111}
+  .summary-item strong{display:block;color:#111}
+  .summary-item span{color:var(--ink)}
+
+  /* ——— Форма (слева, как было) ——— */
+  #booking-form{
+    max-width:720px;                 /* ширина */
+    margin:0;                        /* ← слева, без центрирования */
+  }
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .form-row{margin-bottom:0}
+  .form-row label{display:block;margin:0 0 6px;font-size:14px;color:#0f172a}
+
+  .form-control{
+    width:100%;height:44px;padding:10px 12px;border:1px solid var(--brd);
+    border-radius:10px;font-size:15px;background:#fff;outline:none;
     transition:border-color .15s, box-shadow .15s;
   }
-  #booking-form input:focus{
-    border-color:#111;
-    box-shadow:0 0 0 3px rgba(0,0,0,.06);
-  }
+  .form-control:focus{border-color:#111;box-shadow:0 0 0 3px rgba(0,0,0,.06)}
+  .has-error .form-control{border-color:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.08)}
+  .field-error{margin-top:6px;font-size:12px;color:#b91c1c}
 
-  /* Ошибки полей */
-  #booking-form .field-error{
-    margin-top:6px; font-size:12px; color:#b91c1c;
-  }
-  #booking-form .has-error input{
-    border-color:#ef4444;
-    box-shadow:0 0 0 3px rgba(239,68,68,.08);
-  }
+  .row-full{grid-column:1 / -1}
 
-  /* Блок согласия: аккуратный чекбокс и выравнивание */
-  #booking-form .agree{
-    margin:14px 0; padding:10px 12px; background:#f8fafc;
-    border:1px solid #e5e7eb; border-radius:10px;
-    display:flex; gap:10px; align-items:center;
+  .agree{
+    margin:14px 0;padding:12px;background:#f8fafc;border:1px solid var(--brd);border-radius:10px;
+    display:flex;gap:10px;align-items:flex-start
   }
-  #booking-form .agree input[type="checkbox"]{
-    width:18px; height:18px; flex:0 0 18px; margin:0;
-    accent-color:#111;            /* современная поддержка */
-  }
-  #booking-form .agree label{
-    display:inline; cursor:pointer; line-height:1.5;
-  }
-  #booking-form .agree a{ color:#0f172a; text-decoration:underline }
+  .agree input[type="checkbox"]{width:18px;height:18px;margin-top:2px;accent-color:#111}
+  .agree label{display:inline;line-height:1.5}
+  .agree a{color:#0f172a;text-decoration:underline}
 
-  /* Кнопка */
-  #booking-form .btn{
-    display:inline-block; background:#111; color:#fff;
-    padding:10px 14px; border-radius:10px; text-decoration:none;
-    border:1px solid #111; font-size:15px;
+  .help{margin:8px 0 0;font-size:13px;color:var(--muted)}
+  .help a{color:#111}
+
+  .btn-primary{
+    appearance:none;border:0;border-radius:12px;
+    padding:12px 16px;font-weight:800;font-size:16px;letter-spacing:.2px;
+    color:#fff;background:linear-gradient(135deg,var(--g1),var(--g2),var(--g3));
+    box-shadow:0 10px 22px rgba(2,8,23,.16);cursor:pointer;
+    transition:transform .1s, filter .15s, box-shadow .2s
   }
-  #booking-form .btn[disabled]{opacity:.5; cursor:not-allowed}
+  .btn-primary:hover{filter:brightness(1.02);box-shadow:0 14px 28px rgba(2,8,23,.2)}
+  .btn-primary:active{transform:translateY(1px)}
+  .btn-primary[disabled]{opacity:.6;cursor:not-allowed;filter:none;box-shadow:none}
+
+  @media (max-width:760px){
+    .form-grid{grid-template-columns:1fr}
+  }
 </style>
 
-<p>
-  <a href="{% url 'repairs:slot_select' brand_slug=model.brand.slug model_slug=model.slug repair_slug=repair_type.slug %}">
-    ← Другой слот
+<div class="back-wrap">
+  <a class="back-link" href="{% url 'repairs:slot_select' brand_slug=model.brand.slug model_slug=model.slug repair_slug=repair_type.slug %}">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 19l-7-7 7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Другой слот</span>
   </a>
-</p>
+</div>
 
 <h1>Подтверждение записи на ремонт</h1>
 
-<p id="booking-summary">
-  <strong>Устройство:</strong> {{ model.brand.name }} {{ model.name }}<br>
-  <strong>Услуга:</strong> {{ repair_type.name }}<br>
-  <strong>Время:</strong> {{ slot|date:"d.m.Y H:i" }} ({{ duration }} мин)<br>
-  <strong>Цена:</strong> {{ price }} BYN
-</p>
+<section class="summary" id="booking-summary">
+  <h2 class="summary-title">Детали записи</h2>
+  <div class="summary-items">
+    <div class="summary-item">
+      <span class="ic" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="7" y="2" width="10" height="20" rx="2" stroke-width="2"/><circle cx="12" cy="19" r="1.2"/></svg>
+      </span>
+      <div>
+        <strong>Устройство</strong>
+        <span>{{ model.brand.name }} {{ model.name }}</span>
+      </div>
+    </div>
 
+    <div class="summary-item">
+      <span class="ic" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 21l6-6" stroke-width="2" stroke-linecap="round"/><path d="M15 3a4 4 0 105.66 5.66L13 16 8 11l7.66-7.66z" stroke-width="2" stroke-linejoin="round"/></svg>
+      </span>
+      <div>
+        <strong>Услуга</strong>
+        <span>{{ repair_type.name }}</span>
+      </div>
+    </div>
+
+    <div class="summary-item">
+      <span class="ic" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke-width="2"/><path d="M8 2v4M16 2v4M3 10h18" stroke-width="2" stroke-linecap="round"/></svg>
+      </span>
+      <div>
+        <strong>Время</strong>
+        <span>{{ slot|date:"d.m.Y H:i" }}</span>
+      </div>
+    </div>
+
+<div class="summary-item">
+  <span class="ic" aria-hidden="true">
+    <!-- ₽ (рубль) -->
+    <svg viewBox="0 0 24 24" fill="none">
+      <!-- «P»-образный штрих с округлением -->
+      <path d="M7 4h6a4 4 0 1 1 0 8H7V4z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Вертикальная ножка -->
+      <path d="M7 12v8" stroke-width="2" stroke-linecap="round"/>
+      <!-- Горизонтальные перекладины ₽ -->
+      <path d="M7 15h10M7 19h10" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+  </span>
+  <div>
+    <strong>Цена</strong>
+    <span>{{ price }} BYN</span>
+  </div>
+</div>
+
+  </div>
+</section>
 
 <form id="booking-form" method="post" action="" novalidate>
   {% csrf_token %}
 
-  <div class="form-row {% if form.customer_name.errors %}has-error{% endif %}">
-    <label for="{{ form.customer_name.id_for_label }}">{{ form.customer_name.label }}</label>
-    {{ form.customer_name }}
-    {% if form.customer_name.errors %}
-      <div class="field-error">{{ form.customer_name.errors|striptags }}</div>
-    {% endif %}
-  </div>
+  <div class="form-grid">
+    <div class="form-row {% if form.customer_name.errors %}has-error{% endif %}">
+      <label for="{{ form.customer_name.id_for_label }}">{{ form.customer_name.label }}</label>
+      {{ form.customer_name }}
+      {% if form.customer_name.errors %}
+        <div class="field-error">{{ form.customer_name.errors|striptags }}</div>
+      {% endif %}
+    </div>
 
-  <div class="form-row {% if form.customer_phone.errors %}has-error{% endif %}">
-    <label for="{{ form.customer_phone.id_for_label }}">{{ form.customer_phone.label }}</label>
-    {{ form.customer_phone }}
-    {% if form.customer_phone.errors %}
-      <div class="field-error">{{ form.customer_phone.errors|striptags }}</div>
-    {% endif %}
-  </div>
+    <div class="form-row {% if form.customer_phone.errors %}has-error{% endif %}">
+      <label for="{{ form.customer_phone.id_for_label }}">{{ form.customer_phone.label }}</label>
+      {{ form.customer_phone }}
+      {% if form.customer_phone.errors %}
+        <div class="field-error">{{ form.customer_phone.errors|striptags }}</div>
+      {% endif %}
+    </div>
 
-  <div class="form-row {% if form.referral_code.errors %}has-error{% endif %}">
-    <label for="{{ form.referral_code.id_for_label }}">{{ form.referral_code.label }}</label>
-    {{ form.referral_code }}
-    {% if form.referral_code.errors %}
-      <div class="field-error">{{ form.referral_code.errors|striptags }}</div>
-    {% endif %}
+    <div class="form-row row-full {% if form.referral_code.errors %}has-error{% endif %}">
+      <label for="{{ form.referral_code.id_for_label }}">{{ form.referral_code.label }}</label>
+      {{ form.referral_code }}
+      {% if form.referral_code.errors %}
+        <div class="field-error">{{ form.referral_code.errors|striptags }}</div>
+      {% endif %}
+    </div>
   </div>
 
   <div class="agree">
@@ -121,22 +194,24 @@
       Я подтверждаю, что ознакомлен(а) и согласен(а) с
       <a href="{% url 'terms' %}" target="_blank" rel="noopener">Условиями сервиса</a>
       и
-      <a href="{% url 'privacy' %}" target="_blank" rel="noopener">Политикой конфиденциальности</a>
+      <a href="{% url 'privacy' %}" target="_blank" rel="noopener">Политикой конфиденциальности</a>.
     </label>
   </div>
   {% if form.consent.errors %}
     <div class="field-error">{{ form.consent.errors|striptags }}</div>
   {% endif %}
 
-  <button type="submit" class="btn" id="submitBtn">Подтвердить запись на ремонт</button>
+  <button type="submit" class="btn-primary" id="submitBtn">Подтвердить запись на ремонт</button>
 
   {% if form.errors %}
-    <p class="small muted" style="margin-top:8px">Проверьте корректность введённых данных.</p>
+    <p class="help">Проверьте корректность введённых данных.</p>
   {% endif %}
+
+  <p class="help">Есть вопросы? Позвоните нам: <a href="tel:+375445684493">+375&nbsp;44&nbsp;568-44-93</a></p>
 </form>
 
 <script>
-  // Блокируем кнопку, пока не стоит галочка согласия (UX)
+  // Блокируем кнопку, пока не стоит галочка согласия
   const consent = document.getElementById('id_consent');
   const submitBtn = document.getElementById('submitBtn');
   if (consent && submitBtn){

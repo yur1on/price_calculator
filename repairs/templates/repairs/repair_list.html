@@ -15,21 +15,18 @@
       will-change: transform;
     }
     .btn-back svg{width:18px;height:18px;stroke:currentColor;transition:transform .2s}
-    .btn-back:hover{
-      background:#111; color:#fff; border-color:#111;
-      box-shadow:0 6px 14px rgba(0,0,0,.08);
-    }
+    .btn-back:hover{ background:#111; color:#fff; border-color:#111; box-shadow:0 6px 14px rgba(0,0,0,.08) }
     .btn-back:hover svg{transform:translateX(-2px)}
     .btn-back:active{transform:translateY(1px)}
     .btn-back:focus-visible{outline:3px solid #111; outline-offset:2px}
 
     /* ——— ТАБЛИЦА ——— */
-    .table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--brd); border-radius:12px; overflow:hidden; }
+    .table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--brd); border-radius:12px; overflow:visible; }
     .table th, .table td { padding:12px 14px; border-bottom:1px solid var(--brd); vertical-align:middle; }
     .table tr:last-child td{ border-bottom:0; }
     .table td:first-child { word-break: break-word; }
-    .table td:nth-child(1) { font-weight: 700; font-size: 1.05em; }
-    .table td:nth-child(2) { font-weight: 700; color: #16a34a; }
+    .table td:nth-child(1) { font-weight:700; font-size:1.05em }
+    .table td:nth-child(2) { font-weight:700; color:#16a34a }
     .muted{color:#6b7280}
 
     /* ——— КНОПКИ ——— */
@@ -37,80 +34,68 @@
     .btn:hover{opacity:.9}
     .btn:active{transform:translateY(1px)}
     .btn.is-disabled{
-      pointer-events: none;
-      opacity: .55;
-      filter: grayscale(20%);
-      cursor: not-allowed;
+      pointer-events:none; /* события пойдут на родителя .tooltip */
+      opacity:.55; filter:grayscale(20%); cursor:not-allowed;
       background:#cfcfcf; color:#666; border-color:#cfcfcf;
     }
 
-    /* ——— ПОДСКАЗКА ДЛЯ «ПО СОГЛАСОВАНИЮ» ——— */
-    .tooltip{ position: relative; display:inline-flex; align-items:center; gap:6px; cursor: help; }
+    /* ——— ПОДСКАЗКИ ——— */
+    .tooltip{ position:relative; display:inline-flex; align-items:center; gap:6px; cursor:help; }
     .tooltip .tip{
-      position:absolute;
-      left:50%; bottom:calc(100% + 10px);
+      position:absolute; left:50%; bottom:calc(100% + 10px);
       transform:translate(-50%,-4px);
       background:#111; color:#fff;
       padding:8px 10px; border-radius:8px;
       font-size:.9rem; line-height:1.25;
       box-shadow:0 8px 22px rgba(0,0,0,.18);
-      white-space: nowrap;
-      opacity:0; pointer-events:none;
-      transition:opacity .15s ease, transform .15s ease;
-      z-index:50;
+      white-space:nowrap; opacity:0; pointer-events:none;
+      transition:opacity .15s ease, transform .15s ease; z-index:50;
+      text-align:center;
     }
     .tooltip .tip::after{
-      content:""; position:absolute; top:100%; left:50%;
-      transform:translateX(-50%);
+      content:""; position:absolute; top:100%; left:50%; transform:translateX(-50%);
       border:6px solid transparent; border-top-color:#111;
     }
+    .tooltip .tip a{ color:inherit; text-decoration:underline; }
+
     .tooltip:hover .tip,
     .tooltip:focus-within .tip{ opacity:1; transform:translate(-50%,-8px); }
 
-    /* Мобильная карточная версия */
-    @media (max-width: 640px){
-      .table { border: 0; background: transparent; }
-      .table thead { display: none; }
-      .table tbody { display: block; }
-      .table tr {
-        display: block;
-        background: #fff;
-        border: 1px solid var(--brd);
-        border-radius: 12px;
-        padding: 12px;
-        margin-bottom: 12px;
-      }
-      .table td {
-        display: grid;
-        grid-template-columns: 120px 1fr;
-        gap: 8px;
-        padding: 6px 0;
-        border: 0;
-      }
-      .table td:not(:nth-child(4)):not(:last-child) { border-bottom: 1px solid var(--brd); }
+    /* две версии текста */
+    .tip-desktop{ display:inline }
+    .tip-mobile{ display:none }
 
-      .table td:nth-child(1)::before { content: "Услуга";   font-weight: 600; color: var(--muted); }
-      .table td:nth-child(2)::before { content: "Цена";     font-weight: 600; color: var(--muted); }
-      .table td:nth-child(3)::before { content: "Срок";     font-weight: 600; color: var(--muted); }
+    /* ——— Мобильная карточная версия ——— */
+    @media (max-width:640px){
+      .table{ border:0; background:transparent }
+      .table thead{ display:none }
+      .table tbody{ display:block }
+      .table tr{ display:block; background:#fff; border:1px solid var(--brd); border-radius:12px; padding:12px; margin-bottom:12px }
+      .table td{ display:grid; grid-template-columns:120px 1fr; gap:8px; padding:6px 0; border:0 }
+      .table td:not(:nth-child(4)):not(:last-child){ border-bottom:1px solid var(--brd) }
+      .table td:nth-child(1)::before{ content:"Услуга"; font-weight:600; color:var(--muted) }
+      .table td:nth-child(2)::before{ content:"Цена"; font-weight:600; color:var(--muted) }
+      .table td:nth-child(3)::before{ content:"Срок"; font-weight:600; color:var(--muted) }
+      .table td:nth-child(4){ grid-template-columns:1fr; padding-top:10px }
+      .table td:nth-child(4)::before{ content:""; display:none }
+      .table td:nth-child(4) .btn{ display:block; width:100%; text-align:center; white-space:nowrap }
+      .btn-back{ width:100%; justify-content:center }
 
-      .table td:nth-child(4) {
-        grid-template-columns: 1fr;
-        padding-top: 10px;
+      /* адаптация подсказки под экран телефона */
+      .tooltip .tip{
+        white-space:normal;       /* разрешаем перенос */
+        max-width:92vw;           /* не шире экрана */
+        font-size:.85rem;         /* поменьше шрифт */
+        line-height:1.3;
       }
-      .table td:nth-child(4)::before { content: ""; display: none; }
-      .table td:nth-child(4) .btn {
-        display: block;
-        width: 100%;
-        text-align: center;
-        white-space: nowrap;
-      }
-      .btn-back{width:100%; justify-content:center}
+      .tip-desktop{ display:none }
+      .tip-mobile{ display:inline }
     }
 
-    @media (max-width: 360px){
-      .table td { grid-template-columns: 1fr; }
-      .table td::before { margin-bottom: 4px; }
-      .tooltip .tip{ white-space: normal; max-width: 260px; text-align: center; }
+    @media (max-width:360px){
+      .table td{ grid-template-columns:1fr }
+      .table td::before{ margin-bottom:4px }
+      .tooltip .tip{ font-size:.8rem } /* ещё чуть меньше на совсем узких экранах */
     }
   </style>
 
@@ -144,10 +129,17 @@
           <td>
             {% if dur|add:0 > 560 %}
               <span class="tooltip" tabindex="0"
-                    aria-label="Запчасть под заказ — все подробности узнайте по номеру +375445684493.">
+                    aria-label="Запчасть под заказ — подробности по номеру +375445684493.">
                 <span class="agree-text">по согласованию</span>
                 <span class="tip" role="tooltip">
-                  Запчасть под заказ — все подробности узнайте по номеру +375445684493.
+                  <span class="tip-desktop">
+                    Запчасть под заказ — все подробности по номеру
+                    <a href="tel:+375445684493">+375445684493</a>.
+                  </span>
+                  <span class="tip-mobile">
+                    Под заказ. Звоните:
+                    <a href="tel:+375445684493">+375445684493</a>.
+                  </span>
                 </span>
               </span>
             {% else %}
@@ -157,7 +149,20 @@
 
           <td>
             {% if dur|add:0 > 560 %}
-              <span class="btn is-disabled" aria-disabled="true" tabindex="-1">Выбрать время</span>
+              <span class="tooltip" tabindex="0"
+                    aria-label="Запчасть под заказ — подробности по номеру +375445684493.">
+                <span class="btn is-disabled" aria-disabled="true">Выбрать время</span>
+                <span class="tip" role="tooltip">
+                  <span class="tip-desktop">
+                    Запчасть под заказ — все подробности по номеру
+                    <a href="tel:+375445684493">+375445684493</a>.
+                  </span>
+                  <span class="tip-mobile">
+                    Под заказ. Звоните:
+                    <a href="tel:+375445684493">+375445684493</a>.
+                  </span>
+                </span>
+              </span>
             {% else %}
               <a class="btn"
                  href="{% url 'repairs:slot_select' brand_slug=model.brand.slug model_slug=model.slug repair_slug=price.repair_type.slug %}">

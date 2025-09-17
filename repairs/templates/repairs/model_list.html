@@ -1,4 +1,5 @@
 {% extends "repairs/base.html" %}
+{% load static %}
 {% load repairs_extras %}
 {% block title %}Модели — {{ brand.name }}{% endblock %}
 {% block content %}
@@ -6,7 +7,6 @@
   *{box-sizing:border-box}
   .muted{color:#64748b}
 
-  /* ——— ПЕРЕМЕННЫЕ ——— */
   :root{ --accent:#972B34; }
 
   /* ——— КНОПКА НАЗАД ——— */
@@ -21,25 +21,78 @@
     will-change: transform;
   }
   .btn-back svg{width:18px;height:18px;stroke:currentColor;transition:transform .2s}
-  .btn-back:hover{
-    background:#111; color:#fff; border-color:#111;
-    box-shadow:0 6px 14px rgba(0,0,0,.08);
-  }
+  .btn-back:hover{ background:#111; color:#fff; border-color:#111; box-shadow:0 6px 14px rgba(0,0,0,.08) }
   .btn-back:hover svg{transform:translateX(-2px)}
   .btn-back:active{transform:translateY(1px)}
   .btn-back:focus-visible{outline:3px solid #111; outline-offset:2px}
 
-  /* ——— ЧИПЫ ——— */
-  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 16px}
-  .chip{padding:8px 12px;border:1px solid #e5e7eb;border-radius:999px;text-decoration:none;color:#111;display:inline-block}
-  .chip.active{background:#111;color:#fff;border-color:#111}
+  /* ——— ХЛЕБНЫЕ КРОШКИ ——— */
+  .breadcrumbs{
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+    font-size:13px; color:#64748b; margin:6px 0 6px;
+  }
+  .breadcrumbs a{ color:inherit; text-decoration:none; font-weight:600 }
+  .breadcrumbs a:hover{ text-decoration:underline }
+  .breadcrumbs .sep{ opacity:.5 }
+  .breadcrumbs .current{ color:#111; font-weight:700 }
+  .breadcrumbs .brand{ color:var(--accent); font-weight:800 }
+
+  /* ——— ВЫДЕЛЕННЫЙ БРЕНД-ЗАГОЛОВОК ——— */
+  .brand-head{ margin:0 0 8px }
+  .brand-title{
+    font-size:26px; line-height:1.2; margin:0; letter-spacing:.2px;
+  }
+  .brand-pill{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:6px 12px; border-radius:999px;
+    border:2px solid var(--accent); color:var(--accent); background:#fff;
+    font-weight:800;
+  }
+  .brand-path{ margin-left:10px; color:#64748b; font-weight:600 }
+
+  /* ——— ЧИПЫ (как на экране брендов) ——— */
+  .chips{display:flex;flex-wrap:wrap;gap:12px;margin:8px 0 16px}
+
+  .chip{
+    --g1:#60a5fa; --g2:#a78bfa; --g3:#0ea5e9;
+    position:relative;
+    display:inline-flex; align-items:center; gap:10px;
+    padding:10px 18px;
+    border:0; border-radius:16px;
+    color:#111;
+    background:
+      linear-gradient(#fff,#fff) padding-box,
+      linear-gradient(135deg,var(--g1),var(--g2),var(--g3)) border-box;
+    border:2px solid transparent;
+    font-weight:600; font-size:15px; line-height:1;
+    text-decoration:none;
+    transition:transform .18s, box-shadow .18s, color .18s, background .18s, opacity .18s;
+    box-shadow:0 6px 14px rgba(2,8,23,.06);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .chip *{-webkit-tap-highlight-color: transparent}
+  .chip:hover{transform:translateY(-1px); box-shadow:0 10px 22px rgba(2,8,23,.09)}
+  .chip:active{opacity:.96; transform:translateY(0)}
+  .chip:focus-visible{outline:3px solid #111; outline-offset:2px}
+  .chip.active{
+    color:#fff;
+    background: linear-gradient(135deg,var(--g1),var(--g2),var(--g3));
+    box-shadow:0 10px 24px rgba(2,8,23,.16);
+  }
+
+
+  .chip .icon{
+    width:28px;height:28px;display:inline-grid;place-items:center;
+    background:#fff;border-radius:7px;padding:0px;
+    box-shadow:0 0 0 1px rgba(0,0,0,.12) inset;
+  }
+  .chip .img-icon{width:100%;height:100%;object-fit:contain;border-radius:5px;display:block}
+  .chip.active .icon{ box-shadow:0 0 0 1px rgba(255,255,255,.78) inset; background:rgba(255,255,255,.98) }
 
   /* ——— СЕТКА КАРТОЧЕК ——— */
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
-
   .card{
-    border:1px solid #000;           /* чёрная обводка */
-    border-radius:12px;
+    border:1px solid #000; border-radius:12px;
     padding:12px;background:#fff;
     display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;
     transition:border-color .15s, box-shadow .15s, background-color .15s;
@@ -65,7 +118,20 @@
     .grid{grid-template-columns:1fr}
     .card{grid-template-columns:1fr}
     .card .btn{width:100%;margin-top:6px}
-    .btn-back{width:100%; justify-content:center}   /* ← на мобилке на всю ширину */
+    .btn-back{width:100%; justify-content:center}
+
+    .brand-title{ font-size:22px }
+    .brand-pill{ padding:5px 10px; border-width:2px }
+
+    /* чипы — как на предыдущем экране */
+    .chip{padding:6px 8px;font-size:13px; border-width:2px}
+    .chip .icon{width:18px;height:18px;padding:1px;border-radius:5px}
+    .chip .img-icon{border-radius:3px}
+    .chips{gap:6px}
+  }
+  @media (max-width:360px){
+    .chip{padding:5px 6px;font-size:12px}
+    .chip .icon{width:16px;height:16px}
   }
 </style>
 
@@ -78,15 +144,43 @@
   </a>
 </div>
 
-<h1>{{ brand.name }} — модели</h1>
+<!-- Хлебные крошки -->
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+  <a href="{% url 'repairs:brand_list' %}?cat={{ selected_cat }}">Бренды</a>
+  <span class="sep">/</span>
+  <span class="brand">{{ brand.name }}</span>
+  <span class="sep">/</span>
+  <span class="current" aria-current="page">Модели</span>
+</nav>
 
+<!-- Выделенный бренд -->
+<div class="brand-head">
+  <h1 class="brand-title">
+    <span class="brand-pill">{{ brand.name }}</span>
+    <span class="brand-path">/ Модели</span>
+  </h1>
+</div>
+
+<!-- Категории (оставлены как были) -->
 <div class="chips">
   {% for key,label in categories %}
-    {% if selected_cat == key %}
-      <span class="chip active">{{ label }}</span>
-    {% else %}
-      <a class="chip" href="?cat={{ key }}">{{ label }}</a>
-    {% endif %}
+    {% with src='repairs/icons/cat-'|add:key|add:'.png' %}
+      {% if selected_cat == key %}
+        <span class="chip chip--{{ key }} active" aria-current="true">
+          <span class="icon" aria-hidden="true">
+            <img class="img-icon" src="{% static src %}" alt="">
+          </span>
+          {{ label }}
+        </span>
+      {% else %}
+        <a class="chip chip--{{ key }}" href="?cat={{ key }}">
+          <span class="icon" aria-hidden="true">
+            <img class="img-icon" src="{% static src %}" alt="">
+          </span>
+          {{ label }}
+        </a>
+      {% endif %}
+    {% endwith %}
   {% endfor %}
 </div>
 

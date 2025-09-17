@@ -2,126 +2,233 @@
 {% block title %}Запись создана{% endblock %}
 
 {% block content %}
-  <style>
-    .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:14px}
-    .muted{color:#64748b}
-    .small{font-size:12px}
-    .info-list{margin:0 0 12px 0;padding-left:18px}
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b; --brd:#e5e7eb;
+    --g1:#22d3ee; --g2:#06b6d4; --g3:#0284c7;
+    --success:#22c55e; /* ярко-зелёный */
+    --radius:16px;
+  }
 
-    /* Кнопки (компактные и одинаковые по высоте) */
-    .btn{
-      display:inline-flex;align-items:center;justify-content:center;gap:8px;
-      height:38px; padding:0 12px; border-radius:8px;
-      border:1px solid #111; background:#111; color:#fff;
-      text-decoration:none; font-size:14px; line-height:1; white-space:nowrap;
-    }
-    .btn.ghost{
-      background:#fff; color:#0f172a; border-color:#e5e7eb;
-    }
-    .btn i{font-size:16px; line-height:1}
-    .btn + .btn{margin-left:0}
+  .page-wrap{max-width:920px}
 
-    .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-    .actions .btn{flex:0 0 auto}
+  /* ——— Успешная плашка: ярче текст + большая зелёная «птичка» ——— */
+  .success-banner{
+    display:flex;align-items:center;gap:16px;
+    padding:18px 20px;border-radius:18px;
+    background:linear-gradient(135deg,#ecfdf5 0%, #d1fae5 55%, #bbf7d0 100%);
+    border:none;
+    box-shadow:0 16px 36px rgba(34,197,94,.25);
+    margin:2px 0 16px;
+  }
+  .success-icon{
+    width:56px;height:56px;border-radius:16px;
+    display:grid;place-items:center;
+    background:#bbf7d0;border:1px solid #86efac;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.6);
+  }
+  .success-icon svg{width:30px;height:30px;stroke:var(--success)}
+  .success-text h1{
+    margin:0;font-size:26px;line-height:1.2;
+    font-weight:800;color:#065f46; /* темно-зелёный для контраста */
+    letter-spacing:.2px;
+  }
+  .success-text p{
+    margin:4px 0 0;font-size:16px;font-weight:600;color:#065f46;opacity:.95;
+  }
 
-    /* Печать: оставляем только блок с подтверждением */
-    @media print{
-      header, footer, nav, .actions, .print-hide{display:none!important}
-      body{background:#fff}
-      .card{border:none;box-shadow:none}
-    }
-  </style>
+  /* ——— Карточки ——— */
+  .card{
+    background:#fff;border:1px solid var(--brd);border-radius:16px;padding:16px;
+    box-shadow:0 8px 20px rgba(2,8,23,.04);
+  }
+  .summary{margin:0 0 14px;max-width:720px}
+  .summary h2{margin:0 0 10px;font-size:16px;letter-spacing:.2px}
 
-  <h1>Запись оформлена ✅</h1>
-  <p>Спасибо, {{ appointment.customer_name }}! Ваша запись подтверждена.</p>
+  /* ——— Детали заявки БЕЗ иконок ——— */
+  .summary-rows{display:grid;grid-template-columns:1fr;gap:10px}
+  .s-row{
+    padding:12px 14px;border:1px ;background:#f8fafc;border-radius:12px;
+  }
+  .s-row strong{display:block;color:#111;margin:0 0 2px}
+  .s-row .val{color:var(--ink)}
 
-  <ul class="info-list" id="print-area">
-    <li><strong>Устройство:</strong> {{ appointment.phone_model.brand.name }} {{ appointment.phone_model.name }}</li>
-    <li><strong>Услуга:</strong> {{ appointment.repair_type.name }}</li>
-    <li><strong>Дата:</strong> {{ appointment.start|date:"d.m.Y" }}</li>
-    <li><strong>Время:</strong> к {{ appointment.start|date:"H:i" }}</li>
-    <li><strong>Стоимость:</strong> {{ appointment.price_final }} BYN
-      {% if appointment.discount_amount > 0 %}
-        <span class="muted">(скидка −{{ appointment.discount_amount }} BYN)</span>
-      {% endif %}
-    </li>
-    <li><strong>Статус:</strong> {{ appointment.get_status_display }}</li>
-    <li><strong>ID заявки:</strong> {{ appointment.id }}</li>
-  </ul>
+  .small{font-size:12px}
+  .muted{color:var(--muted)}
+
+  /* Контакты */
+  .contact{max-width:720px}
+
+  /* ——— Кнопки действий (раскрашенные) ——— */
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .btn{
+    --bg:#111; --brd:transparent; --fg:#fff;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    height:40px;padding:0 14px;border-radius:12px;
+    border:1px solid var(--brd);background:var(--bg);color:var(--fg);
+    text-decoration:none;font-weight:700;letter-spacing:.1px;
+    transition:transform .1s,filter .15s,box-shadow .15s;
+  }
+  .btn:hover{filter:brightness(1.02);box-shadow:0 8px 18px rgba(2,8,23,.12)}
+  .btn:active{transform:translateY(1px)}
+  .btn svg{width:16px;height:16px;stroke:currentColor}
+
+  .btn--tg{        --bg:#229ED9; --brd:#229ED9; }
+  .btn--mail{      --bg:#6B7280; --brd:#6B7280; }
+  .btn--copy{      --bg:#374151; --brd:#374151; }
+  .btn--gcal{      --bg:#4285F4; --brd:#4285F4; }
+  .btn--ics{       --bg:#10B981; --brd:#10B981; }
+  .btn--pdf{       --bg:#EF4444; --brd:#EF4444; }
+  .btn--share{     --bg:#8B5CF6; --brd:#8B5CF6; }
+  .btn--secondary{ --bg:#fff;    --brd:#e5e7eb; --fg:#0f172a; }
+
+  .footer-actions{margin-top:16px}
+
+  @media print{
+    header, footer, nav, .actions, .footer-actions, .print-hide{display:none!important}
+    body{background:#fff}
+    .card{border:none;box-shadow:none}
+    .success-banner{box-shadow:none}
+  }
+  @media (max-width:560px){
+    .page-wrap{max-width:100%}
+  }
+</style>
+
+<div class="page-wrap">
+  <!-- Успех -->
+  <div class="success-banner">
+    <span class="success-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M5 13l4 4L19 7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+    <div class="success-text">
+      <h1>Запись оформлена</h1>
+      <p>Спасибо, {{ appointment.customer_name }}! Ваша запись подтверждена.</p>
+    </div>
+  </div>
+
+  <!-- Детали (без иконок) -->
+  <section class="card summary" id="print-area">
+    <h2>Детали заявки</h2>
+    <div class="summary-rows">
+      <div class="s-row">
+        <strong>Устройство</strong>
+        <div class="val">{{ appointment.phone_model.brand.name }} {{ appointment.phone_model.name }}</div>
+      </div>
+      <div class="s-row">
+        <strong>Услуга</strong>
+        <div class="val">{{ appointment.repair_type.name }}</div>
+      </div>
+      <div class="s-row">
+        <strong>Дата</strong>
+        <div class="val">{{ appointment.start|date:"d.m.Y" }}</div>
+      </div>
+      <div class="s-row">
+        <strong>Время</strong>
+        <div class="val">к {{ appointment.start|date:"H:i" }}</div>
+      </div>
+      <div class="s-row">
+        <strong>Стоимость</strong>
+        <div class="val">
+          {{ appointment.price_final }} BYN
+          {% if appointment.discount_amount > 0 %}
+            <span class="muted">(скидка −{{ appointment.discount_amount }} BYN)</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="s-row">
+        <strong>Статус</strong>
+        <div class="val">{{ appointment.get_status_display }}</div>
+      </div>
+      <div class="s-row">
+        <strong>Номер заявки</strong>
+        <div class="val">{{ appointment.id }}</div>
+      </div>
+    </div>
+  </section>
 
   <!-- Контакты/адрес -->
-  <div class="card">
-    <strong>Как нас найти:</strong><br>
-    <div class="small" style="line-height:1.7">
+  <section class="card contact">
+    <strong>Как нас найти</strong>
+    <div class="small" style="line-height:1.7;margin-top:6px">
       <span class="muted">Адрес:</span> г. Гомель, ул. Гагарина, д. 55, каб. 50<br>
       <span class="muted">Время работы:</span> Пн–Сб 10:00–18:00, Вс — выходной<br>
       <span class="muted">Телефон:</span> <a href="tel:+375445684493">+375 (44) 568-44-93</a><br>
       <a href="{% url 'repairs:contacts' %}">Перейти на страницу «Контакты»</a>
     </div>
-  </div>
+  </section>
 
-  <!-- Быстрые действия: сохранить/поделиться (компактные кнопки) -->
+  <!-- Быстрые действия -->
   <div class="actions">
-    <a id="tgShare" class="btn" href="#" rel="noopener" target="_blank">
-      <i class="fa-brands fa-telegram"></i> Telegram
+    <a id="tgShare" class="btn btn--tg" href="#" rel="noopener" target="_blank" aria-label="Поделиться в Telegram">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M21 3L3 11l7 2 2 7 9-17z" stroke-width="2" stroke-linejoin="round"/></svg>
+      Telegram
     </a>
-    <a id="mailShare" class="btn ghost" href="#" rel="noopener">
-      <i class="fa-solid fa-envelope"></i> E-mail
+    <a id="mailShare" class="btn btn--mail" href="#" rel="noopener" aria-label="Отправить на e-mail">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4z" stroke-width="2"/><path d="M4 7l8 6 8-6" stroke-width="2" stroke-linecap="round"/></svg>
+      E-mail
     </a>
-    <button id="copyBtn" class="btn ghost" type="button">
-      <i class="fa-regular fa-copy"></i> Копировать
+    <button id="copyBtn" class="btn btn--copy" type="button" aria-label="Скопировать детали">
+      <svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="10" height="12" rx="2" stroke-width="2"/><rect x="5" y="3" width="10" height="12" rx="2" stroke-width="2"/></svg>
+      Копировать
     </button>
-    <a id="gcalBtn" class="btn ghost" href="#" target="_blank" rel="noopener">
-      <i class="fa-solid fa-calendar-plus"></i> Google Cal
+    <a id="gcalBtn" class="btn btn--gcal" href="#" target="_blank" rel="noopener" aria-label="Добавить в Google Calendar">
+      <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke-width="2"/><path d="M8 2v4M16 2v4M3 10h18" stroke-width="2" stroke-linecap="round"/></svg>
+      Google&nbsp;Cal
     </a>
-    <a id="icsBtn" class="btn ghost" href="#" download="tehsfera.ics">
-      <i class="fa-regular fa-calendar"></i> .ics
+    <a id="icsBtn" class="btn btn--ics" href="#" download="tehsfera.ics" aria-label="Скачать файл .ics">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M7 3h10v6H7z" stroke-width="2"/><path d="M5 9h14v12H5z" stroke-width="2"/><path d="M8 13h8" stroke-width="2" stroke-linecap="round"/></svg>
+      .ics
     </a>
-    <button id="printBtn" class="btn ghost" type="button">
-      <i class="fa-solid fa-print"></i> PDF
+    <button id="printBtn" class="btn btn--pdf" type="button" aria-label="Сохранить в PDF">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M7 8V3h10v5" stroke-width="2"/><rect x="5" y="8" width="14" height="8" rx="2" stroke-width="2"/><path d="M7 16h10v5H7z" stroke-width="2"/></svg>
+      PDF
     </button>
-    <button id="nativeShare" class="btn ghost print-hide" type="button" style="display:none">
-      <i class="fa-solid fa-share-nodes"></i> Поделиться
+    <button id="nativeShare" class="btn btn--share print-hide" type="button" style="display:none" aria-label="Поделиться">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v10" stroke-width="2" stroke-linecap="round"/><path d="M8 9l4-4 4 4" stroke-width="2" stroke-linecap="round"/><path d="M6 19h12" stroke-width="2" stroke-linecap="round"/></svg>
+      Поделиться
     </button>
   </div>
 
-  <p style="margin-top:14px">
-    <a class="btn" href="{% url 'repairs:brand_list' %}">Новая заявка</a>
-  </p>
+  <div class="footer-actions">
+    <a class="btn btn--secondary" href="{% url 'repairs:brand_list' %}">Новая заявка</a>
+  </div>
+</div>
 
-  <!-- Данные для сборки текста/календаря -->
-  <div id="shareData"
-       data-url="{{ request.build_absolute_uri|cut:'?' }}"
-       data-model="{{ appointment.phone_model.brand.name }} {{ appointment.phone_model.name }}"
-       data-repair="{{ appointment.repair_type.name }}"
-       data-date="{{ appointment.start|date:'d.m.Y' }}"
-       data-time="{{ appointment.start|date:'H:i' }}"
-       data-price="{{ appointment.price_final }}"
-       data-id="{{ appointment.id }}"
-       data-start-iso="{{ appointment.start|date:'c' }}"
-       data-end-iso="{{ appointment.end|date:'c' }}"
-       data-location="246050, г. Гомель, ул. Гагарина, д. 55, каб. 50"></div>
+<!-- Данные для шеринга/календаря -->
+<div id="shareData"
+     data-url="{{ request.build_absolute_uri|cut:'?' }}"
+     data-model="{{ appointment.phone_model.brand.name }} {{ appointment.phone_model.name }}"
+     data-repair="{{ appointment.repair_type.name }}"
+     data-date="{{ appointment.start|date:'d.m.Y' }}"
+     data-time="{{ appointment.start|date:'H:i' }}"
+     data-price="{{ appointment.price_final }}"
+     data-id="{{ appointment.id }}"
+     data-start-iso="{{ appointment.start|date:'c' }}"
+     data-end-iso="{{ appointment.end|date:'c' }}"
+     data-location="246050, г. Гомель, ул. Гагарина, д. 55, каб. 50"></div>
 
-  <script>
-    (function(){
-      const el = document.getElementById('shareData');
-      if(!el) return;
+<script>
+(function(){
+  const el = document.getElementById('shareData');
+  if(!el) return;
 
-      // --- исходные данные ---
-      const data = {
-        url:  el.dataset.url || window.location.href,
-        model: el.dataset.model || '',
-        repair: el.dataset.repair || '',
-        date: el.dataset.date || '',
-        time: el.dataset.time || '',
-        price: el.dataset.price || '',
-        id: el.dataset.id || '',
-        startIso: el.dataset.startIso || '',
-        endIso: el.dataset.endIso || '',
-        location: el.dataset.location || ''
-      };
+  const data = {
+    url:  el.dataset.url || window.location.href,
+    model: el.dataset.model || '',
+    repair: el.dataset.repair || '',
+    date: el.dataset.date || '',
+    time: el.dataset.time || '',
+    price: el.dataset.price || '',
+    id: el.dataset.id || '',
+    startIso: el.dataset.startIso || '',
+    endIso: el.dataset.endIso || '',
+    location: el.dataset.location || ''
+  };
 
-      const text =
+  const text =
 `Запись на ремонт №${data.id}
 Устройство: ${data.model}
 Услуга: ${data.repair}
@@ -130,71 +237,69 @@
 Цена: ${data.price} BYN
 Ссылка: ${data.url}`;
 
-      // --- Telegram ---
-      const tg = document.getElementById('tgShare');
-      if (tg){
-        const tgUrl = "https://t.me/share/url?url=" + encodeURIComponent(data.url) +
-                      "&text=" + encodeURIComponent(text);
-        tg.href = tgUrl;
-      }
+  // Telegram
+  const tg = document.getElementById('tgShare');
+  if (tg){
+    tg.href = "https://t.me/share/url?url=" + encodeURIComponent(data.url)
+            + "&text=" + encodeURIComponent(text);
+  }
 
-      // --- Email (mailto) ---
-      const mail = document.getElementById('mailShare');
-      if (mail){
-        const subject = `Запись на ремонт №${data.id} — ${data.date} к ${data.time}`;
-        const mailUrl = "mailto:?subject=" + encodeURIComponent(subject) +
-                        "&body=" + encodeURIComponent(text);
-        mail.href = mailUrl;
-      }
+  // Email
+  const mail = document.getElementById('mailShare');
+  if (mail){
+    const subject = `Запись на ремонт №${data.id} — ${data.date} к ${data.time}`;
+    mail.href = "mailto:?subject=" + encodeURIComponent(subject)
+              + "&body=" + encodeURIComponent(text);
+  }
 
-      // --- Копировать в буфер ---
-      const copyBtn = document.getElementById('copyBtn');
-      if (copyBtn && navigator.clipboard){
-        copyBtn.addEventListener('click', async () => {
-          try {
-            await navigator.clipboard.writeText(text);
-            copyBtn.textContent = 'Скопировано!';
-            setTimeout(()=> copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> Копировать', 1500);
-          } catch(e){}
-        }, {passive:true});
-      }
+  // Копировать
+  const copyBtn = document.getElementById('copyBtn');
+  if (copyBtn && navigator.clipboard){
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        const prev = copyBtn.textContent;
+        copyBtn.textContent = 'Скопировано!';
+        setTimeout(()=> copyBtn.textContent = prev, 1500);
+      } catch(e){}
+    }, {passive:true});
+  }
 
-      // --- Печать / PDF ---
-      const printBtn = document.getElementById('printBtn');
-      if (printBtn){
-        printBtn.addEventListener('click', () => window.print(), {passive:true});
-      }
+  // Печать / PDF
+  const printBtn = document.getElementById('printBtn');
+  if (printBtn){
+    printBtn.addEventListener('click', () => window.print(), {passive:true});
+  }
 
-      // --- Форматирование дат для календарей (UTC, YYYYMMDDTHHMMSSZ) ---
-      function toICS(dt){
-        const iso = new Date(dt.getTime()).toISOString().replace(/\.\d{3}Z$/, 'Z');
-        return iso.replace(/[-:]/g, '');
-      }
+  // формат YYYYMMDDTHHMMSSZ
+  function toICS(dt){
+    const iso = new Date(dt.getTime()).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    return iso.replace(/[-:]/g, '');
+  }
 
-      let start, end;
-      try { start = new Date(data.startIso); } catch(e){}
-      try { end = new Date(data.endIso); } catch(e){}
-      if (start && end && !isNaN(start) && !isNaN(end)){
-        const dtStart = toICS(start);
-        const dtEnd   = toICS(end);
+  let start, end;
+  try { start = new Date(data.startIso); } catch(e){}
+  try { end = new Date(data.endIso); } catch(e){}
+  if (start && end && !isNaN(start) && !isNaN(end)){
+    const dtStart = toICS(start);
+    const dtEnd   = toICS(end);
 
-        // --- Google Calendar ---
-        const gcal = document.getElementById('gcalBtn');
-        if (gcal){
-          const gUrl = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
-                     + '&text=' + encodeURIComponent(`Ремонт: ${data.model} — ${data.repair}`)
-                     + '&dates=' + dtStart + '/' + dtEnd
-                     + '&details=' + encodeURIComponent(`Запись №${data.id}\n${data.url}`)
-                     + '&location=' + encodeURIComponent(data.location)
-                     + '&sf=true&output=xml';
-          gcal.href = gUrl;
-        }
+    // Google Calendar
+    const gcal = document.getElementById('gcalBtn');
+    if (gcal){
+      gcal.href = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+                + '&text=' + encodeURIComponent(`Ремонт: ${data.model} — ${data.repair}`)
+                + '&dates=' + dtStart + '/' + dtEnd
+                + '&details=' + encodeURIComponent(`Запись №${data.id}\n${data.url}`)
+                + '&location=' + encodeURIComponent(data.location)
+                + '&sf=true&output=xml';
+    }
 
-        // --- .ics-файл ---
-        const icsBtn = document.getElementById('icsBtn');
-        if (icsBtn){
-          const now = toICS(new Date());
-          const ics =
+    // ICS-файл
+    const icsBtn = document.getElementById('icsBtn');
+    if (icsBtn){
+      const now = toICS(new Date());
+      const ics =
 `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Tehsfera//Booking//RU
@@ -211,25 +316,25 @@ LOCATION:${data.location}
 URL:${data.url}
 END:VEVENT
 END:VCALENDAR`;
-          const blob = new Blob([ics], {type:'text/calendar;charset=utf-8'});
-          const url = URL.createObjectURL(blob);
-          icsBtn.href = url;
-          icsBtn.download = `tehsfera-${data.id}.ics`;
-        }
-      }
+      const blob = new Blob([ics], {type:'text/calendar;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      icsBtn.href = url;
+      icsBtn.download = `tehsfera-${data.id}.ics`;
+    }
+  }
 
-      // --- Web Share API ---
-      const btnNative = document.getElementById('nativeShare');
-      if (navigator.share && btnNative){
-        btnNative.style.display = 'inline-flex';
-        btnNative.addEventListener('click', function(){
-          navigator.share({
-            title: `Запись на ремонт №${data.id}`,
-            text: text,
-            url: data.url
-          }).catch(()=>{});
-        }, {passive:true});
-      }
-    })();
-  </script>
+  // Web Share API
+  const btnNative = document.getElementById('nativeShare');
+  if (navigator.share && btnNative){
+    btnNative.style.display = 'inline-flex';
+    btnNative.addEventListener('click', function(){
+      navigator.share({
+        title: `Запись на ремонт №${data.id}`,
+        text: text,
+        url: data.url
+      }).catch(()=>{});
+    }, {passive:true});
+  }
+})();
+</script>
 {% endblock %}
