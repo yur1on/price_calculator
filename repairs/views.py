@@ -1,6 +1,6 @@
 # repairs/views.py
 from __future__ import annotations
-
+from django.core.paginator import Paginator
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -254,7 +254,7 @@ def brand_list(request):
 # ---------- шаг 2: модели бренда ----------
 
 def model_list(request, brand_slug: str):
-    """Список моделей бренда по выбранной категории с сортировкой «новые → старые»."""
+    """Список моделей бренда: плитка/список, поиск, пагинация."""
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
 
     choices = list(PhoneModel.CATEGORY_CHOICES)
@@ -263,17 +263,35 @@ def model_list(request, brand_slug: str):
     if sel not in valid:
         sel = "phone"
 
-    # Берём из БД и сортируем в Python по описанному ключу
-    models_qs = list(brand.models.filter(category=sel).order_by())  # сбрасываем Meta.ordering
-    models_qs.sort(key=_model_sort_key)
+    view_mode = (request.GET.get("view") or "grid").lower()  # grid | list
+    if view_mode not in {"grid", "list"}:
+        view_mode = "grid"
+
+    q = (request.GET.get("q") or "").strip()
+
+    qs = brand.models.filter(category=sel)
+    if q:
+        qs = qs.filter(name__icontains=q)
+
+    models_qs = list(qs.order_by())  # сбрасываем Meta.ordering
+    if not q:
+        models_qs.sort(key=_model_sort_key)
+    else:
+        models_qs.sort(key=lambda m: _natural_key(m.name))
+
+    per_page = 48 if view_mode == "grid" else 80
+    paginator = Paginator(models_qs, per_page)
+    page_obj = paginator.get_page(request.GET.get("page") or 1)
 
     return render(request, "repairs/model_list.html", {
         "brand": brand,
-        "models": models_qs,
         "categories": choices,
         "selected_cat": sel,
+        "view_mode": view_mode,
+        "q": q,
+        "page_obj": page_obj,
+        "models": page_obj.object_list,  # совместимо с вашим циклом
     })
-
 # ---------- шаг 3: услуги/цены модели ----------
 
 def repair_list(request, brand_slug: str, model_slug: str):

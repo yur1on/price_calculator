@@ -1,7 +1,9 @@
 {% extends "repairs/base.html" %}
 {% load static %}
 {% load repairs_extras %}
+
 {% block title %}Модели — {{ brand.name }}{% endblock %}
+
 {% block content %}
 <style>
   *{box-sizing:border-box}
@@ -39,9 +41,7 @@
 
   /* ——— ВЫДЕЛЕННЫЙ БРЕНД-ЗАГОЛОВОК ——— */
   .brand-head{ margin:0 0 8px }
-  .brand-title{
-    font-size:26px; line-height:1.2; margin:0; letter-spacing:.2px;
-  }
+  .brand-title{ font-size:26px; line-height:1.2; margin:0; letter-spacing:.2px; }
   .brand-pill{
     display:inline-flex; align-items:center; gap:8px;
     padding:6px 12px; border-radius:999px;
@@ -50,9 +50,8 @@
   }
   .brand-path{ margin-left:10px; color:#64748b; font-weight:600 }
 
-  /* ——— ЧИПЫ (как на экране брендов) ——— */
+  /* ——— ЧИПЫ (категории) ——— */
   .chips{display:flex;flex-wrap:wrap;gap:12px;margin:8px 0 16px}
-
   .chip{
     --g1:#60a5fa; --g2:#a78bfa; --g3:#0ea5e9;
     position:relative;
@@ -79,8 +78,6 @@
     background: linear-gradient(135deg,var(--g1),var(--g2),var(--g3));
     box-shadow:0 10px 24px rgba(2,8,23,.16);
   }
-
-
   .chip .icon{
     width:28px;height:28px;display:inline-grid;place-items:center;
     background:#fff;border-radius:7px;padding:0px;
@@ -113,6 +110,54 @@
   .btn:hover{opacity:.95}
   .btn:active{transform:translateY(1px)}
 
+  /* ——— ПАНЕЛЬ ИНСТРУМЕНТОВ (поиск + переключатель) ——— */
+  .tools-bar{
+    display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 12px
+  }
+  /* объединённое поле поиска с кнопкой той же высоты */
+  .search{
+    display:flex;align-items:center;gap:8px;
+    border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#fff;
+    flex:1 1 380px; /* растягивается по ширине */
+  }
+  .search .lead{padding-left:10px;color:#94a3b8;display:inline-flex}
+  .search input{
+    border:0; outline:0; padding:10px 12px; min-width:140px; flex:1;
+    font:inherit;
+  }
+  .search button{
+    border:0; background:#111; color:#fff; padding:10px 14px; cursor:pointer;
+    display:inline-flex; align-items:center; gap:8px; height:100%;
+  }
+  .search button svg{width:18px;height:18px;stroke:currentColor}
+  .search button:hover{opacity:.95}
+
+  /* переключатель вида — иконки */
+  .view{
+    display:inline-flex; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff
+  }
+  .view a{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:44px; height:40px; color:#111; text-decoration:none;
+  }
+  .view a svg{width:18px;height:18px;stroke:currentColor}
+  .view a.active{ background:#111; color:#fff }
+
+  /* ——— РЕЖИМ СПИСКОМ ——— */
+  .as-list .grid{
+    display:block;
+    border:1px solid #e5e7eb; border-radius:14px; background:#fff; overflow:hidden;
+  }
+  .as-list .card{
+    grid-template-columns: 1fr auto;
+    border:0; border-bottom:1px solid #f2f4f7; border-radius:0;
+    padding:14px 18px; background:#fff;
+  }
+  .as-list .card:last-child{ border-bottom:0 }
+  .as-list .card:hover{ background:#fafafa }
+  .as-list .info .name{ color: var(--accent); }
+  .as-list .btn{ padding:8px 12px; border-radius:8px }
+
   /* ——— МОБИЛЬНАЯ АДАПТАЦИЯ ——— */
   @media (max-width:560px){
     .grid{grid-template-columns:1fr}
@@ -123,11 +168,16 @@
     .brand-title{ font-size:22px }
     .brand-pill{ padding:5px 10px; border-width:2px }
 
-    /* чипы — как на предыдущем экране */
     .chip{padding:6px 8px;font-size:13px; border-width:2px}
     .chip .icon{width:18px;height:18px;padding:1px;border-radius:5px}
     .chip .img-icon{border-radius:3px}
     .chips{gap:6px}
+
+    .tools-bar{gap:8px}
+    .search{flex:1 1 100%}
+    .search input{min-width:0}
+    .view a{width:40px;height:38px}
+    .as-list .card{ padding:12px 14px }
   }
   @media (max-width:360px){
     .chip{padding:5px 6px;font-size:12px}
@@ -138,7 +188,7 @@
 <div class="back-wrap">
   <a class="btn-back" href="{% url 'repairs:brand_list' %}?cat={{ selected_cat }}">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M15 19l-7-7 7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M15 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     <span>Назад к брендам</span>
   </a>
@@ -153,9 +203,7 @@
   <span class="current" aria-current="page">Модели</span>
 </nav>
 
-
-
-<!-- Категории (оставлены как были) -->
+<!-- Категории -->
 <div class="chips">
   {% for key,label in categories %}
     {% with src='repairs/icons/cat-'|add:key|add:'.png' %}
@@ -167,7 +215,7 @@
           {{ label }}
         </span>
       {% else %}
-        <a class="chip chip--{{ key }}" href="?cat={{ key }}">
+        <a class="chip chip--{{ key }}" href="?cat={{ key }}{% if view_mode %}&view={{ view_mode }}{% endif %}{% if q %}&q={{ q|urlencode }}{% endif %}">
           <span class="icon" aria-hidden="true">
             <img class="img-icon" src="{% static src %}" alt="">
           </span>
@@ -178,6 +226,57 @@
   {% endfor %}
 </div>
 
+<!-- Панель: поиск + переключатель вида -->
+<form class="tools-bar" method="get" action="">
+  <input type="hidden" name="cat" value="{{ selected_cat }}">
+  <!-- Поисковая группа -->
+  <div class="search" role="search" aria-label="Поиск моделей">
+    <span class="lead" aria-hidden="true">
+      <!-- лупа -->
+      <svg viewBox="0 0 24 24" fill="none">
+        <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/>
+        <path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </span>
+    <input type="text" name="q" value="{{ q }}" placeholder="Поиск по моделям…"
+           aria-label="Поиск по моделям">
+    <button type="submit" title="Найти">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="sr-only">Поиск</span>
+    </button>
+  </div>
+
+  <!-- Переключатель вида -->
+  <div class="view" role="tablist" aria-label="Режим отображения">
+    <!-- плитка -->
+    <a role="tab" title="Плиткой"
+       href="?cat={{ selected_cat }}&view=grid{% if q %}&q={{ q|urlencode }}{% endif %}"
+       class="{% if view_mode == 'grid' or not view_mode %}active{% endif %}"
+       aria-selected="{% if view_mode == 'grid' or not view_mode %}true{% else %}false{% endif %}">
+       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+         <rect x="4" y="4" width="6" height="6" stroke="currentColor" stroke-width="2" rx="1"/>
+         <rect x="14" y="4" width="6" height="6" stroke="currentColor" stroke-width="2" rx="1"/>
+         <rect x="4" y="14" width="6" height="6" stroke="currentColor" stroke-width="2" rx="1"/>
+         <rect x="14" y="14" width="6" height="6" stroke="currentColor" stroke-width="2" rx="1"/>
+       </svg>
+    </a>
+    <!-- список -->
+    <a role="tab" title="Списком"
+       href="?cat={{ selected_cat }}&view=list{% if q %}&q={{ q|urlencode }}{% endif %}"
+       class="{% if view_mode == 'list' %}active{% endif %}"
+       aria-selected="{% if view_mode == 'list' %}true{% else %}false{% endif %}">
+       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+         <path d="M8 6h12M8 12h12M8 18h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+         <circle cx="4" cy="6" r="1.5" stroke="currentColor" stroke-width="2"/>
+         <circle cx="4" cy="12" r="1.5" stroke="currentColor" stroke-width="2"/>
+         <circle cx="4" cy="18" r="1.5" stroke="currentColor" stroke-width="2"/>
+       </svg>
+    </a>
+  </div>
+</form>
+
 <!-- Выделенный бренд -->
 <div class="brand-head">
   <h1 class="brand-title">
@@ -187,23 +286,26 @@
 </div>
 
 {% if models %}
-  <div class="grid">
-    {% for m in models %}
-      <div class="card">
-        <div class="info">
-          <div class="name">{{ m.name|shrink_parens }}</div>
-          <div class="meta">
-            <span class="muted">{{ brand.name }}</span>
-            <span class="badge">
-              {% if m.category == 'phone' %}Телефон{% elif m.category == 'tablet' %}Планшет{% else %}Смарт-часы{% endif %}
-            </span>
+  <div class="{% if view_mode == 'list' %}as-list{% endif %}">
+    <div class="grid">
+      {% for m in models %}
+        <div class="card">
+          <div class="info">
+            <div class="name">{{ m.name|shrink_parens }}</div>
+            <div class="meta">
+              <span class="muted">{{ brand.name }}</span>
+              <span class="badge">
+                {% if m.category == 'phone' %}Телефон{% elif m.category == 'tablet' %}Планшет{% else %}Смарт-часы{% endif %}
+              </span>
+            </div>
           </div>
+          <a class="btn" href="{% url 'repairs:repair_list' brand_slug=brand.slug model_slug=m.slug %}">Выбрать</a>
         </div>
-        <a class="btn" href="{% url 'repairs:repair_list' brand_slug=brand.slug model_slug=m.slug %}">Выбрать</a>
-      </div>
-    {% endfor %}
+      {% endfor %}
+    </div>
   </div>
 {% else %}
   <p class="muted">Нет моделей выбранной категории.</p>
 {% endif %}
+
 {% endblock %}
