@@ -8,22 +8,10 @@
 
 <style>
   :root{
-    /* более контрастные линии для печати */
-    --ink:#0b1220;
-    --muted:#475569;
-    --brd:#000000;   /* было #e5e7eb */
-    --dash:#000000;  /* было #cbd5e1 */
+    --ink:#0f172a; --muted:#64748b; --brd:#e5e7eb; --dash:#cbd5e1;
     --radius:10px; --pad:8px;
   }
   *{box-sizing:border-box}
-
-  /* ВАЖНО: не давать браузеру «экономить» цвет при печати */
-  html, body, * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    color-adjust: exact !important; /* для старых движков */
-  }
-
   html,body{height:100%}
   body{
     margin:10px; color:var(--ink);
@@ -32,53 +20,38 @@
   }
 
   .page{width:210mm; max-width:100%; margin:0 auto;}
-
   .half{
-    min-height:125mm;
+    min-height:125mm;                 /* компактнее */
     padding:8mm 6mm 6mm;
-    border:0.6pt solid var(--brd);      /* pt вместо px */
+    border:1px solid var(--brd);
     border-radius:10px;
     background:#fff;
   }
 
   .cutline{display:flex; align-items:center; gap:8px; margin:6px 0;}
-  .cutline .line{
-    flex:1; height:0; border-top:0.8pt dashed var(--dash); /* толще и чёрный */
-  }
-  .cutline .scissors{font-size:11px; color:#111; white-space:nowrap}
+  .cutline .line{flex:1; height:0; border-top:2px dashed var(--dash)}
+  .cutline .scissors{font-size:11px; color:var(--muted); white-space:nowrap}
 
   .header{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px}
   .brand{display:flex; align-items:center; gap:8px}
-  .logo{
-    width:28px; height:28px; border-radius:8px;
-    border:0.6pt solid var(--brd);
-    background:#fff; display:grid; place-items:center; overflow:hidden
-  }
+  .logo{width:28px; height:28px; border-radius:8px; border:1px solid var(--brd); background:#fff; display:grid; place-items:center; overflow:hidden}
   .logo img{max-width:100%; max-height:100%; object-fit:contain}
   .brand h1{margin:0; font-size:14px; letter-spacing:.1px}
-  .sub{font-size:11px; color:#111; margin-top:1px}
+  .sub{font-size:11px; color:var(--muted); margin-top:1px}
+  .copy-badge{border:1px dashed var(--dash); border-radius:999px; padding:4px 8px; font-weight:700; background:#fff; font-size:11px}
 
-  .copy-badge{
-    border:0.6pt dashed var(--dash);
-    border-radius:999px; padding:4px 8px; font-weight:700; background:#fff; font-size:11px
-  }
-
-  .card{
-    border:0.6pt solid var(--brd);
-    border-radius:var(--radius);
-    padding:var(--pad); background:#fff; margin:6px 0;
-  }
+  .card{border:1px solid var(--brd); border-radius:var(--radius); padding:var(--pad); background:#fff; margin:6px 0;}
   .grid{display:grid; grid-template-columns:1fr 1fr; gap:8px}
   .section h2{margin:0 0 6px; font-size:12px}
   dl{margin:0}
   .row{display:flex; gap:6px; margin:2px 0}
-  .row dt{min-width:108px; color:#222}
+  .row dt{min-width:108px; color:var(--muted)}
   .row dd{margin:0}
-  .divider{height:0; border-top:0.6pt solid var(--brd); margin:8px 0}
+  .divider{height:1px; background:var(--brd); margin:8px 0}
 
   .signs{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px}
-  .sign{border:0.6pt dashed var(--dash); border-radius:8px; height:56px; padding:6px}
-  .small{font-size:10.5px; color:#222}
+  .sign{border:1px dashed var(--dash); border-radius:8px; height:56px; padding:6px}
+  .small{font-size:10.5px; color:var(--muted)}
 
   .toolbar{margin:8px 0 10px}
   .btn{padding:8px 12px; border-radius:8px; border:1px solid #111; background:#111; color:#fff; text-decoration:none; font-size:12px}
@@ -90,13 +63,44 @@
     .page{width:auto}
     .half{min-height:120mm; page-break-inside:avoid}
     .cutline{break-inside:avoid}
+
+    /* Делаем линии более жирными и чёрными для печати */
+    :root {
+      --brd: #000000; /* Чёрный для сплошных бордеров */
+      --dash: #000000; /* Чёрный для пунктирных */
+    }
+    .half {
+      border: 2px solid var(--brd) !important; /* Толще: 2px */
+    }
+    .card {
+      border: 2px solid var(--brd) !important; /* Толще: 2px */
+    }
+    .sign {
+      border: 2px dashed var(--dash) !important; /* Толще: 2px */
+    }
+    .copy-badge {
+      border: 2px dashed var(--dash) !important; /* Толще: 2px */
+    }
+    .cutline .line {
+      border-top: 3px dashed var(--dash) !important; /* Толще: 3px для пунктира отреза */
+    }
+    .divider {
+      height: 2px !important; /* Толще: 2px */
+      background: var(--brd) !important;
+    }
+    .logo {
+      border: 2px solid var(--brd) !important; /* Толще: 2px */
+    }
+    .half, .card, .sign, .copy-badge, .logo, .cutline .line, .divider {
+      print-color-adjust: exact; /* Заставляет печатать цвета как есть */
+      -webkit-print-color-adjust: exact;
+    }
   }
 
   @media (max-width:720px){
     .grid{grid-template-columns:1fr}
   }
 </style>
-
 </head>
 <body>
 
