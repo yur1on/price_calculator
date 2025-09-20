@@ -8,12 +8,22 @@
 
 <style>
   :root{
-    --ink:#0f172a; --muted:#64748b; --brd:#cfd4dc; --dash:#b8c0cc;
+    /* более контрастные линии для печати */
+    --ink:#0b1220;
+    --muted:#475569;
+    --brd:#000000;   /* было #e5e7eb */
+    --dash:#000000;  /* было #cbd5e1 */
     --radius:10px; --pad:8px;
-    --grid: rgba(15,23,42,.22);
-    --grid-print: rgba(0,0,0,.42);
   }
   *{box-sizing:border-box}
+
+  /* ВАЖНО: не давать браузеру «экономить» цвет при печати */
+  html, body, * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important; /* для старых движков */
+  }
+
   html,body{height:100%}
   body{
     margin:10px; color:var(--ink);
@@ -23,90 +33,70 @@
 
   .page{width:210mm; max-width:100%; margin:0 auto;}
 
-  /* Внешняя «половинка» листа */
   .half{
     min-height:125mm;
-    padding:7mm 6mm 6mm;
-    border:3px solid var(--brd);
+    padding:8mm 6mm 6mm;
+    border:0.6pt solid var(--brd);      /* pt вместо px */
     border-radius:10px;
     background:#fff;
-    position:relative;
   }
 
-  /* Пунктир «отрезать» между копиями */
   .cutline{display:flex; align-items:center; gap:8px; margin:6px 0;}
-  .cutline .line{flex:1; height:0; border-top:2.5px dashed var(--dash)}
-  .cutline .scissors{font-size:11px; color:var(--muted); white-space:nowrap}
+  .cutline .line{
+    flex:1; height:0; border-top:0.8pt dashed var(--dash); /* толще и чёрный */
+  }
+  .cutline .scissors{font-size:11px; color:#111; white-space:nowrap}
 
-  /* Шапка */
   .header{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px}
   .brand{display:flex; align-items:center; gap:8px}
   .logo{
     width:28px; height:28px; border-radius:8px;
-    border:1.5px solid var(--brd);
-    background:#fff; display:grid; place-items:center; overflow:hidden;
+    border:0.6pt solid var(--brd);
+    background:#fff; display:grid; place-items:center; overflow:hidden
   }
   .logo img{max-width:100%; max-height:100%; object-fit:contain}
   .brand h1{margin:0; font-size:14px; letter-spacing:.1px}
-  .sub{font-size:11px; color:var(--muted); margin-top:1px}
+  .sub{font-size:11px; color:#111; margin-top:1px}
+
   .copy-badge{
-    border:1.5px dashed var(--dash); border-radius:999px;
-    padding:4px 8px; font-weight:700; background:#fff; font-size:11px;
+    border:0.6pt dashed var(--dash);
+    border-radius:999px; padding:4px 8px; font-weight:700; background:#fff; font-size:11px
   }
 
-  /* Блоки-карточки */
   .card{
-    border:2px solid var(--brd);
+    border:0.6pt solid var(--brd);
     border-radius:var(--radius);
-    padding:var(--pad);
-    background:#fff;
-    margin:6px 0;
+    padding:var(--pad); background:#fff; margin:6px 0;
   }
   .grid{display:grid; grid-template-columns:1fr 1fr; gap:8px}
   .section h2{margin:0 0 6px; font-size:12px}
+  dl{margin:0}
+  .row{display:flex; gap:6px; margin:2px 0}
+  .row dt{min-width:108px; color:#222}
+  .row dd{margin:0}
+  .divider{height:0; border-top:0.6pt solid var(--brd); margin:8px 0}
 
-  /* «Ячейки» */
-  dl{margin:0; border:1.6px solid var(--grid); border-radius:8px; overflow:hidden}
-  .row{display:flex; gap:0; margin:0}
-  .row + .row{border-top:1.6px solid var(--grid)}
-  .row dt{
-    min-width:120px; padding:6px 8px;
-    color:var(--muted);
-    border-right:1.6px solid var(--grid);
-    background:rgba(2,6,23,.02);
-  }
-  .row dd{margin:0; padding:6px 8px}
+  .signs{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px}
+  .sign{border:0.6pt dashed var(--dash); border-radius:8px; height:56px; padding:6px}
+  .small{font-size:10.5px; color:#222}
 
-  .divider{height:0; border-top:1.8px solid var(--grid); margin:8px 0}
-
-  /* Подписи (общая рамка + перегородка) */
-  .signs{
-    display:grid; grid-template-columns:1fr 1fr; gap:0; margin-top:6px;
-    border:1.8px solid var(--grid); border-radius:8px; overflow:hidden;
-  }
-  .sign{height:56px; padding:6px; border-right:1.8px solid var(--grid)}
-  .sign:last-child{border-right:0}
-  .small{font-size:10.5px; color:var(--muted)}
-
-  /* Панель сверху/снизу для печати */
   .toolbar{margin:8px 0 10px}
   .btn{padding:8px 12px; border-radius:8px; border:1px solid #111; background:#111; color:#fff; text-decoration:none; font-size:12px}
 
   @media print{
-    :root{ --grid: var(--grid-print); }
     @page{size:A4 portrait; margin:8mm}
     body{margin:0}
     .toolbar{display:none!important}
     .page{width:auto}
-    .half{min-height:120mm; page-break-inside:avoid; border-width:3px}
+    .half{min-height:120mm; page-break-inside:avoid}
     .cutline{break-inside:avoid}
   }
 
   @media (max-width:720px){
     .grid{grid-template-columns:1fr}
-    .row dt{min-width:110px}
   }
 </style>
+
 </head>
 <body>
 
@@ -116,7 +106,7 @@
     <button class="btn" onclick="window.print()">Распечатать</button>
   </div>
 
-  <!-- ===== ВЕРХ: Экземпляр мастерской (минимум) ===== -->
+  <!-- ===== ВЕРХНЯЯ ПОЛОВИНА: Экземпляр мастерской (минимум) ===== -->
   <section class="half">
     <header class="header">
       <div class="brand">
@@ -137,7 +127,6 @@
           <h2>Данные заявки</h2>
           <dl>
             <div class="row"><dt>Номер</dt><dd>{{ appointment.id }}</dd></div>
-            {% if appointment.imei %}<div class="row"><dt>IMEI</dt><dd>{{ appointment.imei }}</dd></div>{% endif %}
           </dl>
         </div>
         <div>
@@ -172,7 +161,6 @@
           <h2>Работа</h2>
           <dl>
             <div class="row"><dt>Услуга</dt><dd>{{ appointment.repair_type.name }}</dd></div>
-            <!-- без даты/времени -->
           </dl>
         </div>
       </div>
@@ -188,7 +176,7 @@
             <div class="row"><dt><strong>Итого</strong></dt><dd><strong>{{ appointment.price_final }} BYN</strong></dd></div>
           </dl>
         </div>
-        <!-- контакты для мастерской не показываем -->
+        <!-- блок контактов убран -->
       </div>
 
       <div class="signs">
@@ -209,7 +197,7 @@
     <span class="line"></span>
   </div>
 
-  <!-- ===== НИЗ: Экземпляр клиента ===== -->
+  <!-- ===== НИЖНЯЯ ПОЛОВИНА: Экземпляр клиента ===== -->
   <section class="half">
     <header class="header">
       <div class="brand">
@@ -233,7 +221,6 @@
           <h2>Данные заявки</h2>
           <dl>
             <div class="row"><dt>Номер</dt><dd>{{ appointment.id }}</dd></div>
-            {% if appointment.imei %}<div class="row"><dt>IMEI</dt><dd>{{ appointment.imei }}</dd></div>{% endif %}
           </dl>
         </div>
         <div>
@@ -268,7 +255,6 @@
           <h2>Работа</h2>
           <dl>
             <div class="row"><dt>Услуга</dt><dd>{{ appointment.repair_type.name }}</dd></div>
-            <!-- без даты/времени -->
           </dl>
         </div>
       </div>
