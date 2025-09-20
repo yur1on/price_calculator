@@ -153,13 +153,7 @@
   <span class="current" aria-current="page">Модели</span>
 </nav>
 
-<!-- Выделенный бренд -->
-<div class="brand-head">
-  <h1 class="brand-title">
-    <span class="brand-pill">{{ brand.name }}</span>
-    <span class="brand-path">/ Модели</span>
-  </h1>
-</div>
+
 
 <!-- Категории (оставлены как были) -->
 <div class="chips">
@@ -182,6 +176,14 @@
       {% endif %}
     {% endwith %}
   {% endfor %}
+</div>
+
+<!-- Выделенный бренд -->
+<div class="brand-head">
+  <h1 class="brand-title">
+    <span class="brand-pill">{{ brand.name }}</span>
+    <span class="brand-path">/ Модели</span>
+  </h1>
 </div>
 
 {% if models %}

@@ -1,8 +1,12 @@
-"""Админка приложения repairs (обновлено под django-unfold + скрываем текст в скобках)."""
+# repairs/admin.py
+from __future__ import annotations
+
 import re
 from django.contrib import admin, messages
-from django.utils import timezone
 from django.db.models import Sum
+from django.shortcuts import get_object_or_404, render
+from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.html import format_html
 
 from unfold.admin import ModelAdmin  # базовый класс от Unfold
@@ -14,14 +18,14 @@ from .models import (
 )
 
 # -------------------------------------------------------------------
-# Глобальные настройки заголовков админки (по желанию)
+# Заголовки админки (по желанию)
 # -------------------------------------------------------------------
 admin.site.site_header = "Мастерская — панель администратора"
 admin.site.site_title = "Админка Мастерской"
 admin.site.index_title = "Управление данными и заказами"
 
 # -------------------------------------------------------------------
-# Утилита: убираем все фрагменты " (....)" в строках
+# Утилита: убираем фрагменты " (....)" в строках
 # -------------------------------------------------------------------
 _PAR_RE = re.compile(r"\s*\([^)]*\)")
 
@@ -30,7 +34,7 @@ def strip_parens_text(s: str) -> str:
 
 
 # -------------------------------------------------------------------
-# Mixin: заменяем подписи в ForeignKey(phone_model) на версии без скобок
+# Mixin: меняем label у FK(phone_model), скрывая текст в скобках
 # -------------------------------------------------------------------
 class StripPhoneModelLabelsMixin:
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
@@ -104,7 +108,7 @@ class RepairTypeAdmin(ModelAdmin):
 
 
 # -------------------------------------------------------------------
-# Цены на ремонт (для конкретных моделей)
+# Цены на ремонт по моделям
 # -------------------------------------------------------------------
 @admin.register(ModelRepairPrice)
 class ModelRepairPriceAdmin(StripPhoneModelLabelsMixin, ModelAdmin):
@@ -220,10 +224,18 @@ class TimeOffAdmin(ModelAdmin):
 
 
 # -------------------------------------------------------------------
-# Записи (Appointment) — скрываем скобки у модели и в селектах
+# Записи (Appointment) — печатные формы + бейджи статусов
 # -------------------------------------------------------------------
 @admin.register(Appointment)
 class AppointmentAdmin(StripPhoneModelLabelsMixin, ModelAdmin):
+    """
+    При смене статуса:
+      - new -> confirmed: ссылки на печать двух квитанций
+      - любой -> done: ссылка на печать гарантийного талона
+    Также кнопки печати показываются в карточке (change_form_template).
+    """
+    change_form_template = "admin/repairs/appointment/change_form.html"
+
     date_hierarchy = "start"
     list_display = (
         "customer_name", "customer_phone",
@@ -236,27 +248,49 @@ class AppointmentAdmin(StripPhoneModelLabelsMixin, ModelAdmin):
     list_select_related = ("phone_model", "phone_model__brand", "repair_type", "technician")
     autocomplete_fields = ("phone_model", "repair_type", "technician")
     ordering = ("-start",)
-
-    fieldsets = (
-        ("Клиент", {
-            "fields": ("customer_name", "customer_phone", "referral_code", "status")
-        }),
-        ("Устройство и услуга", {
-            "fields": ("phone_model", "repair_type", "technician")
-        }),
-        ("Время", {
-            "fields": ("start", "end")
-        }),
-        ("Оплата", {
-            "fields": ("price_original", "discount_amount", "price_final")
-        }),
-        ("Служебное", {
-            "fields": ("created_at",),
-            "classes": ("collapse",),
-        }),
-    )
     readonly_fields = ("created_at",)
 
+    fieldsets = (
+        ("Клиент", {"fields": ("customer_name", "customer_phone", "referral_code", "status")}),
+        ("Устройство и услуга", {"fields": ("phone_model", "repair_type", "technician")}),
+        ("Время", {"fields": ("start", "end")}),
+        ("Оплата", {"fields": ("price_original", "discount_amount", "price_final")}),
+        ("Служебное", {"fields": ("created_at",), "classes": ("collapse",)}),
+    )
+
+    # ----- собственные урлы для печати -----
+    def get_urls(self):
+        urls = super().get_urls()
+        my = [
+            path("<int:pk>/print/receipt/<str:variant>/",
+                 self.admin_site.admin_view(self.print_receipt),
+                 name="repairs_appointment_receipt"),
+            path("<int:pk>/print/warranty/",
+                 self.admin_site.admin_view(self.print_warranty),
+                 name="repairs_appointment_warranty"),
+        ]
+        return my + urls
+
+    # ----- view: печать квитанций -----
+    def print_receipt(self, request, pk: int, variant: str):
+        """
+        variant: 'client' | 'shop'
+        """
+        obj = get_object_or_404(Appointment, pk=pk)
+        variant = "client" if variant not in {"client", "shop"} else variant
+        return render(request, "admin/repairs/print_receipt.html", {
+            "appointment": obj,
+            "variant": variant,
+        })
+
+    # ----- view: печать гарантийного талона -----
+    def print_warranty(self, request, pk: int):
+        obj = get_object_or_404(Appointment, pk=pk)
+        return render(request, "admin/repairs/print_warranty.html", {
+            "appointment": obj,
+        })
+
+    # ----- вспомогательные колонки -----
     @admin.display(ordering="phone_model__name", description="Модель")
     def phone_model_no_parens(self, obj: Appointment):
         return strip_parens_text(getattr(obj.phone_model, "name", ""))
@@ -276,3 +310,40 @@ class AppointmentAdmin(StripPhoneModelLabelsMixin, ModelAdmin):
             'background:{}20;color:{};border:1px solid {}33;font-size:12px">{}</span>',
             color, color, color, text
         )
+
+    # ----- уведомления при смене статуса -----
+    def save_model(self, request, obj, form, change):
+        old_status = None
+        if change:
+            try:
+                old_status = Appointment.objects.only("status").get(pk=obj.pk).status
+            except Appointment.DoesNotExist:
+                pass
+
+        super().save_model(request, obj, form, change)
+
+        if old_status and old_status != obj.status:
+            if old_status == "new" and obj.status == "confirmed":
+                url_client = reverse("admin:repairs_appointment_receipt", args=[obj.pk, "client"])
+                url_shop   = reverse("admin:repairs_appointment_receipt", args=[obj.pk, "shop"])
+                self.message_user(
+                    request,
+                    format_html(
+                        'Статус: <b>подтверждена</b>. Распечатать: '
+                        '<a class="button" href="{}" target="_blank">Квитанция клиента</a> '
+                        '<a class="button" href="{}" target="_blank">Квитанция мастерской</a>',
+                        url_client, url_shop
+                    ),
+                    level=messages.SUCCESS
+                )
+            if obj.status == "done":
+                url_w = reverse("admin:repairs_appointment_warranty", args=[obj.pk])
+                self.message_user(
+                    request,
+                    format_html(
+                        'Статус: <b>завершена</b>. Распечатайте: '
+                        '<a class="button" href="{}" target="_blank">Гарантийный талон</a>',
+                        url_w
+                    ),
+                    level=messages.SUCCESS
+                )

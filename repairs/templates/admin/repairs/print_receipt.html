@@ -1,0 +1,272 @@
+{% load static %}
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Квитанция приёмки — 2 экземпляра на 1 лист (компакт)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b; --brd:#e5e7eb; --dash:#cbd5e1;
+    --radius:10px; --pad:8px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:10px; color:var(--ink);
+    font:12px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    background:#fff;
+  }
+
+  .page{width:210mm; max-width:100%; margin:0 auto;}
+  .half{
+    min-height:125mm;                 /* компактнее */
+    padding:8mm 6mm 6mm;
+    border:1px solid var(--brd);
+    border-radius:10px;
+    background:#fff;
+  }
+
+  .cutline{display:flex; align-items:center; gap:8px; margin:6px 0;}
+  .cutline .line{flex:1; height:0; border-top:2px dashed var(--dash)}
+  .cutline .scissors{font-size:11px; color:var(--muted); white-space:nowrap}
+
+  .header{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px}
+  .brand{display:flex; align-items:center; gap:8px}
+  .logo{width:28px; height:28px; border-radius:8px; border:1px solid var(--brd); background:#fff; display:grid; place-items:center; overflow:hidden}
+  .logo img{max-width:100%; max-height:100%; object-fit:contain}
+  .brand h1{margin:0; font-size:14px; letter-spacing:.1px}
+  .sub{font-size:11px; color:var(--muted); margin-top:1px}
+  .copy-badge{border:1px dashed var(--dash); border-radius:999px; padding:4px 8px; font-weight:700; background:#fff; font-size:11px}
+
+  .card{border:1px solid var(--brd); border-radius:var(--radius); padding:var(--pad); background:#fff; margin:6px 0;}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .section h2{margin:0 0 6px; font-size:12px}
+  dl{margin:0}
+  .row{display:flex; gap:6px; margin:2px 0}
+  .row dt{min-width:108px; color:var(--muted)}
+  .row dd{margin:0}
+  .divider{height:1px; background:var(--brd); margin:8px 0}
+
+  .signs{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px}
+  .sign{border:1px dashed var(--dash); border-radius:8px; height:56px; padding:6px}
+  .small{font-size:10.5px; color:var(--muted)}
+
+  .toolbar{margin:8px 0 10px}
+  .btn{padding:8px 12px; border-radius:8px; border:1px solid #111; background:#111; color:#fff; text-decoration:none; font-size:12px}
+
+  @media print{
+    @page{size:A4 portrait; margin:8mm}
+    body{margin:0}
+    .toolbar{display:none!important}
+    .page{width:auto}
+    .half{min-height:120mm; page-break-inside:avoid}
+    .cutline{break-inside:avoid}
+  }
+
+  @media (max-width:720px){
+    .grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="toolbar">
+    <button class="btn" onclick="window.print()">Распечатать</button>
+  </div>
+
+  <!-- ===== ВЕРХНЯЯ ПОЛОВИНА: Экземпляр мастерской (минимум) ===== -->
+  <section class="half">
+    <header class="header">
+      <div class="brand">
+        <div class="logo">
+          {% if logo_url %}<img src="{{ logo_url }}" alt="Логотип">{% else %}T{% endif %}
+        </div>
+        <div>
+          <h1>Квитанция приёмки устройства</h1>
+          <div class="sub">{% if org_name %}{{ org_name }}{% else %}Мастерская{% endif %}</div>
+        </div>
+      </div>
+      <div class="copy-badge">Экземпляр мастерской</div>
+    </header>
+
+    <div class="card section">
+      <div class="grid">
+        <div>
+          <h2>Данные заявки</h2>
+          <dl>
+            <div class="row"><dt>Номер</dt><dd>{{ appointment.id }}</dd></div>
+          </dl>
+        </div>
+        <div>
+          <h2>Клиент</h2>
+          <dl>
+            <div class="row"><dt>Имя</dt><dd>{{ appointment.customer_name }}</dd></div>
+            <div class="row"><dt>Телефон</dt><dd>{{ appointment.customer_phone }}</dd></div>
+            {% if appointment.referral_code %}
+              <div class="row"><dt>Промокод</dt><dd>{{ appointment.referral_code }}</dd></div>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="grid">
+        <div>
+          <h2>Устройство</h2>
+          <dl>
+            <div class="row"><dt>Модель</dt><dd>{{ appointment.phone_model.brand.name }} {{ appointment.phone_model.name }}</dd></div>
+            <div class="row"><dt>Категория</dt>
+              <dd>
+                {% if appointment.phone_model.category == 'phone' %}Телефон
+                {% elif appointment.phone_model.category == 'tablet' %}Планшет
+                {% else %}Смарт-часы{% endif %}
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div>
+          <h2>Работа</h2>
+          <dl>
+            <div class="row"><dt>Услуга</dt><dd>{{ appointment.repair_type.name }}</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="grid">
+        <div>
+          <h2>Стоимость</h2>
+          <dl>
+            <div class="row"><dt>Цена</dt><dd>{{ appointment.price_original }} BYN</dd></div>
+            <div class="row"><dt>Скидка</dt><dd>{{ appointment.discount_amount|default:"0" }} BYN</dd></div>
+            <div class="row"><dt><strong>Итого</strong></dt><dd><strong>{{ appointment.price_final }} BYN</strong></dd></div>
+          </dl>
+        </div>
+        <!-- блок контактов убран -->
+      </div>
+
+      <div class="signs">
+        <div class="sign"><div class="small">Подпись клиента</div></div>
+        <div class="sign"><div class="small">Подпись сотрудника</div></div>
+      </div>
+
+      <p class="small" style="margin-top:6px">
+        Передавая устройство, клиент подтверждает согласие на диагностику/ремонт и обработку персональных данных.
+      </p>
+    </div>
+  </section>
+
+  <!-- Пунктир «отрезать» -->
+  <div class="cutline" aria-hidden="true">
+    <span class="line"></span>
+    <span class="scissors">✂︎ отрезать по линии</span>
+    <span class="line"></span>
+  </div>
+
+  <!-- ===== НИЖНЯЯ ПОЛОВИНА: Экземпляр клиента ===== -->
+  <section class="half">
+    <header class="header">
+      <div class="brand">
+        <div class="logo">
+          {% if logo_url %}<img src="{{ logo_url }}" alt="Логотип">{% else %}T{% endif %}
+        </div>
+        <div>
+          <h1>Квитанция приёмки устройства</h1>
+          <div class="sub">
+            {% if org_name %}{{ org_name }}{% else %}Мастерская{% endif %}
+            · {% if org_phone %}{{ org_phone }}{% else %}+375 (44) 568-44-93{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="copy-badge">Экземпляр клиента</div>
+    </header>
+
+    <div class="card section">
+      <div class="grid">
+        <div>
+          <h2>Данные заявки</h2>
+          <dl>
+            <div class="row"><dt>Номер</dt><dd>{{ appointment.id }}</dd></div>
+          </dl>
+        </div>
+        <div>
+          <h2>Клиент</h2>
+          <dl>
+            <div class="row"><dt>Имя</dt><dd>{{ appointment.customer_name }}</dd></div>
+            <div class="row"><dt>Телефон</dt><dd>{{ appointment.customer_phone }}</dd></div>
+            {% if appointment.referral_code %}
+              <div class="row"><dt>Промокод</dt><dd>{{ appointment.referral_code }}</dd></div>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="grid">
+        <div>
+          <h2>Устройство</h2>
+          <dl>
+            <div class="row"><dt>Модель</dt><dd>{{ appointment.phone_model.brand.name }} {{ appointment.phone_model.name }}</dd></div>
+            <div class="row"><dt>Категория</dt>
+              <dd>
+                {% if appointment.phone_model.category == 'phone' %}Телефон
+                {% elif appointment.phone_model.category == 'tablet' %}Планшет
+                {% else %}Смарт-часы{% endif %}
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <div>
+          <h2>Работа</h2>
+          <dl>
+            <div class="row"><dt>Услуга</dt><dd>{{ appointment.repair_type.name }}</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="grid">
+        <div>
+          <h2>Стоимость</h2>
+          <dl>
+            <div class="row"><dt>Цена</dt><dd>{{ appointment.price_original }} BYN</dd></div>
+            <div class="row"><dt>Скидка</dt><dd>{{ appointment.discount_amount|default:"0" }} BYN</dd></div>
+            <div class="row"><dt><strong>Итого</strong></dt><dd><strong>{{ appointment.price_final }} BYN</strong></dd></div>
+          </dl>
+        </div>
+        <div>
+          <h2>Контакты</h2>
+          <dl>
+            <div class="row"><dt>Адрес</dt><dd>{% if org_address %}{{ org_address }}{% else %}г. Гомель, ул. Гагарина, д. 55, каб. 50{% endif %}</dd></div>
+            <div class="row"><dt>Телефон</dt><dd>{% if org_phone %}{{ org_phone }}{% else %}+375 (44) 568-44-93{% endif %}</dd></div>
+            {% if org_site %}<div class="row"><dt>Сайт</dt><dd>{{ org_site }}</dd></div>{% endif %}
+          </dl>
+        </div>
+      </div>
+
+      <div class="signs">
+        <div class="sign"><div class="small">Подпись клиента</div></div>
+        <div class="sign"><div class="small">Подпись сотрудника</div></div>
+      </div>
+
+      <p class="small" style="margin-top:6px">
+        Сохраните до выдачи устройства. По вопросам звоните по указанному телефону.
+      </p>
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <button class="btn" onclick="window.print()">Распечатать</button>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,31 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{# Вставляем кнопки в правый верхний блок действий #}
+{% block object-tools-items %}
+  {{ block.super }}
+  {% if original %}
+
+    {% if original.status == "confirmed" %}
+      <li>
+        <a class="historylink" href="{% url 'admin:repairs_appointment_receipt' original.pk 'client' %}" target="_blank" rel="noopener">
+          Квитанция клиента
+        </a>
+      </li>
+      <li>
+        <a class="historylink" href="{% url 'admin:repairs_appointment_receipt' original.pk 'shop' %}" target="_blank" rel="noopener">
+          Квитанция мастерской
+        </a>
+      </li>
+    {% endif %}
+
+    {% if original.status == "done" %}
+      <li>
+        <a class="historylink" href="{% url 'admin:repairs_appointment_warranty' original.pk %}" target="_blank" rel="noopener">
+          Гарантийный талон
+        </a>
+      </li>
+    {% endif %}
+
+  {% endif %}
+{% endblock %}
