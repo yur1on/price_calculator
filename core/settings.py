@@ -26,6 +26,9 @@ except Exception:
 
 # Секретный ключ
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-dev-key-change-me")
+BOOKING_TIME_STEP_MIN = 60
+BOOKING_PREP_BUFFER_MIN = 0     # при желании можно менять
+BOOKING_CLEANUP_BUFFER_MIN = 0  # при желании можно менять
 
 # Режим отладки
 # DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"

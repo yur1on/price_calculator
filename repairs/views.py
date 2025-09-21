@@ -312,43 +312,67 @@ def repair_list(request, brand_slug: str, model_slug: str):
 
 # ---------- слоты и бронь ----------
 
+from datetime import date, datetime, timedelta
+from typing import List
+from django.conf import settings
+from django.utils import timezone
+
 def get_available_slots(
-    phone_model: PhoneModel,
-    repair_type: RepairType,
+    phone_model: "PhoneModel",
+    repair_type: "RepairType",
     days: int = 7,
     start_date: date | None = None,
     tz=None,
 ) -> List[datetime]:
     """
-    Вернуть список доступных слотов от start_date на days дней вперёд.
+    Возвращает список ДАТ/ВРЕМЕН (aware datetime) возможных стартов записи.
+    Сетка — с фиксированным шагом (по умолчанию 60 минут).
 
-    Конфликты считаются ГЛОБАЛЬНО: любые заявки (кроме отменённых),
-    независимо от модели/услуги, блокируют слот, если превышают ёмкость.
+    Учитывается:
+      • длительность конкретной услуги для модели (ModelRepairPrice) либо default у RepairType
+      • рабочие часы (WorkingHour) на каждый день недели
+      • существующие заявки (кроме отменённых)
+      • глобальная ёмкость (settings.REPAIRS_MAX_PARALLEL_APPOINTMENTS)
+      • текущее время: прошлое не показывается
+      • шаг сетки: settings.BOOKING_TIME_STEP_MIN (по умолчанию 60)
+      • опциональные буферы ДО и ПОСЛЕ (settings.BOOKING_PREP_BUFFER_MIN / BOOKING_CLEANUP_BUFFER_MIN)
 
-    Ёмкость читается из settings.REPAIRS_MAX_PARALLEL_APPOINTMENTS (по умолчанию 1).
+    Правило валидности слота:
+      интервал [slot_start, slot_start + duration] должен полностью
+      попадать в рабочее окно дня и при этом интервал
+      [slot_start - prep_buffer, slot_end + cleanup_buffer] не должен
+      превышать ёмкость по пересечениям с уже существующими заявками.
     """
-    # 1) длительность услуги
+    # --- 1) Длительность услуги ---
     try:
         price_entry = ModelRepairPrice.objects.get(
             phone_model=phone_model, repair_type=repair_type, is_active=True
         )
         duration_min = price_entry.duration_min
     except ModelRepairPrice.DoesNotExist:
-        duration_min = repair_type.default_duration_min
-    duration = timedelta(minutes=duration_min)
+        duration_min = repair_type.default_duration_min or 60  # безопасный дефолт
+    duration = timedelta(minutes=int(duration_min))
 
-    # 2) таймзона/сейчас
+    # --- 2) Настройки шаг/буферы/ёмкость ---
+    step_min = int(getattr(settings, "BOOKING_TIME_STEP_MIN", 60))
+    prep_min = int(getattr(settings, "BOOKING_PREP_BUFFER_MIN", 0))
+    cleanup_min = int(getattr(settings, "BOOKING_CLEANUP_BUFFER_MIN", 0))
+    step = timedelta(minutes=max(1, step_min))
+    prep_buf = timedelta(minutes=max(0, prep_min))
+    cleanup_buf = timedelta(minutes=max(0, cleanup_min))
+    capacity = int(getattr(settings, "REPAIRS_MAX_PARALLEL_APPOINTMENTS", 1))
+
+    # --- 3) TZ/сейчас/стартовая дата ---
     tz = tz or timezone.get_current_timezone()
     now = timezone.localtime(timezone.now(), tz)
-
-    # 3) стартовая дата
     if start_date is None:
         start_date = now.date()
 
-    # 4) заранее вытаскиваем все НЕ отменённые заявки, пересекающиеся с диапазоном сетки
+    # --- 4) Границы диапазона для предзагрузки существующих заявок ---
+    # Берём чуть шире с учётом буферов
     from datetime import time as _time
-    range_start = timezone.make_aware(datetime.combine(start_date, _time.min), tz)
-    range_end = timezone.make_aware(datetime.combine(start_date + timedelta(days=days), _time.min), tz)
+    range_start = timezone.make_aware(datetime.combine(start_date, _time.min), tz) - prep_buf
+    range_end = timezone.make_aware(datetime.combine(start_date + timedelta(days=days), _time.min), tz) + cleanup_buf
 
     existing = list(
         Appointment.objects.filter(
@@ -357,42 +381,72 @@ def get_available_slots(
             end__gt=range_start,
         ).values_list("start", "end")
     )
+    # Преобразуем к локальной TZ (на всякий)
+    existing = [(timezone.localtime(s, tz), timezone.localtime(e, tz)) for s, e in existing]
 
-    # 5) ёмкость (сколько ремонтов можно вести параллельно)
-    capacity = int(getattr(settings, "REPAIRS_MAX_PARALLEL_APPOINTMENTS", 1))
-
-    # 6) собираем слоты по рабочим часам
-    slots: List[datetime] = []
+    # --- 5) Рабочие часы ---
     working_hours = list(WorkingHour.objects.all())
 
+    slots: List[datetime] = []
+
+    # --- 6) Проход по дням ---
     for day_offset in range(days):
         current_date = start_date + timedelta(days=day_offset)
         weekday = current_date.weekday()
         day_hours = [wh for wh in working_hours if wh.weekday == weekday]
+        if not day_hours:
+            continue
 
         for wh in day_hours:
-            # окно работы за день
-            naive_start = datetime.combine(current_date, wh.start)
-            naive_end = datetime.combine(current_date, wh.end)
-            slot_start_time = timezone.make_aware(naive_start, tz)
-            slot_end_time = timezone.make_aware(naive_end, tz)
+            # Рабочее окно дня
+            day_start_naive = datetime.combine(current_date, wh.start)
+            day_end_naive = datetime.combine(current_date, wh.end)
+            day_start = timezone.make_aware(day_start_naive, tz)
+            day_end = timezone.make_aware(day_end_naive, tz)
 
-            current_slot = slot_start_time
-            while current_slot + duration <= slot_end_time:
-                # не показываем прошлое
-                if current_slot < now:
-                    current_slot += duration
+            # Старт итерации — ближайшая точка сетки ≥ day_start
+            # (чтобы шаг сетки был ровно по N минут от начала дня)
+            # Привяжем сетку к началу рабочего окна:
+            first_slot = day_start
+            # Если нужно привязать сетку к «круглому часу», раскомментируй:
+            # first_slot = (day_start.replace(minute=0, second=0, microsecond=0)
+            #               + (((day_start - day_start.replace(minute=0, second=0, microsecond=0))
+            #                   // step) * step))
+
+            current_slot = first_slot
+            while True:
+                slot_start = current_slot
+
+                # Не показываем прошлое
+                if slot_start < now:
+                    current_slot += step
+                    # проверка выхода за рабочее окно сделана после вычисления end
+                    # но здесь тоже можно сэкономить:
+                    if current_slot >= day_end:
+                        break
                     continue
 
-                end_slot = current_slot + duration
+                slot_end = slot_start + duration
 
-                # сколько пересечений уже есть в этот интервал
-                overlaps = sum(1 for s, e in existing if s < end_slot and e > current_slot)
+                # Слот должен полностью влезать в рабочее окно
+                if slot_end > day_end:
+                    break  # дальше только позже — тоже выйдет за окно
+
+                # С учётом буферов проверяем пересечения
+                check_start = slot_start - prep_buf
+                check_end = slot_end + cleanup_buf
+
+                overlaps = sum(
+                    1
+                    for s, e in existing
+                    if s < check_end and e > check_start
+                )
 
                 if overlaps < capacity:
-                    slots.append(current_slot)
+                    slots.append(slot_start)
 
-                current_slot += duration
+                # Следующий шаг по сетке
+                current_slot += step
 
     return slots
 
