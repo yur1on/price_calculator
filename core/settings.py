@@ -31,9 +31,9 @@ BOOKING_PREP_BUFFER_MIN = 0     # при желании можно менять
 BOOKING_CLEANUP_BUFFER_MIN = 0  # при желании можно менять
 
 # Режим отладки
-DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
+# DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 # Режим отладки продакшен
-# DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
+DEBUG = os.getenv("DJANGO_DEBUG", "false").lower() == "true"
 
 # Разрешённые хосты
 
