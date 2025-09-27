@@ -4,21 +4,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <!-- Font Awesome CDN -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" integrity="sha512-Kc323vGBEqzTmouAECnVceyQqyqdsSiqLQISBL29aUW4U/M7pSPA/gEUZQqv1cwx4OnYxTxvA5u3uJLD7GcsdQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <!-- Локальный fallback для Font Awesome -->
-  <link rel="stylesheet" href="{% static 'fonts/fontawesome/css/all.min.css' %}" onload="this.media='all'" onerror="this.href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css';">
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" crossorigin="anonymous">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
+
   <title>{% block title %}Ремонт телефонов{% endblock %}</title>
   <style>
     :root {
-      --container: 1200px; /* ← было 1000px */
+      --container: 1200px;
       --gap: 16px;
       --radius: 14px;
       --ink: #0f172a;
       --muted: #64748b;
       --brd: #e5e7eb;
       --brd2: #cbd5e1;
+
+      /* Шапка и логотип */
+      --header-h: 56px;   /* фиксированная высота «полосы» шапки */
+      --logo-h: 124px;     /* фактическая высота картинки (крупнее шапки) */
+      --logo-up: 10px;    /* насколько лого выходит вверх/вниз */
     }
+
     * { box-sizing: border-box; }
 
     /* Фон: mesh */
@@ -37,12 +46,26 @@
 
     /* Шапка */
     header { background: #111; color: #fff; }
-    .wrap { max-width: var(--container); margin: 0 auto; padding: 14px 20px; }
-    header .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .wrap { max-width: var(--container); margin: 0 auto; padding: 0 20px; }
+    header .row {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      height: var(--header-h);              /* фиксируем высоту шапки */
+      overflow: visible;                    /* позволяем лого «выглядывать» */
+    }
     header a { color: #fff; text-decoration: none; }
     header nav a { opacity: .95; }
     header nav a + a { margin-left: 14px; }
     header nav a:hover { opacity: 1; text-decoration: underline; }
+
+    /* Лого: больше полосы, «выпуск» за границы шапки */
+    header .brand { display:inline-flex; align-items:center; height: var(--header-h); }
+    header .brand img{
+      display:block;
+      height: var(--logo-h);
+      width:auto;
+      margin-top: calc(var(--logo-up) * -1);
+      margin-bottom: calc(var(--logo-up) * -1);
+    }
 
     /* Контент */
     main { max-width: var(--container); margin: 0 auto; padding: 20px; }
@@ -63,7 +86,13 @@
     .messages li { background: #f1f5f9; border: 1px solid #e2e8f0; color: #0f172a; padding: 8px 10px; border-radius: 8px; margin-bottom: 8px; }
 
     /* Подвал */
-    footer { background: #0b1220; color: #cbd5e1; margin-top: 28px; }
+   footer {
+  background: #0b1220;
+  color: #cbd5e1;
+  margin-top: 40px;
+  padding: 20px 0 20px; /* ✅ Добавлено — отступы сверху и снизу */
+}
+
     footer .grid { display: grid; gap: 18px; grid-template-columns: 1.2fr 1fr 1fr; }
     footer h4 { margin: 0 0 10px; font-size: 14px; color: #e2e8f0; letter-spacing: .02em; }
     footer p, footer li, footer a { font-size: 14px; line-height: 1.6; }
@@ -75,7 +104,7 @@
       display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; color: #94a3b8;
     }
 
-    /* Соц-иконки: Instagram и TikTok */
+    /* Соц-иконки */
     footer .social { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
     footer .social a {
       display: inline-flex; align-items: center; justify-content: center;
@@ -89,19 +118,20 @@
       font-family: "Font Awesome 6 Brands";
       font-weight: 400;
     }
-
-    /* Instagram */
     footer .social a.ig i { color: #d6249f; }
     footer .social a.ig:hover i { color: #e1306c; }
-
-    /* TikTok */
     footer .social a.tt i { color: #69C9D0; }
     footer .social a.tt:hover i { color: #EE1D52; }
 
-    /* Медиа-запросы */
+    /* Медиа */
     @media (max-width: 820px) { footer .grid { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 560px) {
-      .wrap { padding: 14px; }
+      :root{
+        --header-h: 52px;
+        --logo-h: 64px;
+        --logo-up: 6px;
+      }
+      .wrap { padding: 0 14px; }
       main { padding: 16px; }
       footer .grid { grid-template-columns: 1fr; }
       .f-bottom { flex-direction: column; align-items: flex-start; }
@@ -112,7 +142,11 @@
   <header>
     <div class="wrap">
       <div class="row">
-        <a href="{% url 'repairs:brand_list' %}"><strong>Tehsfera</strong></a>
+        <a class="brand" href="{% url 'repairs:brand_list' %}" aria-label="Tehsfera — на главную">
+          <img
+            src="{% static 'img/tehsfera-logo.png' %}"
+            alt="Tehsfera" loading="eager" decoding="async">
+        </a>
         <nav>
           <a href="{% url 'repairs:contacts' %}">Контакты</a>
           <a href="{% url 'repairs:brand_list' %}">Стоимость ремонта</a>
@@ -142,7 +176,7 @@
       <div class="grid">
         <section>
           <h4>Tehsfera</h4>
-          <p class="small" style="margin:0 0 10px">Ремонтируем смартфоны, планшеты и смарт-часы.</p>
+          <p class="small" style="margin:0 0 10px">Ремонтируем смартфоны, планшеты, смарт-часы.</p>
           <div class="social">
             <a class="ig" href="https://www.instagram.com/tehsfera_gomel" target="_blank" rel="noopener" title="Instagram: @tehsfera_gomel" aria-label="Instagram">
               <i class="fa-brands fa-instagram"></i>
