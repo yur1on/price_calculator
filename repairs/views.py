@@ -279,7 +279,7 @@ def model_list(request, brand_slug: str):
     else:
         models_qs.sort(key=lambda m: _natural_key(m.name))
 
-    per_page = 48 if view_mode == "grid" else 80
+    per_page = 80 if view_mode == "grid" else 80
     paginator = Paginator(models_qs, per_page)
     page_obj = paginator.get_page(request.GET.get("page") or 1)
 
