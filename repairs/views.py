@@ -452,16 +452,16 @@ def get_available_slots(
 
 def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
     """
-    Месячный календарь (6 недель) с лимитом записи на 30 дней вперёд,
-    скрытием дней до сегодня и удалением полностью «прошедших» верхних недель.
+    Месячный календарь (до 6 недель) с лимитом записи на MAX_BOOK_AHEAD_DAYS вперёд,
+    скрытием полностью «прошедших» верхних недель и скрытием дней до сегодня в первой видимой неделе.
 
-    ДОП: если длительность услуги > 560 мин, запись недоступна — редирект на список услуг с сообщением.
+    ДОП: если длительность услуги > 560 мин — онлайн-запись недоступна (редирект на список услуг).
     """
     brand = get_object_or_404(PhoneBrand, slug=brand_slug)
     model = get_object_or_404(PhoneModel, brand=brand, slug=model_slug)
     repair_type = get_object_or_404(RepairType, slug=repair_slug)
 
-    # --- Правило «по согласованию»: блокируем выбор слота, если длительность > 560
+    # --- Проверка длительности: > 560 мин — запись только по согласованию ---
     try:
         price_entry = ModelRepairPrice.objects.get(
             phone_model=model, repair_type=repair_type, is_active=True
@@ -480,7 +480,7 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
     tz = timezone.get_current_timezone()
     today = timezone.localdate()
 
-    # Запись доступна максимум на 30 дней вперёд (скользящее окно)
+    # Скользящее окно записи: максимум на N дней вперёд
     limit_date = today + timedelta(days=MAX_BOOK_AHEAD_DAYS)
     limit_month_start = limit_date.replace(day=1)
     current_month_start = today.replace(day=1)
@@ -496,30 +496,31 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
     else:
         month_start = current_month_start
 
-    # Если запросили месяц позже лимитного — показываем лимитный
+    # Не даём уйти дальше лимитного месяца
     if month_start > limit_month_start:
         month_start = limit_month_start
 
-    # Начало сетки: понедельник недели, куда входит 1-е число
+    # Сетка начинается с понедельника той недели, где находится 1-е число
     first_weekday = 0  # Пн
     offset = (month_start.weekday() - first_weekday) % 7
     grid_start = month_start - timedelta(days=offset)
 
-    # Доступные слоты на 6 недель (42 дня)
+    # Собираем слоты на 6 недель (42 дня) от grid_start
     days_span = 42
-    all_slots = get_available_slots(model, repair_type, days=days_span, start_date=grid_start, tz=tz)
-
-    # Отфильтровать слоты, выходящие за предел limit_date
+    all_slots = get_available_slots(
+        model, repair_type, days=days_span, start_date=grid_start, tz=tz
+    )
+    # Обрезаем по лимитной дате
     all_slots = [s for s in all_slots if s.date() <= limit_date]
 
-    # Сгрупповать слоты по дате
+    # Группируем по датам
     slots_by_date: dict[date, list[datetime]] = {}
     for s in all_slots:
         d = timezone.localtime(s, tz).date()
         slots_by_date.setdefault(d, []).append(s)
 
-    # Построить 6 недель × 7 дней
-    calendar_weeks = []
+    # Формируем 6 недель × 7 дней
+    calendar_weeks: list[list[dict]] = []
     for w in range(6):
         week = []
         for i in range(7):
@@ -539,7 +540,7 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
     can_next = next_month <= limit_month_start
     is_current_month = (month_start.year == today.year and month_start.month == today.month)
 
-    # === Удаляем полностью «прошедшие» верхние недели (ТОЛЬКО для текущего месяца) ===
+    # === Удаляем полностью «прошедшие» верхние недели (только для текущего месяца) ===
     if is_current_month:
         while calendar_weeks:
             first_week = calendar_weeks[0]
@@ -547,6 +548,12 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
                 calendar_weeks.pop(0)
             else:
                 break
+
+        # Скрываем дни до сегодняшнего в первой видимой неделе
+        if calendar_weeks:
+            for cell in calendar_weeks[0]:
+                if cell["date"] < today:
+                    cell["placeholder"] = True  # будет скрыт в шаблоне через .cell--placeholder
 
     return render(request, "repairs/slot_select.html", {
         "brand": brand,

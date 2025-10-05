@@ -46,7 +46,7 @@
   #cal .weekend{background:linear-gradient(0deg, rgba(249,250,251,.9), rgba(255,255,255,1))}
   #cal .today{border-color:#111; box-shadow:0 0 0 2px rgba(0,0,0,.05) inset}
 
-  /* Плейсхолдер — теперь полностью исключён из потока, чтобы не было «дыр» */
+  /* Плейсхолдер — полностью исключён из потока */
   #cal .cell.cell--placeholder{ display:none; }
 
   /* Слоты */
@@ -143,6 +143,7 @@
       {% for day in week %}
         {% with w=day.date|date:"w" %}
           <div class="cell
+                      {% if day.placeholder %} cell--placeholder{% endif %}
                       {% if not day.in_month %} out{% endif %}
                       {% if day.date|date:'Y-m-d' == today_iso %} today{% endif %}
                       {% if w == '0' or w == '6' %} weekend{% endif %}

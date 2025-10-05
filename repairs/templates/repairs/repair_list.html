@@ -127,7 +127,23 @@
           <td>{{ price.price }} BYN</td>
 
           <td>
-            {% if dur|add:0 > 560 %}
+            {# ——— Новая ветка для 700 минут ——— #}
+            {% if dur|add:0 == 700 %}
+              <span class="tooltip" tabindex="0"
+                    aria-label="Под заказ на следующий день — подробности по номеру +375445684493.">
+                <span class="agree-text">под заказ на следующий день</span>
+                <span class="tip" role="tooltip">
+                  <span class="tip-desktop">
+                    Под заказ на следующий день — все подробности по номеру
+                    <a href="tel:+375445684493">+375445684493</a>.
+                  </span>
+                  <span class="tip-mobile">
+                    На следующий день. Звоните:
+                    <a href="tel:+375445684493">+375445684493</a>.
+                  </span>
+                </span>
+              </span>
+            {% elif dur|add:0 > 560 %}
               <span class="tooltip" tabindex="0"
                     aria-label="Запчасть под заказ — подробности по номеру +375445684493.">
                 <span class="agree-text">по согласованию</span>
@@ -148,7 +164,22 @@
           </td>
 
           <td>
-            {% if dur|add:0 > 560 %}
+            {% if dur|add:0 == 700 %}
+              <span class="tooltip" tabindex="0"
+                    aria-label="Под заказ на следующий день — подробности по номеру +375445684493.">
+                <span class="btn is-disabled" aria-disabled="true">Выбрать время</span>
+                <span class="tip" role="tooltip">
+                  <span class="tip-desktop">
+                    Под заказ на следующий день — все подробности по номеру
+                    <a href="tel:+375445684493">+375445684493</a>.
+                  </span>
+                  <span class="tip-mobile">
+                    На следующий день. Звоните:
+                    <a href="tel:+375445684493">+375445684493</a>.
+                  </span>
+                </span>
+              </span>
+            {% elif dur|add:0 > 560 %}
               <span class="tooltip" tabindex="0"
                     aria-label="Запчасть под заказ — подробности по номеру +375445684493.">
                 <span class="btn is-disabled" aria-disabled="true">Выбрать время</span>
