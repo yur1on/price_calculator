@@ -46,8 +46,10 @@
   #cal .weekend{background:linear-gradient(0deg, rgba(249,250,251,.9), rgba(255,255,255,1))}
   #cal .today{border-color:#111; box-shadow:0 0 0 2px rgba(0,0,0,.05) inset}
 
-  /* Плейсхолдер — полностью исключён из потока */
-  #cal .cell.cell--placeholder{ display:none; }
+  /* Плейсхолдер:
+     — на десктопе держим место в сетке, чтобы выравнивание по Пн–Вс сохранялось
+     — на мобильном полностью скрываем */
+  #cal .cell.cell--placeholder{ visibility: hidden; }
 
   /* Слоты */
   #cal .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
@@ -96,6 +98,9 @@
     /* при раскрытии показать все слоты, перекрывая nth-child */
     #cal .chips.expanded .slot-chip{display:inline-flex !important;}
     #cal .chips.expanded .more{display:none !important;}
+
+    /* плейсхолдер на мобильном убираем из потока */
+    #cal .cell.cell--placeholder{ display:none; visibility: hidden; }
   }
 
   @media (max-width: 420px){
