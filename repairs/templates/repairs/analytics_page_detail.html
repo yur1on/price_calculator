@@ -1,0 +1,95 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% block title %}Просмотры страницы{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom:14px">Просмотры страницы</h1>
+
+<style>
+  .a-wrap{display:grid;gap:16px}
+  .a-toolbar{
+    position: sticky; top: 0; z-index: 5;
+    background:#fff; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px;
+    display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    box-shadow: 0 2px 10px rgba(2,8,23,.04);
+  }
+  .a-toolbar input[type="text"], .a-toolbar input[type="date"]{
+    height:34px; padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px;
+  }
+  .a-card{background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden}
+  .a-table{width:100%; border-collapse:collapse}
+  .a-table th, .a-table td{padding:10px 12px; border-bottom:1px solid #eef2f7; text-align:left; vertical-align:top}
+  .a-table thead th{font-weight:700; font-size:13px; color:#475569; background:#f8fafc}
+  .a-table tbody tr:nth-child(odd){background:#fcfdff}
+  .muted{color:#64748b}
+  code{white-space:pre-wrap; word-break:break-word}
+  .ua{max-width:680px}
+  .a-stats{font-size:13px; color:#475569}
+  .a-pager{display:flex; gap:8px; align-items:center; padding-top:10px}
+  @media (max-width:900px){
+    .ua{max-width:100%}
+  }
+</style>
+
+<div class="a-wrap">
+
+  {% if error %}
+    <p style="color:#b91c1c; background:#fee2e2; border:1px solid #fecaca; padding:10px 12px; border-radius:10px">{{ error }}</p>
+    <p><a class="button" href="{% url 'repairs:analytics_pages' %}">← К списку страниц</a></p>
+  {% else %}
+    <form class="a-toolbar" method="get">
+      <input type="text" name="path" value="{{ path }}" style="min-width:380px" placeholder="/repairs/...">
+      <label>С: <input type="date" name="from" value="{{ date_from|date:'Y-m-d' }}"></label>
+      <label>По: <input type="date" name="to" value="{{ date_to|date:'Y-m-d' }}"></label>
+      <button class="button default">Показать</button>
+      <a class="button" href="{% url 'repairs:analytics_pages' %}?from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}">← К списку</a>
+    </form>
+
+    <div class="a-stats">
+      <div>URL: <code>{{ path }}</code></div>
+      <div class="muted">Всего просмотров: <strong>{{ total }}</strong> • период {{ date_from|date:"d.m.Y" }}–{{ date_to|date:"d.m.Y" }}</div>
+    </div>
+
+    <div class="a-card">
+      <table class="a-table">
+        <thead>
+          <tr>
+            <th style="width:170px">Когда</th>
+            <th>Реферер</th>
+            <th style="width:140px">IP</th>
+            <th>User-Agent</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pv in page_obj.object_list %}
+            <tr>
+              <td>{{ pv.created_at|date:"d.m.Y H:i:s" }}</td>
+              <td>
+                {% if pv.referer %}
+                  <code>{{ pv.referer }}</code>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+              <td>{{ pv.ip_address|default:"—" }}</td>
+              <td class="ua"><code>{{ pv.user_agent|default:"—" }}</code></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="muted">Нет просмотров для этого URL за период.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="a-pager">
+      {% if page_obj.has_previous %}
+        <a class="button" href="?path={{ path|urlencode }}&page={{ page_obj.previous_page_number }}&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}">← Назад</a>
+      {% endif %}
+      <span class="muted">стр. {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a class="button" href="?path={{ path|urlencode }}&page={{ page_obj.next_page_number }}&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}">Вперёд →</a>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

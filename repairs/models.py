@@ -300,3 +300,15 @@ class Appointment(models.Model):
         if not self.price_final:
             self.price_final = self.price_original - self.discount_amount
         super().save(*args, **kwargs)
+
+
+
+class PageView(models.Model):
+    path = models.CharField(max_length=255, db_index=True)
+    user_agent = models.TextField(blank=True)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    referer = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.path} ({self.created_at:%Y-%m-%d %H:%M})"

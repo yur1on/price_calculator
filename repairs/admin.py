@@ -15,6 +15,7 @@ from .models import (
     PhoneBrand, PhoneModel, RepairType, ModelRepairPrice,
     ReferralPartner, ReferralRedemption,
     Technician, WorkingHour, TimeOff, Appointment,
+    PageView,
 )
 
 # -------------------------------------------------------------------
@@ -262,12 +263,16 @@ class AppointmentAdmin(StripPhoneModelLabelsMixin, ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         my = [
-            path("<int:pk>/print/receipt/<str:variant>/",
-                 self.admin_site.admin_view(self.print_receipt),
-                 name="repairs_appointment_receipt"),
-            path("<int:pk>/print/warranty/",
-                 self.admin_site.admin_view(self.print_warranty),
-                 name="repairs_appointment_warranty"),
+            path(
+                "<int:pk>/print/receipt/<str:variant>/",
+                self.admin_site.admin_view(self.print_receipt),
+                name="repairs_appointment_receipt",
+            ),
+            path(
+                "<int:pk>/print/warranty/",
+                self.admin_site.admin_view(self.print_warranty),
+                name="repairs_appointment_warranty",
+            ),
         ]
         return my + urls
 
@@ -347,3 +352,41 @@ class AppointmentAdmin(StripPhoneModelLabelsMixin, ModelAdmin):
                     ),
                     level=messages.SUCCESS
                 )
+
+
+# -------------------------------------------------------------------
+# Просмотры страниц (PageView)
+# -------------------------------------------------------------------
+@admin.register(PageView)
+class PageViewAdmin(admin.ModelAdmin):
+    list_display = ("path", "ip_address", "created_at")
+    list_filter = ("path", "created_at")
+    search_fields = ("path", "ip_address")
+    ordering = ("-created_at",)
+
+
+# -------------------------------------------------------------------
+# Кнопка «Аналитика» в админке через proxy-модель
+# -------------------------------------------------------------------
+from django.http import HttpResponseRedirect  # ← добавь импорт
+
+class AnalyticsLink(PageView):
+    class Meta:
+        proxy = True
+        verbose_name = "Аналитика"
+        verbose_name_plural = "Аналитика"
+
+@admin.register(AnalyticsLink)
+class AnalyticsAdmin(admin.ModelAdmin):
+    """
+    Пункт в разделе Repairs → «Аналитика».
+    При клике — редирект на /repairs/admin/analytics/
+    """
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        return HttpResponseRedirect(reverse("repairs:analytics"))

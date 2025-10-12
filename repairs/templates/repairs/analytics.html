@@ -1,0 +1,155 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% block title %}Аналитика трафика{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom:10px;">Аналитика трафика</h1>
+<p style="margin:10px 0">
+  <a class="button" href="{% url 'repairs:analytics_pages' %}?from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}">
+    Полный список страниц →
+  </a>
+</p>
+
+<form method="get" style="margin:8px 0 18px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+  <label>С: <input type="date" name="from" value="{{ date_from|date:'Y-m-d' }}"></label>
+  <label>По: <input type="date" name="to" value="{{ date_to|date:'Y-m-d' }}"></label>
+  <button class="button default">Показать</button>
+  <a class="button" href="{% url 'repairs:analytics' %}">Сброс</a>
+</form>
+
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"></script>
+
+<style>
+  .grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 900px) {
+    .grid.two { grid-template-columns: 1fr 1fr; }
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05);
+    padding: 12px 14px;
+  }
+  .card h3 {
+    font-size: 16px;
+    margin: 0 0 6px;
+    color: #1e293b;
+  }
+  canvas {
+    width: 100%;
+    height: 220px !important;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th, td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 6px 8px;
+    text-align: left;
+  }
+  .muted { color: #64748b; font-size: 13px; }
+</style>
+
+<div class="grid two">
+  <div class="card">
+    <h3>По дням</h3>
+    <canvas id="chartDaily"></canvas>
+  </div>
+  <div class="card">
+    <h3>По часам</h3>
+    <canvas id="chartHourly"></canvas>
+  </div>
+</div>
+
+<div class="grid two" style="margin-top:14px;">
+  <div class="card">
+    <h3>ТОП страниц</h3>
+    <canvas id="chartTop"></canvas>
+  </div>
+  <div class="card">
+    <h3>Теплокарта</h3>
+    <canvas id="chartHeat"></canvas>
+  </div>
+</div>
+
+<div class="card" style="margin-top:14px;">
+  <h3>Рефереры</h3>
+  <table>
+    <thead><tr><th>Источник</th><th>Просмотры</th></tr></thead>
+    <tbody>
+      {% for r in top_referrers %}
+        <tr>
+          <td>{{ r.referer }}</td>
+          <td>{{ r.n }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="2" class="muted">Нет данных</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  const dailyLabels  = {{ daily_labels|safe }};
+  const dailyCounts  = {{ daily_counts|safe }};
+  const hoursLabels  = {{ hours_labels|safe }};
+  const hoursCounts  = {{ hours_counts|safe }};
+  const weekdayLabels= {{ weekday_labels|safe }};
+  const heat         = {{ heatmap|safe }};
+  const topLabels = [{% for row in top_paths %}"{{ row.path|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+  const topCounts = [{% for row in top_paths %}{{ row.n }}{% if not forloop.last %},{% endif %}{% endfor %}];
+
+  // — Линейный график по дням
+  new Chart(document.getElementById('chartDaily'), {
+    type: 'line',
+    data: { labels: dailyLabels, datasets: [{ data: dailyCounts, borderWidth: 2, borderColor:'#2563eb', fill:false, tension:.3 }] },
+    options: { plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:6}}}, responsive:true, maintainAspectRatio:false }
+  });
+
+  // — Гистограмма по часам
+  new Chart(document.getElementById('chartHourly'), {
+    type: 'bar',
+    data: { labels: hoursLabels, datasets: [{ data: hoursCounts, backgroundColor:'#3b82f6' }] },
+    options: { plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:12}}}, responsive:true, maintainAspectRatio:false }
+  });
+
+  // — ТОП страниц
+  new Chart(document.getElementById('chartTop'), {
+    type: 'bar',
+    data: { labels: topLabels, datasets: [{ data: topCounts, backgroundColor:'#60a5fa' }] },
+    options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{y:{ticks:{autoSkip:false}}}, responsive:true, maintainAspectRatio:false }
+  });
+
+  // — Теплокарта
+  const heatData = [];
+  for (let d=0; d<7; d++) for (let h=0; h<24; h++) heatData.push({x:h, y:d, v:heat[d][h]});
+  const vmax = Math.max(1, ...heatData.map(o=>o.v));
+  new Chart(document.getElementById('chartHeat'), {
+    type: 'matrix',
+    data: { datasets: [{
+      data: heatData,
+      width: ({chart})=> (chart.chartArea?.width||0)/24 - 1.5,
+      height: ({chart})=> (chart.chartArea?.height||0)/7 - 1.5,
+      backgroundColor: ctx => `rgba(37,99,235,${0.15 + 0.8*(ctx.raw.v/vmax)})`,
+      borderWidth: 0
+    }] },
+    options: {
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{type:'linear',min:0,max:23,ticks:{callback:v=>String(v).padStart(2,'0')+":00",maxTicksLimit:6}},
+        y:{type:'linear',min:0,max:6,ticks:{callback:v=>weekdayLabels[v]}}
+      },
+      responsive:true, maintainAspectRatio:false
+    }
+  });
+</script>
+{% endblock %}

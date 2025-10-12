@@ -1,0 +1,107 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+{% block title %}Страницы за период{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom:14px">Страницы за период</h1>
+
+<style>
+  /* ——— Layout ——— */
+  .a-wrap{display:grid;gap:16px}
+  .a-toolbar{
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg, #fff);
+    padding: 10px 12px; border:1px solid #e5e7eb; border-radius:10px;
+    display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    box-shadow: 0 2px 10px rgba(2,8,23,.04);
+  }
+  .a-toolbar label{display:flex; gap:6px; align-items:center; font-size:14px; color:#475569}
+  .a-toolbar input[type="date"], .a-toolbar input[type="text"]{
+    height:34px; padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px;
+  }
+  .a-toolbar .button{height:34px; line-height:1}
+
+  /* ——— Table ——— */
+  .a-card{background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden}
+  .a-table{width:100%; border-collapse:collapse}
+  .a-table th, .a-table td{padding:10px 12px; border-bottom:1px solid #eef2f7; text-align:left}
+  .a-table tr:last-child td{border-bottom:0}
+  .a-table thead th{font-weight:700; font-size:13px; color:#475569; background:#f8fafc}
+  .a-table tbody tr:nth-child(odd){background:#fcfdff}
+  code{white-space:nowrap}
+  .muted{color:#64748b}
+
+  /* ——— Badge ——— */
+  .a-badge{
+    display:inline-block; min-width:38px; text-align:center;
+    padding:4px 8px; border-radius:999px; font-weight:700; font-size:12px;
+    background:#eff6ff; color:#1d4ed8; border:1px solid #dbeafe;
+  }
+
+  /* ——— Pager ——— */
+  .a-pager{display:flex; gap:8px; align-items:center; justify-content:flex-start; padding:10px 0}
+  .a-pager .muted{font-size:13px}
+
+  /* ——— Responsive ——— */
+  @media (max-width:800px){
+    code{white-space:normal}
+    .a-table td:nth-child(3){width:auto}
+  }
+</style>
+
+<div class="a-wrap">
+
+  <form class="a-toolbar" method="get">
+    <label>С:
+      <input type="date" name="from" value="{{ date_from|date:'Y-m-d' }}">
+    </label>
+    <label>По:
+      <input type="date" name="to" value="{{ date_to|date:'Y-m-d' }}">
+    </label>
+    <input type="text" name="q" placeholder="Фильтр по URL" value="{{ q }}" style="min-width:260px">
+    <button class="button default">Показать</button>
+    <a class="button" href="{% url 'repairs:analytics_pages' %}">Сброс</a>
+    <span style="flex:1"></span>
+    <a class="button" href="{% url 'repairs:analytics' %}">← Дашборд</a>
+  </form>
+
+  <div class="a-card">
+    <table class="a-table">
+      <thead>
+        <tr>
+          <th style="width:100px">Просмотры</th>
+          <th>URL</th>
+          <th style="width:160px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in page_obj.object_list %}
+          <tr>
+            <td><span class="a-badge">{{ row.n }}</span></td>
+            <td><code>{{ row.path }}</code></td>
+            <td>
+              <a class="button"
+                 href="{% url 'repairs:analytics_page_detail' %}?path={{ row.path|urlencode }}&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}">
+                Детали
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="3" class="muted">Нет данных за выбранный период.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="a-pager">
+    {% if page_obj.has_previous %}
+      <a class="button" href="?page={{ page_obj.previous_page_number }}&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}&q={{ q|urlencode }}">← Назад</a>
+    {% endif %}
+    <span class="muted">стр. {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+      <a class="button" href="?page={{ page_obj.next_page_number }}&from={{ date_from|date:'Y-m-d' }}&to={{ date_to|date:'Y-m-d' }}&q={{ q|urlencode }}">Вперёд →</a>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
