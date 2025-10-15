@@ -1,4 +1,6 @@
 {% extends "repairs/base.html" %}
+{% load repairs_extras %}  {# подключаем фильтры (human_minutes и shrink_parens) #}
+
 {% block title %}Ремонт {{ model.brand.name }} {{ model.name }}{% endblock %}
 
 {% block content %}
@@ -34,7 +36,7 @@
     .btn:hover{opacity:.9}
     .btn:active{transform:translateY(1px)}
     .btn.is-disabled{
-      pointer-events:none; /* события пойдут на родителя .tooltip */
+      pointer-events:none;
       opacity:.55; filter:grayscale(20%); cursor:not-allowed;
       background:#cfcfcf; color:#666; border-color:#cfcfcf;
     }
@@ -61,7 +63,6 @@
     .tooltip:hover .tip,
     .tooltip:focus-within .tip{ opacity:1; transform:translate(-50%,-8px); }
 
-    /* две версии текста */
     .tip-desktop{ display:inline }
     .tip-mobile{ display:none }
 
@@ -81,11 +82,10 @@
       .table td:nth-child(4) .btn{ display:block; width:100%; text-align:center; white-space:nowrap }
       .btn-back{ width:100%; justify-content:center }
 
-      /* адаптация подсказки под экран телефона */
       .tooltip .tip{
-        white-space:normal;       /* разрешаем перенос */
-        max-width:92vw;           /* не шире экрана */
-        font-size:.85rem;         /* поменьше шрифт */
+        white-space:normal;
+        max-width:92vw;
+        font-size:.85rem;
         line-height:1.3;
       }
       .tip-desktop{ display:none }
@@ -95,7 +95,7 @@
     @media (max-width:360px){
       .table td{ grid-template-columns:1fr }
       .table td::before{ margin-bottom:4px }
-      .tooltip .tip{ font-size:.8rem } /* ещё чуть меньше на совсем узких экранах */
+      .tooltip .tip{ font-size:.8rem }
     }
   </style>
 
@@ -125,9 +125,7 @@
         <tr>
           <td>{{ price.repair_type.name }}</td>
           <td>{{ price.price }} BYN</td>
-
           <td>
-            {# ——— Новая ветка для 700 минут ——— #}
             {% if dur|add:0 == 700 %}
               <span class="tooltip" tabindex="0"
                     aria-label="Под заказ на следующий день — подробности по номеру +375445684493.">
@@ -159,7 +157,7 @@
                 </span>
               </span>
             {% else %}
-              {{ dur }} мин
+              {{ dur|human_minutes }}
             {% endif %}
           </td>
 
