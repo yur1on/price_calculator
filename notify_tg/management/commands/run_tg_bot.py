@@ -31,14 +31,19 @@ def gen_ref_code(length: int = 8) -> str:
 
 
 def gen_pending_code() -> str:
-    # Временный код (никогда не показываем пользователю)
+    """
+    Временный код (никогда не показываем пользователю).
+
+    ВАЖНО: в проде Postgres строго валидирует длину поля code.
+    Судя по ошибке у тебя code = varchar(16), поэтому делаем <= 16 символов.
+    """
     alphabet = string.ascii_uppercase + string.digits
-    return "PEND-" + "".join(random.choice(alphabet) for _ in range(12))
+    # 4 ("PEND") + 12 = 16
+    return "PEND" + "".join(random.choice(alphabet) for _ in range(12))
 
 
 def norm_phone(s: str) -> str:
     digits = "".join(ch for ch in (s or "") if ch.isdigit())
-    # сравнение по последним 9 цифрам
     return digits[-9:] if len(digits) >= 9 else digits
 
 
@@ -47,7 +52,8 @@ def partner_has_phone(partner: ReferralPartner) -> bool:
 
 
 def partner_has_real_code(partner: ReferralPartner) -> bool:
-    return bool(partner.code) and not partner.code.startswith("PEND-")
+    # временные коды начинаются с PEND
+    return bool(partner.code) and not partner.code.startswith("PEND")
 
 
 def fmt_money(x: Decimal | int | None) -> str:
@@ -112,8 +118,13 @@ def reply_kb(full: bool) -> ReplyKeyboardMarkup:
 
 async def _reply(update: Update, text: str, full_keyboard: bool, parse_mode: str | None = None):
     msg = update.message or update.effective_message
-    if msg:
+    if not msg:
+        return
+    try:
         await msg.reply_text(text, reply_markup=reply_kb(full_keyboard), parse_mode=parse_mode)
+    except Exception:
+        # чтобы бот не "молчал" при ошибках Telegram API
+        logger.exception("TG send failed (len=%s, parse_mode=%s)", len(text or ""), parse_mode)
 
 
 # =========================
@@ -174,7 +185,7 @@ def db_get_or_create_partner_for_chat(
 ) -> tuple[ReferralPartner, bool]:
     """
     Создаём партнёра и привязку Telegram.
-    ВАЖНО: создаём временный code=PEND-..., настоящий код выдаём только после подтверждения телефона.
+    ВАЖНО: создаём временный code=PEND..., настоящий код выдаём только после подтверждения телефона.
     """
     pt = (PartnerTelegram.objects
           .select_related("partner")
@@ -257,7 +268,6 @@ def db_calc_balance(partner_id: int) -> dict:
     available = (earned_accrued - spent_abs).quantize(Decimal("0.01"))
     total_discount = Decimal(total_discount).quantize(Decimal("0.01"))
 
-    # простой “потенциал”
     potential = (earned_accrued + earned_pending - spent_abs).quantize(Decimal("0.01"))
 
     return {
@@ -300,7 +310,6 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_username = (user.username or "").strip() if user else ""
     full_name = " ".join([x for x in [(user.first_name if user else ""), (user.last_name if user else "")] if x]).strip()
 
-    # /start CODE (например если продавец получил код)
     code_arg = (context.args[0].strip() if context.args else "")
     if code_arg:
         partner = await db_get_partner_by_code(code_arg)
@@ -331,7 +340,6 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         full_name=full_name or None,
     )
 
-    # строго: сначала подтверждение, потом выдача кода
     if not partner_has_phone(partner):
         await _reply(
             update,
@@ -341,11 +349,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # если вдруг телефон уже есть
-    if not partner_has_real_code(partner):
-        code = await db_assign_real_code_if_needed(partner.id)
-    else:
-        code = partner.code
+    code = await db_assign_real_code_if_needed(partner.id) if not partner_has_real_code(partner) else partner.code
 
     await _reply(
         update,
@@ -363,11 +367,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     full = bool(partner and partner_has_phone(partner))
 
     if not full:
-        await _reply(
-            update,
-            "ℹ️ Сначала подтвердите номер телефона кнопкой «Подтвердить номер».",
-            full_keyboard=False,
-        )
+        await _reply(update, "ℹ️ Сначала подтвердите номер телефона кнопкой «Подтвердить номер».", full_keyboard=False)
         return
 
     await _reply(
@@ -389,11 +389,7 @@ async def cmd_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _reply(update, rules_text(None), full_keyboard=False, parse_mode="HTML")
         return
 
-    if not partner_has_real_code(partner):
-        code = await db_assign_real_code_if_needed(partner.id)
-    else:
-        code = partner.code
-
+    code = await db_assign_real_code_if_needed(partner.id) if not partner_has_real_code(partner) else partner.code
     await _reply(update, rules_text(code), full_keyboard=True, parse_mode="HTML")
 
 
@@ -429,7 +425,6 @@ async def on_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     c = update.message.contact
 
-    # принимаем только "свой" контакт
     if c.user_id and user and c.user_id != user.id:
         await _reply(update, "Можно подтвердить только свой номер (через кнопку).", full_keyboard=False)
         return
@@ -469,7 +464,6 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _reply(update, "Нажмите /start для начала.", full_keyboard=False)
         return
 
-    # блокируем кабинет до подтверждения телефона
     if not partner_has_phone(partner):
         if text_l == BTN_HELP.lower():
             await cmd_help(update, context)
@@ -480,7 +474,6 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _reply(update, "Сначала подтвердите номер кнопкой «Подтвердить номер».", full_keyboard=False)
         return
 
-    # гарантируем реальный код
     if not partner_has_real_code(partner):
         await db_assign_real_code_if_needed(partner.id)
         partner = await db_get_partner_by_chat(chat_id)
