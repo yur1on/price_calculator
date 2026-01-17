@@ -15,12 +15,52 @@ class NewsCategoryAdmin(ModelAdmin):
 
 @admin.register(NewsPost)
 class NewsPostAdmin(ModelAdmin):
-    list_display = ("title", "category", "status", "published_at", "updated_at")
+    list_display = (
+        "title",
+        "category",
+        "status",
+        "published_at",
+        "author_user",
+        "source_name",
+        "updated_at",
+    )
     list_filter = ("status", "category")
-    search_fields = ("title", "excerpt", "content")
+    search_fields = ("title", "excerpt", "content", "author_name", "source_name", "source_url")
     prepopulated_fields = {"slug": ("title",)}
     ordering = ("-published_at", "-created_at")
     readonly_fields = ("created_at", "updated_at")
+
+    fieldsets = (
+        (None, {
+            "fields": (
+                "category",
+                "title",
+                "slug",
+                "status",
+                "published_at",
+                "cover",
+                "excerpt",
+                "content",
+            )
+        }),
+        ("Автор и источник", {
+            "fields": (
+                "author_user",
+                "author_name",
+                "source_name",
+                "source_url",
+            )
+        }),
+        ("Служебное", {
+            "fields": ("created_at", "updated_at")
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        # Авто-автор: если не указан и сохраняет staff-пользователь — подставим его
+        if not obj.author_user and request.user.is_authenticated and request.user.is_staff:
+            obj.author_user = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(NewsReaction)

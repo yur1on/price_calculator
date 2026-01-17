@@ -46,6 +46,20 @@ class NewsPost(models.Model):
 
     cover = models.ImageField("Обложка", upload_to="news/", blank=True, null=True)
 
+    # Автор и источник
+    author_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="news_posts",
+        verbose_name="Автор (пользователь)",
+    )
+    author_name = models.CharField("Автор (текст)", max_length=120, blank=True)
+
+    source_name = models.CharField("Источник (название)", max_length=160, blank=True)
+    source_url = models.URLField("Источник (ссылка)", blank=True)
+
     status = models.CharField("Статус", max_length=12, choices=Status.choices, default=Status.DRAFT)
     published_at = models.DateTimeField("Дата публикации", blank=True, null=True)
 
@@ -60,6 +74,7 @@ class NewsPost(models.Model):
             models.Index(fields=["status", "-published_at"]),
             models.Index(fields=["slug"]),
             models.Index(fields=["category", "status", "-published_at"]),
+            models.Index(fields=["author_user"]),
         ]
 
     def __str__(self):
@@ -67,6 +82,26 @@ class NewsPost(models.Model):
 
     def get_absolute_url(self):
         return reverse("news:detail", kwargs={"slug": self.slug})
+
+    def author_display(self) -> str:
+        """
+        Что показывать как автора:
+        - если заполнен author_name -> он
+        - иначе если есть author_user -> full_name или username
+        - иначе пусто
+        """
+        if (self.author_name or "").strip():
+            return self.author_name.strip()
+
+        if self.author_user_id:
+            full_name = ""
+            try:
+                full_name = (self.author_user.get_full_name() or "").strip()
+            except Exception:
+                full_name = ""
+            return full_name or getattr(self.author_user, "username", "") or ""
+
+        return ""
 
     def save(self, *args, **kwargs):
         # Автопубликация: если статус PUBLISHED и даты нет — ставим сейчас
