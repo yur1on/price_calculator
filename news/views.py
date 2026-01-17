@@ -1,10 +1,11 @@
 import re
+
 from django.db.models import Count
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.template.defaultfilters import linebreaks
 from django.utils import timezone
 from django.utils.html import escape
-from django.utils.safestring import mark_safe
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView, DetailView
@@ -21,16 +22,20 @@ def _get_session_key(request) -> str:
     return request.session.session_key or ""
 
 
-_IMG_RE = re.compile(r"\{\{\s*img\s*:\s*([1-5])\s*\}\}")
+# поддерживаем {{img:1}}..{{img:5}} с пробелами и любым регистром
+_IMG_RE = re.compile(r"\{\{\s*img\s*:\s*([1-5])\s*\}\}", re.IGNORECASE)
 
 
 def build_rendered_parts(post: NewsPost):
     """
-    Разбивает post.content на части по плейсхолдерам {{img:1}}..{{img:5}}
-    и вставляет картинки из NewsImage (position=1..5).
-    Возвращает список dict: {"type": "html", "html": "..."} или {"type":"img", ...}
+    Вариант №1 (правильный): превращаем текст в HTML-абзацы через linebreaks,
+    чтобы переносы/пустые строки из админки отображались красиво.
+
+    - Любой текст экранируется escape() (безопасно)
+    - Потом linebreaks() делает <p> и <br>
+    - Вставки картинок по {{img:N}} берутся из NewsImage(position=N)
     """
-    # Карты картинок по позиции
+    # Картинки по позиции
     images = {img.position: img for img in post.images.all()}
 
     content = post.content or ""
@@ -42,10 +47,10 @@ def build_rendered_parts(post: NewsPost):
         pos = int(m.group(1))
 
         # Текст до плейсхолдера
-        text_chunk = content[last:start].strip("\n")
-        if text_chunk.strip():
-            html = mark_safe("<p>" + "</p><p>".join(escape(text_chunk).split("\n\n")) + "</p>")
-            parts.append({"type": "html", "html": html})
+        chunk = content[last:start]
+        if chunk.strip():
+            # ВАЖНО: escape -> linebreaks
+            parts.append({"type": "html", "html": linebreaks(escape(chunk))})
 
         # Картинка
         img = images.get(pos)
@@ -53,17 +58,16 @@ def build_rendered_parts(post: NewsPost):
             parts.append({
                 "type": "img",
                 "url": img.image.url,
-                "caption": img.caption or "",
+                "caption": (img.caption or "").strip(),
                 "position": pos,
             })
 
         last = end
 
     # Хвост текста
-    tail = content[last:].strip("\n")
+    tail = content[last:]
     if tail.strip():
-        html = mark_safe("<p>" + "</p><p>".join(escape(tail).split("\n\n")) + "</p>")
-        parts.append({"type": "html", "html": html})
+        parts.append({"type": "html", "html": linebreaks(escape(tail))})
 
     return parts
 
@@ -116,10 +120,10 @@ class NewsDetailView(DetailView):
         ctx = super().get_context_data(**kwargs)
         post = self.object
 
-        # Источники (до 3, но админка/валидация уже держит лимит)
+        # Источники (сортируем, чтобы в шаблоне было стабильно)
         ctx["sources"] = list(post.sources.all().order_by("sort_order", "id"))
 
-        # Готовые части текста с вставками картинок
+        # Текст + картинки по {{img:N}}
         ctx["rendered_parts"] = build_rendered_parts(post)
 
         # Счётчики реакций
@@ -135,7 +139,7 @@ class NewsDetailView(DetailView):
         ctx["count_fire"] = counts.get("fire", 0)
         ctx["count_wow"] = counts.get("wow", 0)
 
-        # Мои реакции
+        # Мои реакции (пользователь или session)
         if self.request.user.is_authenticated:
             mine = set(
                 NewsReaction.objects
@@ -149,8 +153,8 @@ class NewsDetailView(DetailView):
                 .filter(post=post, user__isnull=True, session_key=sk)
                 .values_list("reaction", flat=True)
             )
-        ctx["my_reactions"] = mine
 
+        ctx["my_reactions"] = mine
         return ctx
 
 
@@ -169,6 +173,7 @@ def toggle_reaction(request, slug: str):
     if reaction not in allowed:
         return JsonResponse({"ok": False, "error": "bad_reaction"}, status=400)
 
+    # Toggle для user / session
     if request.user.is_authenticated:
         lookup = {"post": post, "reaction": reaction, "user": request.user}
         existing = NewsReaction.objects.filter(**lookup)
@@ -185,6 +190,7 @@ def toggle_reaction(request, slug: str):
         else:
             NewsReaction.objects.create(post=post, reaction=reaction, user=None, session_key=sk)
 
+    # Новые счётчики
     counts_qs = (
         NewsReaction.objects
         .filter(post=post)
@@ -193,8 +199,11 @@ def toggle_reaction(request, slug: str):
     )
     counts = {row["reaction"]: row["c"] for row in counts_qs}
 
+    # Мои реакции для подсветки
     if request.user.is_authenticated:
-        mine = set(NewsReaction.objects.filter(post=post, user=request.user).values_list("reaction", flat=True))
+        mine = set(
+            NewsReaction.objects.filter(post=post, user=request.user).values_list("reaction", flat=True)
+        )
     else:
         sk = _get_session_key(request)
         mine = set(
