@@ -1,0 +1,50 @@
+{% extends "repairs/base.html" %}
+
+{% block title %}Новости{% endblock %}
+
+{% block content %}
+  <h1>Новости</h1>
+
+  {% if categories %}
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin: 10px 0 16px;">
+      <a class="btn" href="{% url 'news:list' %}"
+         style="{% if not active_category %}background:#111;color:#fff;{% else %}background:#fff;color:#111;border-color:#cbd5e1;{% endif %}">
+        Все
+      </a>
+
+      {% for c in categories %}
+        <a class="btn" href="{% url 'news:category' c.slug %}"
+           style="{% if active_category and active_category.id == c.id %}background:#111;color:#fff;{% else %}background:#fff;color:#111;border-color:#cbd5e1;{% endif %}">
+          {{ c.title }}
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% for p in posts %}
+    <article class="card" style="margin-bottom: 12px;">
+      <div class="muted small" style="display:flex; gap:10px; flex-wrap:wrap;">
+        {% if p.category %}<span>{{ p.category.title }}</span>{% endif %}
+        {% if p.published_at %}<span>{{ p.published_at|date:"d.m.Y" }}</span>{% endif %}
+      </div>
+      <h2 style="margin: 8px 0 8px;">
+        <a href="{{ p.get_absolute_url }}" style="text-decoration:none;">{{ p.title }}</a>
+      </h2>
+      {% if p.excerpt %}<p style="margin:0;">{{ p.excerpt }}</p>{% endif %}
+    </article>
+  {% empty %}
+    <p>Пока новостей нет.</p>
+  {% endfor %}
+
+  {% if is_paginated %}
+    <nav style="display:flex; gap:12px; align-items:center; margin-top: 14px;">
+      {% if page_obj.has_previous %}
+        <a class="btn" style="background:#fff;color:#111;border-color:#cbd5e1;" href="?page={{ page_obj.previous_page_number }}">Назад</a>
+      {% endif %}
+      <span class="muted">Стр. {{ page_obj.number }} / {{ paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a class="btn" style="background:#fff;color:#111;border-color:#cbd5e1;" href="?page={{ page_obj.next_page_number }}">Вперёд</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+{% endblock %}

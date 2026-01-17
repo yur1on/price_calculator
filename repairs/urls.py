@@ -1,4 +1,4 @@
-# repairs/urls.py
+# repairs/urls.py.py
 from django.urls import path
 from . import views
 from .views_analytics import analytics_view

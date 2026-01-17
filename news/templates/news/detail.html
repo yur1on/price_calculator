@@ -1,0 +1,241 @@
+{% extends "repairs/base.html" %}
+{% block title %}{{ post.title }}{% endblock %}
+
+{% block content %}
+  <style>
+    .post-wrap { max-width: 920px; margin: 0 auto; }
+
+    /* Кнопка "назад" в вашем стиле */
+    .post-back-btn{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--brd2);
+      background: #fff;
+      color: #111;
+      text-decoration: none;
+      margin: 2px 0 12px;
+      font-size: 13px;
+    }
+    .post-back-btn:hover { background: rgba(15,23,42,0.03); }
+
+    .post-card {
+      background: #fff;
+      border: 1px solid var(--brd);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, .06);
+    }
+
+    /* Контрастная шапка, чтобы заголовок не "тонул" */
+    .post-head {
+      padding: 16px 18px 14px;
+      background:
+        linear-gradient(180deg, rgba(248,250,252,0.95) 0%, rgba(255,255,255,1) 70%);
+      border-bottom: 1px solid rgba(229,231,235,.9);
+    }
+
+    .post-meta {
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .pill {
+      display:inline-flex;
+      align-items:center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--brd2);
+      background: rgba(255,255,255,0.95);
+      color: #0f172a;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .post-title {
+      margin: 10px 0 0;
+      font-size: 26px;
+      line-height: 1.15;
+      color: #0b1220;
+      letter-spacing: -0.01em;
+      text-shadow: 0 1px 0 rgba(255,255,255,.35);
+    }
+
+    .post-cover {
+      width: 100%;
+      height: auto;
+      display:block;
+      border-bottom: 1px solid rgba(229,231,235,.9);
+      background: #f1f5f9;
+    }
+
+    .post-body {
+      padding: 16px 18px 18px;
+      line-height: 1.8;
+      color: #0f172a;
+      font-size: 16px;
+    }
+    .post-body p { margin: 0 0 14px; }
+    .post-body p:last-child { margin-bottom: 0; }
+
+    /* Ссылки в тексте */
+    .post-body a { color: inherit; text-decoration: underline; text-decoration-thickness: 1px; }
+    .post-body a:hover { opacity: .9; }
+
+    /* Реакции */
+    .react-bar {
+      display:flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 14px 18px 18px;
+      border-top: 1px solid rgba(229,231,235,.9);
+      background: rgba(248,250,252,.6);
+    }
+    .react-title {
+      width: 100%;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: -2px;
+    }
+    .react-btn {
+      display:inline-flex;
+      align-items:center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--brd2);
+      background: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      user-select: none;
+    }
+    .react-btn:hover { background: rgba(15,23,42,0.03); }
+    .react-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .react-btn.active {
+      border-color: #111;
+      box-shadow: 0 0 0 1px rgba(17,17,17,.15) inset;
+    }
+    .react-count { font-size: 13px; color: var(--muted); }
+
+    /* Мобильная подстройка */
+    @media (max-width: 560px) {
+      .post-head { padding: 14px 14px 12px; }
+      .post-body { padding: 14px; font-size: 15px; }
+      .post-title { font-size: 22px; }
+      .react-bar { padding: 12px 14px 14px; }
+    }
+  </style>
+
+  <div class="post-wrap">
+    <a class="post-back-btn" href="{% url 'news:list' %}">
+      <span aria-hidden="true">←</span> Назад к новостям
+    </a>
+
+    <article class="post-card">
+      <header class="post-head">
+        <div class="post-meta">
+          {% if post.category %}<span class="pill">{{ post.category.title }}</span>{% endif %}
+          {% if post.published_at %}<span>{{ post.published_at|date:"d.m.Y H:i" }}</span>{% endif %}
+        </div>
+
+        <h1 class="post-title">{{ post.title }}</h1>
+      </header>
+
+      {% if post.cover %}
+        <img class="post-cover" src="{{ post.cover.url }}" alt="{{ post.title }}" loading="lazy">
+      {% endif %}
+
+      <div class="post-body">
+        {{ post.content|linebreaks }}
+      </div>
+
+      {# Нужен CSRF для fetch POST #}
+      <form style="display:none;">{% csrf_token %}</form>
+
+      <div class="react-bar" id="reactBar" data-url="{% url 'news:react' post.slug %}">
+        <div class="react-title">Оцените новость:</div>
+
+        <button class="react-btn {% if 'like' in my_reactions %}active{% endif %}" type="button" data-reaction="like">
+          👍 <span class="react-count" data-count="like">{{ count_like }}</span>
+        </button>
+
+        <button class="react-btn {% if 'love' in my_reactions %}active{% endif %}" type="button" data-reaction="love">
+          ❤️ <span class="react-count" data-count="love">{{ count_love }}</span>
+        </button>
+
+        <button class="react-btn {% if 'fire' in my_reactions %}active{% endif %}" type="button" data-reaction="fire">
+          🔥 <span class="react-count" data-count="fire">{{ count_fire }}</span>
+        </button>
+
+        <button class="react-btn {% if 'wow' in my_reactions %}active{% endif %}" type="button" data-reaction="wow">
+          😮 <span class="react-count" data-count="wow">{{ count_wow }}</span>
+        </button>
+      </div>
+    </article>
+  </div>
+
+  <script>
+    (function () {
+      const bar = document.getElementById("reactBar");
+      if (!bar) return;
+
+      const url = bar.dataset.url;
+      const csrfTokenEl = document.querySelector('[name=csrfmiddlewaretoken]');
+      const csrfToken = csrfTokenEl ? csrfTokenEl.value : "";
+
+      function setCounts(counts) {
+        ["like","love","fire","wow"].forEach((k) => {
+          const el = bar.querySelector(`[data-count="${k}"]`);
+          if (!el) return;
+          const v = counts && typeof counts[k] === "number" ? counts[k] : 0;
+          el.textContent = v;
+        });
+      }
+
+      function setMine(mine) {
+        const mineSet = new Set(mine || []);
+        bar.querySelectorAll(".react-btn").forEach((btn) => {
+          const r = btn.dataset.reaction;
+          btn.classList.toggle("active", mineSet.has(r));
+        });
+      }
+
+      async function postReaction(reaction) {
+        const body = new URLSearchParams({reaction});
+        const resp = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "X-CSRFToken": csrfToken,
+          },
+          body: body.toString()
+        });
+        return await resp.json();
+      }
+
+      bar.addEventListener("click", async (e) => {
+        const btn = e.target.closest(".react-btn");
+        if (!btn) return;
+
+        btn.disabled = true;
+        try {
+          const r = btn.dataset.reaction;
+          const data = await postReaction(r);
+          if (!data || !data.ok) return;
+
+          setCounts(data.counts);
+          setMine(data.mine);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    })();
+  </script>
+{% endblock %}

@@ -1,0 +1,242 @@
+{% extends "repairs/base.html" %}
+{% block title %}Новости{% endblock %}
+
+{% block content %}
+  <style>
+    /* ===== News page layout ===== */
+    .news-header {
+      display:flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      margin: 6px 0 18px;
+    }
+    .news-header h1 { margin: 0; }
+    .news-sub { margin: 6px 0 0; color: var(--muted); max-width: 760px; }
+
+    .news-2col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+      margin-top: 10px;
+    }
+
+    .news-col {
+      background: rgba(255,255,255,0.55);
+      border: 1px solid rgba(229,231,235,0.9);
+      border-radius: var(--radius);
+      padding: 12px;
+      backdrop-filter: blur(6px);
+    }
+
+    .news-col-head {
+      display:flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .news-col-head h2 { margin: 0; font-size: 18px; }
+    .badge {
+      display:inline-flex;
+      align-items:center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(203,213,225,0.9);
+      background: rgba(255,255,255,0.9);
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 999px; display:inline-block; background: #111; opacity: .9; }
+
+    /* Cards */
+    .news-card {
+      background: #fff;
+      border: 1px solid var(--brd);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 12px;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, .04);
+    }
+    .news-card:hover { border-color: var(--brd2); }
+
+    .news-cover {
+      width: 100%;
+      height: 170px;
+      object-fit: cover;
+      display:block;
+      background: #f1f5f9;
+    }
+
+    .news-body { padding: 12px 14px; }
+
+    .news-meta {
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .news-title {
+      margin: 0 0 8px;
+      font-size: 16px;
+      line-height: 1.25;
+    }
+    .news-title a { text-decoration: none; }
+    .news-title a:hover { text-decoration: underline; }
+
+    .news-excerpt { margin: 0; color: var(--ink); opacity: .92; }
+
+    .news-actions {
+      display:flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .btn-ghost {
+      display:inline-flex;
+      align-items:center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--brd2);
+      background: #fff;
+      text-decoration:none;
+      color: #111;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .btn-ghost:hover { background: rgba(15,23,42,0.03); }
+
+    /* Featured card (first item in each column) */
+    .featured .news-cover { height: 210px; }
+    .featured .news-title { font-size: 18px; }
+
+    /* Empty state */
+    .news-empty {
+      background:#fff;
+      border: 1px dashed rgba(203,213,225,0.9);
+      border-radius: var(--radius);
+      padding: 14px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 980px) {
+      .news-2col { grid-template-columns: 1fr; }
+      .news-header { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+
+  <div class="news-header">
+    <div>
+      <h1>Новости</h1>
+      <p class="news-sub">
+        Обновления мастерской, полезные заметки и технологические новинки. Публикуем коротко и по делу.
+      </p>
+    </div>
+  </div>
+
+  <div class="news-2col">
+
+    {# ===== Left column: Workshop ===== #}
+    <section class="news-col">
+      <div class="news-col-head">
+        <h2>{% if workshop_category %}{{ workshop_category.title }}{% else %}Новости мастерской{% endif %}</h2>
+        <span class="badge"><span class="dot"></span> Tehsfera</span>
+      </div>
+
+      {% if workshop_posts %}
+        {% for p in workshop_posts %}
+          <article class="news-card {% if forloop.first %}featured{% endif %}">
+            {% if p.cover %}
+              <img class="news-cover" src="{{ p.cover.url }}" alt="{{ p.title }}" loading="lazy">
+            {% endif %}
+
+            <div class="news-body">
+              <div class="news-meta">
+                {% if p.published_at %}<span>{{ p.published_at|date:"d.m.Y" }}</span>{% endif %}
+                <span>•</span>
+                <span class="muted">Мастерская</span>
+              </div>
+
+              <h3 class="news-title">
+                <a href="{{ p.get_absolute_url }}">{{ p.title }}</a>
+              </h3>
+
+              {% if p.excerpt %}
+                <p class="news-excerpt">{{ p.excerpt }}</p>
+              {% else %}
+                <p class="news-excerpt muted">Откройте новость, чтобы прочитать подробнее.</p>
+              {% endif %}
+
+              <div class="news-actions">
+                <a class="btn-ghost" href="{{ p.get_absolute_url }}">
+                  Читать <span aria-hidden="true">→</span>
+                </a>
+              </div>
+            </div>
+          </article>
+        {% endfor %}
+      {% else %}
+        <div class="news-empty">
+          Пока новостей нет. Создайте публикацию в админке и поставьте статус “Опубликовано”.
+        </div>
+      {% endif %}
+    </section>
+
+    {# ===== Right column: Tech ===== #}
+    <section class="news-col">
+      <div class="news-col-head">
+        <h2>{% if tech_category %}{{ tech_category.title }}{% else %}Новости технологий{% endif %}</h2>
+        <span class="badge"><span class="dot"></span> Tech</span>
+      </div>
+
+      {% if tech_posts %}
+        {% for p in tech_posts %}
+          <article class="news-card {% if forloop.first %}featured{% endif %}">
+            {% if p.cover %}
+              <img class="news-cover" src="{{ p.cover.url }}" alt="{{ p.title }}" loading="lazy">
+            {% endif %}
+
+            <div class="news-body">
+              <div class="news-meta">
+                {% if p.published_at %}<span>{{ p.published_at|date:"d.m.Y" }}</span>{% endif %}
+                <span>•</span>
+                <span class="muted">Технологии</span>
+              </div>
+
+              <h3 class="news-title">
+                <a href="{{ p.get_absolute_url }}">{{ p.title }}</a>
+              </h3>
+
+              {% if p.excerpt %}
+                <p class="news-excerpt">{{ p.excerpt }}</p>
+              {% else %}
+                <p class="news-excerpt muted">Откройте новость, чтобы прочитать подробнее.</p>
+              {% endif %}
+
+              <div class="news-actions">
+                <a class="btn-ghost" href="{{ p.get_absolute_url }}">
+                  Читать <span aria-hidden="true">→</span>
+                </a>
+              </div>
+            </div>
+          </article>
+        {% endfor %}
+      {% else %}
+        <div class="news-empty">
+          Пока новостей нет. Создайте публикацию в админке и поставьте статус “Опубликовано”.
+        </div>
+      {% endif %}
+    </section>
+
+  </div>
+{% endblock %}

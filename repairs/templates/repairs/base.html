@@ -21,6 +21,7 @@
   <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
 
   <title>{% block title %}Ремонт телефонов{% endblock %}</title>
+
   <style>
     :root {
       --container: 1200px;
@@ -65,6 +66,9 @@
     header nav a + a { margin-left: 14px; }
     header nav a:hover { opacity: 1; text-decoration: underline; }
 
+    /* Активный пункт меню */
+    header nav a.active { opacity: 1; text-decoration: underline; }
+
     header .brand { display:inline-flex; align-items:center; height: var(--header-h); }
     header .brand img{
       display:block;
@@ -89,6 +93,81 @@
     input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
     .messages { margin: 0 0 12px 0; padding: 0; list-style: none; }
     .messages li { background: #f1f5f9; border: 1px solid #e2e8f0; color: #0f172a; padding: 8px 10px; border-radius: 8px; margin-bottom: 8px; }
+
+    /* ===== Mobile burger menu ===== */
+    .site-nav { display: flex; align-items: center; gap: 14px; }
+
+    .nav-toggle {
+      display: none;
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.22);
+      background: rgba(255,255,255,.06);
+      color: #fff;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .nav-toggle:hover { background: rgba(255,255,255,.10); }
+
+    .nav-toggle .bar {
+      width: 18px;
+      height: 2px;
+      background: #fff;
+      display: block;
+      border-radius: 99px;
+      position: relative;
+    }
+    .nav-toggle .bar::before,
+    .nav-toggle .bar::after{
+      content:"";
+      position:absolute;
+      left:0;
+      width: 18px;
+      height: 2px;
+      background:#fff;
+      border-radius:99px;
+    }
+    .nav-toggle .bar::before { top: -6px; }
+    .nav-toggle .bar::after  { top:  6px; }
+
+    @media (max-width: 560px) {
+      .nav-toggle { display: inline-flex; }
+      .site-nav { position: relative; }
+
+      /* На мобилке показываем пункты в выпадающем меню */
+      .site-nav .nav-links {
+        display: none;
+        position: absolute;
+        right: 0;
+        top: calc(var(--header-h) - 6px);
+        min-width: 240px;
+        background: #0b1220;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 14px;
+        padding: 10px;
+        box-shadow: 0 16px 34px rgba(0,0,0,.35);
+        z-index: 999;
+      }
+      .site-nav.open .nav-links { display: block; }
+
+      .site-nav .nav-links a {
+        display: block;
+        padding: 10px 10px;
+        border-radius: 10px;
+        margin: 2px 0;
+        text-decoration: none;
+        opacity: 1; /* важнее на мобилке */
+      }
+      .site-nav .nav-links a:hover {
+        background: rgba(255,255,255,.08);
+        text-decoration: none;
+      }
+
+      /* На мобилке убираем "длинную" строку юзера в шапке — показываем внутри меню */
+      .site-nav .nav-user-inline { display: none; }
+    }
 
     /* Подвал */
     footer {
@@ -145,6 +224,7 @@
     }
   </style>
 </head>
+
 <body>
   <header>
     <div class="wrap">
@@ -152,16 +232,46 @@
         <a class="brand" href="{% url 'repairs:brand_list' %}" aria-label="Tehsfera — на главную">
           <img src="{% static 'img/tehsfera-logo.png' %}" alt="Tehsfera" loading="eager" decoding="async">
         </a>
-        <nav>
-          <a href="{% url 'repairs:contacts' %}">Контакты</a>
-          <a href="{% url 'repairs:brand_list' %}">Стоимость ремонта</a>
-          {% if request.user.is_staff %}
-            <a href="{% url 'repairs:referrals_report' %}">Отчёт партнёров</a>
-          {% endif %}
-          {% if request.user.is_authenticated and request.user.is_staff %}
-            <a href="{% url 'admin:index' %}">Админ-панель</a>
-            <span class="small" style="opacity:.8">({{ request.user.username }})</span>
-          {% endif %}
+
+        <nav class="site-nav" id="siteNav">
+          <button class="nav-toggle" type="button" aria-label="Открыть меню" aria-expanded="false" aria-controls="navLinks">
+            <span class="bar"></span>
+          </button>
+
+          <div class="nav-links" id="navLinks">
+            {# Подсветка активного: проверяем request.path #}
+
+            <a href="{% url 'repairs:contacts' %}"
+               class="{% if request.path|slice:':10' == '/contacts' %}active{% endif %}">
+              Контакты
+            </a>
+
+            <a href="{% url 'repairs:brand_list' %}"
+               class="{% if request.path == '/' or request.path|slice:':8' == '/repairs' %}active{% endif %}">
+              Стоимость ремонта
+            </a>
+
+            <a href="{% url 'news:list' %}"
+               class="{% if request.path|slice:':6' == '/news/' %}active{% endif %}">
+              Новости
+            </a>
+
+            {% if request.user.is_staff %}
+              <a href="{% url 'repairs:referrals_report' %}"
+                 class="{% if request.path|slice:':11' == '/referrals' %}active{% endif %}">
+                Отчёт партнёров
+              </a>
+            {% endif %}
+
+            {% if request.user.is_authenticated and request.user.is_staff %}
+              <a href="{% url 'admin:index' %}">Админ-панель</a>
+              <div class="small" style="opacity:.85; padding: 8px 10px;">
+                Вы вошли как: <b>{{ request.user.username }}</b>
+              </div>
+            {% endif %}
+          </div>
+
+          {# На десктопе nav-links будет отображаться обычной строкой через ваши базовые стили #}
         </nav>
       </div>
     </div>
@@ -196,6 +306,7 @@
             </a>
           </div>
         </section>
+
         <section>
           <h4>Контакты</h4>
           <ul>
@@ -204,6 +315,7 @@
             <li><i class="fa-solid fa-clock"></i>&nbsp; Пн–Сб 10:00–18:00, Вс — выходной</li>
           </ul>
         </section>
+
         <section>
           <h4>Ссылки</h4>
           <ul>
@@ -213,11 +325,45 @@
           </ul>
         </section>
       </div>
+
       <div class="f-bottom">
         <div>© {% now "Y" %} «Tehsfera». Все права защищены.</div>
-        <div class="small">Сайт создан для демонстрации — цены и сроки указаны для примера.</div>
       </div>
     </div>
   </footer>
+
+  <script>
+    (function () {
+      const nav = document.getElementById("siteNav");
+      if (!nav) return;
+
+      const btn = nav.querySelector(".nav-toggle");
+      const links = nav.querySelector(".nav-links");
+      if (!btn || !links) return;
+
+      function setOpen(isOpen) {
+        nav.classList.toggle("open", isOpen);
+        btn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      }
+
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        setOpen(!nav.classList.contains("open"));
+      });
+
+      document.addEventListener("click", function (e) {
+        if (!nav.contains(e.target)) setOpen(false);
+      });
+
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") setOpen(false);
+      });
+
+      links.addEventListener("click", function (e) {
+        const a = e.target.closest("a");
+        if (a) setOpen(false);
+      });
+    })();
+  </script>
 </body>
 </html>

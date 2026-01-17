@@ -29,6 +29,8 @@ urlpatterns = [
 
     # приложение
     path("repairs/", include("repairs.urls")),
+    path("news/", include("news.urls")),
+
 
     # корень
     path("", RedirectView.as_view(pattern_name="repairs:brand_list", permanent=False)),
@@ -42,3 +44,4 @@ handler404 = "core.urls.err_404"
 handler403 = "core.urls.err_403"
 handler400 = "core.urls.err_400"
 handler500 = "core.urls.err_500"
+
