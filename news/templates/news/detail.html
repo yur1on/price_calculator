@@ -29,10 +29,13 @@
       box-shadow: 0 10px 28px rgba(15, 23, 42, .06);
     }
 
+    /* Не используем <header>, чтобы не конфликтовать со стилями site header */
     .post-head {
       padding: 16px 18px 14px;
       background: linear-gradient(180deg, rgba(248,250,252,0.95) 0%, rgba(255,255,255,1) 70%);
       border-bottom: 1px solid rgba(229,231,235,.9);
+      position: relative;
+      z-index: 1;
     }
 
     .post-meta {
@@ -42,6 +45,8 @@
       flex-wrap: wrap;
       color: var(--muted);
       font-size: 12px;
+      position: relative;
+      z-index: 2;
     }
 
     .pill {
@@ -58,13 +63,23 @@
 
     .meta-sep { opacity: .6; }
 
-    .meta-link {
+    /* Источники: обычные кликабельные ссылки (без рамок) */
+    .sources { display:inline-flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .source-link{
       color: var(--muted);
       text-decoration: underline;
       text-decoration-thickness: 1px;
       text-underline-offset: 2px;
+      position: relative;
+      z-index: 3;
+      pointer-events: auto;
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      display: inline-block;
     }
-    .meta-link:hover { color: #0f172a; }
+    .source-link:hover { color: #0f172a; }
 
     .post-title {
       margin: 10px 0 0;
@@ -91,6 +106,23 @@
     }
     .post-body p { margin: 0 0 14px; }
     .post-body p:last-child { margin-bottom: 0; }
+
+    /* Картинка внутри текста */
+    .post-figure { margin: 16px 0; padding: 0; }
+    .post-figure img{
+      width: 100%;
+      height: auto;
+      display:block;
+      border-radius: 12px;
+      border: 1px solid rgba(229,231,235,.9);
+      background: #f1f5f9;
+    }
+    .post-caption{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
 
     /* Ссылки в тексте */
     .post-body a { color: inherit; text-decoration: underline; text-decoration-thickness: 1px; }
@@ -138,6 +170,7 @@
       .post-body { padding: 14px; font-size: 15px; }
       .post-title { font-size: 22px; }
       .react-bar { padding: 12px 14px 14px; }
+      .source-link { max-width: 100%; }
     }
   </style>
 
@@ -147,7 +180,7 @@
     </a>
 
     <article class="post-card">
-      <header class="post-head">
+      <div class="post-head">
         <div class="post-meta">
           {% if post.category %}
             <span class="pill">{{ post.category.title }}</span>
@@ -164,27 +197,42 @@
             {% endif %}
           {% endwith %}
 
-          {% if post.source_name %}
+          {# Источники (до 3) — обычные ссылки, без рамок #}
+          {% if sources %}
             <span class="meta-sep">•</span>
-            {% if post.source_url %}
-              <a class="meta-link" href="{{ post.source_url }}" target="_blank" rel="noopener">
-                Источник: {{ post.source_name }}
-              </a>
-            {% else %}
-              <span>Источник: {{ post.source_name }}</span>
-            {% endif %}
+            <span>Источник:</span>
+            <span class="sources" aria-label="Источники">
+              {% for s in sources %}
+                <a class="source-link" href="{{ s.url }}" target="_blank" rel="noopener" title="{{ s.url }}">
+                  {{ s.title }}
+                </a>
+                {% if not forloop.last %}<span class="meta-sep">•</span>{% endif %}
+              {% endfor %}
+            </span>
           {% endif %}
         </div>
 
         <h1 class="post-title">{{ post.title }}</h1>
-      </header>
+      </div>
 
       {% if post.cover %}
         <img class="post-cover" src="{{ post.cover.url }}" alt="{{ post.title }}" loading="lazy">
       {% endif %}
 
       <div class="post-body">
-        {{ post.content|linebreaks }}
+        {# render: текст + вставки картинок по {{img:1}}..{{img:5}} #}
+        {% for part in rendered_parts %}
+          {% if part.type == "html" %}
+            {{ part.html|safe }}
+          {% elif part.type == "img" %}
+            <figure class="post-figure">
+              <img src="{{ part.url }}" alt="{{ post.title }}" loading="lazy">
+              {% if part.caption %}
+                <figcaption class="post-caption">{{ part.caption }}</figcaption>
+              {% endif %}
+            </figure>
+          {% endif %}
+        {% endfor %}
       </div>
 
       {# Нужен CSRF для fetch POST #}
