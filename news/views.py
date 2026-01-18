@@ -25,17 +25,44 @@ def _get_session_key(request) -> str:
 # поддерживаем {{img:1}}..{{img:5}} с пробелами и любым регистром
 _IMG_RE = re.compile(r"\{\{\s*img\s*:\s*([1-5])\s*\}\}", re.IGNORECASE)
 
+# URL из текста: https://... или http://...
+# (не захватываем пробелы и очевидные закрывающие скобки/кавычки)
+_URL_RE = re.compile(r"(https?://[^\s<>()\"']+)", re.IGNORECASE)
+
+
+def linkify_escaped_text(escaped_text: str) -> str:
+    """
+    Превращает URL в кликабельные <a>..., но ожидает, что текст уже escape()-нут.
+    Это важно: так мы не допускаем XSS и не разрешаем произвольный HTML.
+    """
+
+    def repl(match):
+        url = match.group(1)
+
+        # url уже в escape()-нутом тексте, но всё равно не навредит.
+        # Дополнительно можно подрезать хвостовые знаки пунктуации.
+        trailing = ""
+        while url and url[-1] in ".,:;!?)]}":
+            trailing = url[-1] + trailing
+            url = url[:-1]
+
+        return (
+            f'<a href="{url}" target="_blank" rel="noopener">'
+            f'{url}'
+            f"</a>{trailing}"
+        )
+
+    return _URL_RE.sub(repl, escaped_text)
+
 
 def build_rendered_parts(post: NewsPost):
     """
-    Вариант №1 (правильный): превращаем текст в HTML-абзацы через linebreaks,
-    чтобы переносы/пустые строки из админки отображались красиво.
-
-    - Любой текст экранируется escape() (безопасно)
-    - Потом linebreaks() делает <p> и <br>
-    - Вставки картинок по {{img:N}} берутся из NewsImage(position=N)
+    Вариант №1 + автоссылки:
+    - escape() (безопасность)
+    - linkify_escaped_text() (кликабельные URL из админки)
+    - linebreaks() (абзацы/переносы)
+    - вставки картинок по {{img:N}} из NewsImage(position=N)
     """
-    # Картинки по позиции
     images = {img.position: img for img in post.images.all()}
 
     content = post.content or ""
@@ -46,13 +73,12 @@ def build_rendered_parts(post: NewsPost):
         start, end = m.span()
         pos = int(m.group(1))
 
-        # Текст до плейсхолдера
         chunk = content[last:start]
         if chunk.strip():
-            # ВАЖНО: escape -> linebreaks
-            parts.append({"type": "html", "html": linebreaks(escape(chunk))})
+            esc = escape(chunk)
+            esc = linkify_escaped_text(esc)
+            parts.append({"type": "html", "html": linebreaks(esc)})
 
-        # Картинка
         img = images.get(pos)
         if img and img.image:
             parts.append({
@@ -64,10 +90,11 @@ def build_rendered_parts(post: NewsPost):
 
         last = end
 
-    # Хвост текста
     tail = content[last:]
     if tail.strip():
-        parts.append({"type": "html", "html": linebreaks(escape(tail))})
+        esc = escape(tail)
+        esc = linkify_escaped_text(esc)
+        parts.append({"type": "html", "html": linebreaks(esc)})
 
     return parts
 
@@ -120,10 +147,10 @@ class NewsDetailView(DetailView):
         ctx = super().get_context_data(**kwargs)
         post = self.object
 
-        # Источники (сортируем, чтобы в шаблоне было стабильно)
+        # Источники (до 3)
         ctx["sources"] = list(post.sources.all().order_by("sort_order", "id"))
 
-        # Текст + картинки по {{img:N}}
+        # Текст + картинки + автоссылки
         ctx["rendered_parts"] = build_rendered_parts(post)
 
         # Счётчики реакций
@@ -134,12 +161,13 @@ class NewsDetailView(DetailView):
             .annotate(c=Count("id"))
         )
         counts = {row["reaction"]: row["c"] for row in counts_qs}
+
         ctx["count_like"] = counts.get("like", 0)
         ctx["count_love"] = counts.get("love", 0)
         ctx["count_fire"] = counts.get("fire", 0)
         ctx["count_wow"] = counts.get("wow", 0)
 
-        # Мои реакции (пользователь или session)
+        # Мои реакции
         if self.request.user.is_authenticated:
             mine = set(
                 NewsReaction.objects
