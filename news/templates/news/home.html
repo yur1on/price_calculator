@@ -3,7 +3,6 @@
 
 {% block content %}
   <style>
-    /* ===== News page layout ===== */
     .news-header {
       display:flex;
       justify-content: space-between;
@@ -11,8 +10,14 @@
       gap: 16px;
       margin: 6px 0 18px;
     }
+
     .news-header h1 { margin: 0; }
-    .news-sub { margin: 6px 0 0; color: var(--muted); max-width: 760px; }
+
+    .news-sub {
+      margin: 6px 0 0;
+      color: var(--muted);
+      max-width: 760px;
+    }
 
     .news-2col {
       display: grid;
@@ -37,7 +42,12 @@
       gap: 10px;
       margin-bottom: 10px;
     }
-    .news-col-head h2 { margin: 0; font-size: 18px; }
+
+    .news-col-head h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+
     .badge {
       display:inline-flex;
       align-items:center;
@@ -50,9 +60,16 @@
       color: var(--muted);
       white-space: nowrap;
     }
-    .dot { width: 8px; height: 8px; border-radius: 999px; display:inline-block; background: #111; opacity: .9; }
 
-    /* Cards */
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      display:inline-block;
+      background: #111;
+      opacity: .9;
+    }
+
     .news-card {
       background: #fff;
       border: 1px solid var(--brd);
@@ -61,7 +78,10 @@
       margin-bottom: 12px;
       box-shadow: 0 6px 18px rgba(15, 23, 42, .04);
     }
-    .news-card:hover { border-color: var(--brd2); }
+
+    .news-card:hover {
+      border-color: var(--brd2);
+    }
 
     .news-cover {
       width: 100%;
@@ -71,7 +91,9 @@
       background: #f1f5f9;
     }
 
-    .news-body { padding: 12px 14px; }
+    .news-body {
+      padding: 12px 14px;
+    }
 
     .news-meta {
       display:flex;
@@ -88,10 +110,20 @@
       font-size: 16px;
       line-height: 1.25;
     }
-    .news-title a { text-decoration: none; }
-    .news-title a:hover { text-decoration: underline; }
 
-    .news-excerpt { margin: 0; color: var(--ink); opacity: .92; }
+    .news-title a {
+      text-decoration: none;
+    }
+
+    .news-title a:hover {
+      text-decoration: underline;
+    }
+
+    .news-excerpt {
+      margin: 0;
+      color: var(--ink);
+      opacity: .92;
+    }
 
     .news-actions {
       display:flex;
@@ -114,13 +146,19 @@
       font-size: 13px;
       white-space: nowrap;
     }
-    .btn-ghost:hover { background: rgba(15,23,42,0.03); }
 
-    /* Featured card (first item in each column) */
-    .featured .news-cover { height: 210px; }
-    .featured .news-title { font-size: 18px; }
+    .btn-ghost:hover {
+      background: rgba(15,23,42,0.03);
+    }
 
-    /* Empty state */
+    .featured .news-cover {
+      height: 210px;
+    }
+
+    .featured .news-title {
+      font-size: 18px;
+    }
+
     .news-empty {
       background:#fff;
       border: 1px dashed rgba(203,213,225,0.9);
@@ -130,8 +168,14 @@
     }
 
     @media (max-width: 980px) {
-      .news-2col { grid-template-columns: 1fr; }
-      .news-header { flex-direction: column; align-items: flex-start; }
+      .news-2col {
+        grid-template-columns: 1fr;
+      }
+
+      .news-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
     }
   </style>
 
@@ -139,18 +183,27 @@
     <div>
       <h1>Новости</h1>
       <p class="news-sub">
-        Обновления мастерской, полезные заметки и технологические новинки. Публикуем коротко и по делу.
+        Обновления мастерской и новости технологий мира.
       </p>
     </div>
   </div>
 
   <div class="news-2col">
-
-    {# ===== Left column: Workshop ===== #}
     <section class="news-col">
       <div class="news-col-head">
-        <h2>{% if workshop_category %}{{ workshop_category.title }}{% else %}Новости мастерской{% endif %}</h2>
-        <span class="badge"><span class="dot"></span> Tehsfera</span>
+        <h2>
+          {% if workshop_category %}
+            {{ workshop_category.title }}
+          {% else %}
+            Новости мастерской
+          {% endif %}
+        </h2>
+
+        {% if workshop_category %}
+          <a class="btn-ghost" href="{% url 'news:category' workshop_category.slug %}">
+            Все новости →
+          </a>
+        {% endif %}
       </div>
 
       {% if workshop_posts %}
@@ -179,7 +232,7 @@
 
               <div class="news-actions">
                 <a class="btn-ghost" href="{{ p.get_absolute_url }}">
-                  Читать <span aria-hidden="true">→</span>
+                  Читать →
                 </a>
               </div>
             </div>
@@ -187,16 +240,26 @@
         {% endfor %}
       {% else %}
         <div class="news-empty">
-          Пока новостей нет. Создайте публикацию в админке и поставьте статус “Опубликовано”.
+          Пока новостей мастерской нет.
         </div>
       {% endif %}
     </section>
 
-    {# ===== Right column: Tech ===== #}
     <section class="news-col">
       <div class="news-col-head">
-        <h2>{% if tech_category %}{{ tech_category.title }}{% else %}Новости технологий{% endif %}</h2>
-        <span class="badge"><span class="dot"></span> Tech</span>
+        <h2>
+          {% if tech_category %}
+            {{ tech_category.title }}
+          {% else %}
+            Новости технологий мира
+          {% endif %}
+        </h2>
+
+        {% if tech_category %}
+          <a class="btn-ghost" href="{% url 'news:category' tech_category.slug %}">
+            Все новости →
+          </a>
+        {% endif %}
       </div>
 
       {% if tech_posts %}
@@ -225,7 +288,7 @@
 
               <div class="news-actions">
                 <a class="btn-ghost" href="{{ p.get_absolute_url }}">
-                  Читать <span aria-hidden="true">→</span>
+                  Читать →
                 </a>
               </div>
             </div>
@@ -233,10 +296,9 @@
         {% endfor %}
       {% else %}
         <div class="news-empty">
-          Пока новостей нет. Создайте публикацию в админке и поставьте статус “Опубликовано”.
+          Пока новостей технологий нет.
         </div>
       {% endif %}
     </section>
-
   </div>
 {% endblock %}

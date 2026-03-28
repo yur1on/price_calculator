@@ -69,7 +69,6 @@ INSTALLED_APPS = [
     "repairs.apps.RepairsConfig",
     "notify_tg",
     "news.apps.NewsConfig",
-
 ]
 
 # ──────────────────────────────────────────────────────────────
