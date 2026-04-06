@@ -1,10 +1,16 @@
 # repairs/views.py
+
+
+
 from __future__ import annotations
 from django.core.paginator import Paginator
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import List
+
+from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 
 from django.conf import settings
 from django.contrib import messages
@@ -837,3 +843,18 @@ def contacts(request):
         "ymaps_query": "ремонт телефонов Гагарина 55 Гомель",
     }
     return render(request, "repairs/contacts.html", ctx)
+
+
+
+
+@csrf_exempt
+def yoomoney_webhook(request):
+    if request.method == "GET":
+        return HttpResponse("YooMoney webhook endpoint", status=200)
+
+    if request.method == "POST":
+        print("YooMoney POST received")
+        print("POST data:", request.POST.dict())
+        return HttpResponse("OK", status=200)
+
+    return HttpResponse("Method not allowed", status=405)

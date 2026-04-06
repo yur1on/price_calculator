@@ -4,7 +4,7 @@ from django.views.generic import RedirectView, TemplateView
 from django.conf import settings
 from django.conf.urls.static import static
 from django.shortcuts import render
-
+from repairs.views import yoomoney_webhook
 
 # --- error handlers ---
 def err_404(request, exception):
@@ -26,6 +26,7 @@ urlpatterns = [
     # статические страницы
     path("privacy/", TemplateView.as_view(template_name="legal/privacy.html"), name="privacy"),
     path("terms/", TemplateView.as_view(template_name="legal/terms.html"), name="terms"),
+    path("payments/yoomoney/", yoomoney_webhook, name="yoomoney_webhook"),
 
     # приложение
     path("repairs/", include("repairs.urls")),
