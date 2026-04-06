@@ -1,6 +1,10 @@
 tehsfera.by {
   encode gzip zstd
 
+  handle /payments/yoomoney/* {
+    reverse_proxy 127.0.0.1:8010
+  }
+
   handle_path /static/* {
     root * /srv/static
     file_server
@@ -13,7 +17,9 @@ tehsfera.by {
     header Cache-Control "public, max-age=86400, immutable"
   }
 
-  reverse_proxy web:8000
+  handle {
+    reverse_proxy web:8000
+  }
 }
 
 www.tehsfera.by {
