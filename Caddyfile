@@ -2,7 +2,7 @@ tehsfera.by {
   encode gzip zstd
 
   handle /payments/yoomoney/* {
-    reverse_proxy host.docker.internal:8010
+    reverse_proxy 45.128.205.77:8010
   }
 
   handle_path /static/* {
