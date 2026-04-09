@@ -80,9 +80,16 @@ services:
       - ./media:/srv/media:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      - default
+      - shared_proxy
 
 volumes:
   db_data:
   staticfiles:
   caddy_data:
   caddy_config:
+
+networks:
+  shared_proxy:
+    external: true

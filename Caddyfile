@@ -19,3 +19,8 @@ tehsfera.by {
 www.tehsfera.by {
   redir https://tehsfera.by{uri} permanent
 }
+
+pay.tehsfera.by {
+  encode gzip zstd
+  reverse_proxy tg_monitor_web:8000
+}
