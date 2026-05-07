@@ -20,7 +20,11 @@
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
 
-  <title>{% block title %}Ремонт телефонов{% endblock %}</title>
+  <title>{% block title %}Ремонт телефонов в Гомеле | Tehsfera{% endblock %}</title>
+
+  <meta name="description" content="{% block meta_description %}Ремонт телефонов, планшетов и смарт-часов в Гомеле. Tehsfera: цены, сроки и онлайн-запись.{% endblock %}">
+  <meta name="robots" content="{% block robots %}index, follow{% endblock %}">
+  <link rel="canonical" href="{{ request.build_absolute_uri }}">
 
   <style>
     :root {
@@ -51,25 +55,56 @@
         #f7f7f8;
       background-attachment: fixed, fixed, fixed, scroll;
     }
+
     a { color: inherit; }
 
     /* Шапка */
     header { background: #111; color: #fff; }
-    .wrap { max-width: var(--container); margin: 0 auto; padding: 0 20px; }
+
+    .wrap {
+      max-width: var(--container);
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
     header .row {
-      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
       height: var(--header-h);
       overflow: visible;
     }
-    header a { color: #fff; text-decoration: none; }
-    header nav a { opacity: .95; }
-    header nav a + a { margin-left: 14px; }
-    header nav a:hover { opacity: 1; text-decoration: underline; }
 
-    /* Активный пункт меню */
-    header nav a.active { opacity: 1; text-decoration: underline; }
+    header a {
+      color: #fff;
+      text-decoration: none;
+    }
 
-    header .brand { display:inline-flex; align-items:center; height: var(--header-h); }
+    header nav a {
+      opacity: .95;
+    }
+
+    header nav a + a {
+      margin-left: 14px;
+    }
+
+    header nav a:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+
+    header nav a.active {
+      opacity: 1;
+      text-decoration: underline;
+    }
+
+    header .brand {
+      display:inline-flex;
+      align-items:center;
+      height: var(--header-h);
+    }
+
     header .brand img{
       display:block;
       height: var(--logo-h);
@@ -78,24 +113,99 @@
       margin-bottom: calc(var(--logo-up) * -1);
     }
 
-    main { max-width: var(--container); margin: 0 auto; padding: 20px; }
+    main {
+      max-width: var(--container);
+      margin: 0 auto;
+      padding: 20px;
+    }
 
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--gap); }
-    .card { background: #fff; border: 1px solid var(--brd); border-radius: var(--radius); padding: 14px; text-decoration: none; color: var(--ink); }
-    .card:hover { border-color: var(--brd2); }
-    .btn { display: inline-block; background: #111; color: #fff; padding: 10px 14px; border-radius: 10px; text-decoration: none; border: 1px solid #111; }
-    .btn:hover { opacity: .95; }
-    .table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; }
-    .table th, .table td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: var(--gap);
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid var(--brd);
+      border-radius: var(--radius);
+      padding: 14px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+
+    .card:hover {
+      border-color: var(--brd2);
+    }
+
+    .btn {
+      display: inline-block;
+      background: #111;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 10px;
+      text-decoration: none;
+      border: 1px solid #111;
+    }
+
+    .btn:hover {
+      opacity: .95;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .table th,
+    .table td {
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+      vertical-align: top;
+    }
+
     .muted { color: var(--muted); }
     .small { font-size: 12px; }
-    label { display: block; margin: 10px 0 6px; }
-    input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
-    .messages { margin: 0 0 12px 0; padding: 0; list-style: none; }
-    .messages li { background: #f1f5f9; border: 1px solid #e2e8f0; color: #0f172a; padding: 8px 10px; border-radius: 8px; margin-bottom: 8px; }
+
+    label {
+      display: block;
+      margin: 10px 0 6px;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .messages {
+      margin: 0 0 12px 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .messages li {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      color: #0f172a;
+      padding: 8px 10px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
 
     /* ===== Mobile burger menu ===== */
-    .site-nav { display: flex; align-items: center; gap: 14px; }
+    .site-nav {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
 
     .nav-toggle {
       display: none;
@@ -109,7 +219,10 @@
       justify-content: center;
       cursor: pointer;
     }
-    .nav-toggle:hover { background: rgba(255,255,255,.10); }
+
+    .nav-toggle:hover {
+      background: rgba(255,255,255,.10);
+    }
 
     .nav-toggle .bar {
       width: 18px;
@@ -119,6 +232,7 @@
       border-radius: 99px;
       position: relative;
     }
+
     .nav-toggle .bar::before,
     .nav-toggle .bar::after{
       content:"";
@@ -129,14 +243,19 @@
       background:#fff;
       border-radius:99px;
     }
+
     .nav-toggle .bar::before { top: -6px; }
     .nav-toggle .bar::after  { top:  6px; }
 
     @media (max-width: 560px) {
-      .nav-toggle { display: inline-flex; }
-      .site-nav { position: relative; }
+      .nav-toggle {
+        display: inline-flex;
+      }
 
-      /* На мобилке показываем пункты в выпадающем меню */
+      .site-nav {
+        position: relative;
+      }
+
       .site-nav .nav-links {
         display: none;
         position: absolute;
@@ -150,7 +269,10 @@
         box-shadow: 0 16px 34px rgba(0,0,0,.35);
         z-index: 999;
       }
-      .site-nav.open .nav-links { display: block; }
+
+      .site-nav.open .nav-links {
+        display: block;
+      }
 
       .site-nav .nav-links a {
         display: block;
@@ -158,15 +280,17 @@
         border-radius: 10px;
         margin: 2px 0;
         text-decoration: none;
-        opacity: 1; /* важнее на мобилке */
+        opacity: 1;
       }
+
       .site-nav .nav-links a:hover {
         background: rgba(255,255,255,.08);
         text-decoration: none;
       }
 
-      /* На мобилке убираем "длинную" строку юзера в шапке — показываем внутри меню */
-      .site-nav .nav-user-inline { display: none; }
+      .site-nav .nav-user-inline {
+        display: none;
+      }
     }
 
     /* Подвал */
@@ -177,50 +301,121 @@
       padding: 20px 0;
     }
 
-    footer .grid { display: grid; gap: 18px; grid-template-columns: 1.2fr 1fr 1fr; }
-    footer h4 { margin: 0 0 10px; font-size: 14px; color: #e2e8f0; letter-spacing: .02em; }
-    footer p, footer li, footer a { font-size: 14px; line-height: 1.6; }
-    footer a { color: #e2e8f0; text-decoration: none; }
-    footer a:hover { text-decoration: underline; }
-    footer ul { margin: 0; padding: 0; list-style: none; }
+    footer .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: 1.2fr 1fr 1fr;
+    }
+
+    footer h4 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      color: #e2e8f0;
+      letter-spacing: .02em;
+    }
+
+    footer p,
+    footer li,
+    footer a {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    footer a {
+      color: #e2e8f0;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    footer ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
 
     .f-bottom {
-      margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08);
-      display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; color: #94a3b8;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: #94a3b8;
     }
 
-    /* Соц-иконки */
-    footer .social { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-    footer .social a {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 38px; height: 38px; border-radius: 10px;
-      border: 1px solid rgba(255,255,255,.18);
-      text-decoration: none; background: transparent;
+    footer .social {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
     }
-    footer .social a:hover { background: rgba(255,255,255,.06); }
+
+    footer .social a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.18);
+      text-decoration: none;
+      background: transparent;
+    }
+
+    footer .social a:hover {
+      background: rgba(255,255,255,.06);
+    }
+
     footer .social a i {
-      font-size: 20px; line-height: 1;
+      font-size: 20px;
+      line-height: 1;
       font-family: "Font Awesome 6 Brands";
       font-weight: 400;
     }
+
     footer .social a.ig i { color: #d6249f; }
     footer .social a.ig:hover i { color: #e1306c; }
+
     footer .social a.tt i { color: #69C9D0; }
     footer .social a.tt:hover i { color: #EE1D52; }
+
     footer .social a.tg i { color: #229ED9; }
     footer .social a.tg:hover i { color: #1b89bd; }
 
-    @media (max-width: 820px) { footer .grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 820px) {
+      footer .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
     @media (max-width: 560px) {
       :root{
         --header-h: 52px;
         --logo-h: 64px;
         --logo-up: 6px;
       }
-      .wrap { padding: 0 14px; }
-      main { padding: 16px; }
-      footer .grid { grid-template-columns: 1fr; }
-      .f-bottom { flex-direction: column; align-items: flex-start; }
+
+      .wrap {
+        padding: 0 14px;
+      }
+
+      main {
+        padding: 16px;
+      }
+
+      footer .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .f-bottom {
+        flex-direction: column;
+        align-items: flex-start;
+      }
     }
   </style>
 </head>
@@ -239,8 +434,6 @@
           </button>
 
           <div class="nav-links" id="navLinks">
-            {# Подсветка активного: проверяем request.path #}
-
             <a href="{% url 'repairs:contacts' %}"
                class="{% if request.path|slice:':10' == '/contacts' %}active{% endif %}">
               Контакты
@@ -270,8 +463,6 @@
               </div>
             {% endif %}
           </div>
-
-          {# На десктопе nav-links будет отображаться обычной строкой через ваши базовые стили #}
         </nav>
       </div>
     </div>
@@ -285,6 +476,7 @@
         {% endfor %}
       </ul>
     {% endif %}
+
     {% block content %}{% endblock %}
   </main>
 
@@ -294,13 +486,16 @@
         <section>
           <h4>Tehsfera</h4>
           <p class="small" style="margin:0 0 10px">Ремонтируем смартфоны, планшеты, смарт-часы.</p>
+
           <div class="social">
             <a class="ig" href="https://www.instagram.com/tehsfera_gomel" target="_blank" rel="noopener" title="Instagram: @tehsfera_gomel" aria-label="Instagram">
               <i class="fa-brands fa-instagram"></i>
             </a>
+
             <a class="tg" href="https://t.me/+OeKcuIOyDMBiOGUy" target="_blank" rel="noopener" title="Telegram — вопросы и обсуждения" aria-label="Telegram">
               <i class="fa-brands fa-telegram"></i>
             </a>
+
             <a class="tt" href="https://www.tiktok.com/@tehsfera" target="_blank" rel="noopener" title="TikTok: @tehsfera" aria-label="TikTok">
               <i class="fa-brands fa-tiktok"></i>
             </a>
