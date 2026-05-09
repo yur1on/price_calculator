@@ -1,10 +1,13 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.contrib.sitemaps.views import sitemap
 from django.views.generic import RedirectView, TemplateView
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import HttpResponse
 from django.shortcuts import render
 from repairs.views import yoomoney_webhook
+from repairs.sitemaps import SITEMAPS
 
 # --- error handlers ---
 def err_404(request, exception):
@@ -20,8 +23,30 @@ def err_500(request):
     return render(request, "500.html", status=500)
 
 
+def robots_txt(request):
+    content = "\n".join([
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /admin/",
+        "Disallow: /payments/",
+        "Sitemap: " + request.build_absolute_uri("/sitemap.xml"),
+        "",
+    ])
+    return HttpResponse(content, content_type="text/plain; charset=utf-8")
+
+
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("robots.txt", robots_txt, name="robots_txt"),
+    path("sitemap.xml", sitemap, {"sitemaps": SITEMAPS}, name="django.contrib.sitemaps.views.sitemap"),
+    path(
+        "yandex_735004e6e924285d.html",
+        TemplateView.as_view(
+            template_name="yandex_735004e6e924285d.html",
+            content_type="text/html",
+        ),
+        name="yandex_verification",
+    ),
 
     # статические страницы
     path("privacy/", TemplateView.as_view(template_name="legal/privacy.html"), name="privacy"),
@@ -45,4 +70,3 @@ handler404 = "core.urls.err_404"
 handler403 = "core.urls.err_403"
 handler400 = "core.urls.err_400"
 handler500 = "core.urls.err_500"
-

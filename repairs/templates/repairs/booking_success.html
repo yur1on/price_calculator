@@ -1,5 +1,6 @@
 {% extends "repairs/base.html" %}
 {% block title %}Запись создана{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
 
 {% block content %}
 <style>
@@ -199,7 +200,7 @@
 
 <!-- Данные для шеринга/календаря -->
 <div id="shareData"
-     data-url="{{ request.build_absolute_uri|cut:'?' }}"
+     data-url="{{ request.build_absolute_uri }}"
      data-model="{{ appointment.phone_model.brand.name }} {{ appointment.phone_model.name }}"
      data-repair="{{ appointment.repair_type.name }}"
      data-date="{{ appointment.start|date:'d.m.Y' }}"

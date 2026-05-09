@@ -1,5 +1,6 @@
 {% extends "repairs/base.html" %}
 {% block title %}Календарь — {{ model.brand.name }} {{ model.name }}{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
 
 {% block content %}
 {% now "Y-m-d" as today_iso %}

@@ -15,6 +15,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import FieldDoesNotExist
+from django.core.signing import BadSignature, SignatureExpired
+from django.core import signing
 from django.db import transaction
 from django.db.models import Q, Sum, Count
 from django.db.models.functions import Lower
@@ -33,7 +35,27 @@ from .models import (
     ReferralRedemption,
 )
 MAX_BOOK_AHEAD_DAYS = int(getattr(settings, "REPAIRS_MAX_BOOK_AHEAD_DAYS", 30))
+BOOKING_SUCCESS_TOKEN_SALT = "repairs.booking_success"
+BOOKING_SUCCESS_TOKEN_MAX_AGE = 60 * 60 * 24 * 30
 # ---------- утилиты ----------
+
+
+def _make_booking_success_token(appointment_id: int) -> str:
+    return signing.dumps({"appointment_id": appointment_id}, salt=BOOKING_SUCCESS_TOKEN_SALT)
+
+
+def _is_valid_booking_success_token(token: str | None, appointment_id: int) -> bool:
+    if not token:
+        return False
+    try:
+        payload = signing.loads(
+            token,
+            salt=BOOKING_SUCCESS_TOKEN_SALT,
+            max_age=BOOKING_SUCCESS_TOKEN_MAX_AGE,
+        )
+    except (BadSignature, SignatureExpired):
+        return False
+    return payload.get("appointment_id") == appointment_id
 
 
 
@@ -699,7 +721,8 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
                     app.price_final = app.price_original - app.discount_amount
                 app.save()
 
-            return redirect("repairs:booking_success", appointment_id=app.id)
+            token = _make_booking_success_token(app.id)
+            return redirect(f'{redirect("repairs:booking_success", appointment_id=app.id).url}?token={token}')
     else:
         form = BookingForm()
 
@@ -716,6 +739,8 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
 
 def booking_success(request, appointment_id: int):
     """Страница подтверждения после успешного бронирования."""
+    if not _is_valid_booking_success_token(request.GET.get("token"), appointment_id):
+        return render(request, "404.html", {"path": request.path}, status=404)
     appointment = get_object_or_404(Appointment, id=appointment_id)
     return render(request, "repairs/booking_success.html", {"appointment": appointment})
 

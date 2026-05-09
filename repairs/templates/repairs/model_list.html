@@ -3,6 +3,7 @@
 {% load repairs_extras %}
 
 {% block title %}Модели — {{ brand.name }}{% endblock %}
+{% block canonical_href %}{{ request.scheme }}://{{ request.get_host }}{% url 'repairs:model_list' brand_slug=brand.slug %}?cat={{ selected_cat }}{% endblock %}
 
 {% block content %}
 <style>
