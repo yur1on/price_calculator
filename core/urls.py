@@ -6,7 +6,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.http import HttpResponse
 from django.shortcuts import render
-from repairs.views import yoomoney_webhook
+from repairs.views import home, yoomoney_webhook
 from repairs.sitemaps import SITEMAPS
 
 # --- error handlers ---
@@ -59,7 +59,7 @@ urlpatterns = [
 
 
     # корень
-    path("", RedirectView.as_view(pattern_name="repairs:brand_list", permanent=False)),
+    path("", home, name="home"),
 ]
 
 # ВАЖНО: отдаём медиа ВСЕГДА (и в dev, и в prod)

@@ -279,6 +279,20 @@ def brand_list(request):
         "selected_cat": sel,
     })
 
+
+def home(request):
+    phone_brands = list(
+        PhoneBrand.objects
+        .filter(models__category="phone")
+        .distinct()
+        .annotate(name_lc=Lower("name"))
+        .order_by("name_lc", "name")[:12]
+    )
+
+    return render(request, "repairs/home.html", {
+        "phone_brands": phone_brands,
+    })
+
 # ---------- шаг 2: модели бренда ----------
 
 def model_list(request, brand_slug: str):

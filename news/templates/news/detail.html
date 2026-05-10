@@ -1,5 +1,40 @@
 {% extends "repairs/base.html" %}
-{% block title %}{{ post.title }}{% endblock %}
+{% load static %}
+{% block title %}{{ post.title }} | Tehsfera{% endblock %}
+{% block meta_description %}{% if post.excerpt %}{{ post.excerpt|striptags|truncatechars:160 }}{% else %}{{ post.content|striptags|truncatechars:160 }}{% endif %}{% endblock %}
+{% block structured_data %}
+  {{ block.super }}
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": "{{ post.title|escapejs }}",
+      "mainEntityOfPage": "{{ request.scheme }}://{{ request.get_host }}{{ request.path }}",
+      {% if post.excerpt %}
+      "description": "{{ post.excerpt|striptags|truncatechars:200|escapejs }}",
+      {% endif %}
+      {% if post.cover %}
+      "image": ["{{ request.scheme }}://{{ request.get_host }}{{ post.cover.url }}"],
+      {% endif %}
+      {% if post.published_at %}
+      "datePublished": "{{ post.published_at|date:'c' }}",
+      {% endif %}
+      "dateModified": "{{ post.updated_at|date:'c' }}",
+      "author": {
+        "@type": "Person",
+        "name": "{% with a=post.author_display %}{% if a %}{{ a|escapejs }}{% else %}Tehsfera{% endif %}{% endwith %}"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Tehsfera",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "{{ request.scheme }}://{{ request.get_host }}{% static 'img/tehsfera-logo.png' %}"
+        }
+      }
+    }
+  </script>
+{% endblock %}
 
 {% block content %}
   <style>

@@ -26,6 +26,45 @@
   <meta name="robots" content="{% block robots %}index, follow{% endblock %}">
   <meta name="google-site-verification" content="PzSNJiDFYL2IVbEpJdX-SPNWxiixt_Wj4iH3FcHkSrY">
   <link rel="canonical" href="{% block canonical_href %}{{ request.scheme }}://{{ request.get_host }}{{ request.path }}{% endblock %}">
+  {% block structured_data %}
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "RepairService",
+      "name": "Tehsfera",
+      "url": "{{ request.scheme }}://{{ request.get_host }}",
+      "logo": "{{ request.scheme }}://{{ request.get_host }}{% static 'img/tehsfera-logo.png' %}",
+      "image": "{{ request.scheme }}://{{ request.get_host }}{% static 'img/contacts/01.jpg' %}",
+      "telephone": "+375445684493",
+      "priceRange": "$$",
+      "currenciesAccepted": "BYN",
+      "paymentAccepted": "Cash, Card",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "ул. Гагарина, д. 55, каб. 50",
+        "addressLocality": "Гомель",
+        "postalCode": "246050",
+        "addressCountry": "BY"
+      },
+      "openingHoursSpecification": [
+        {
+          "@type": "OpeningHoursSpecification",
+          "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+          "opens": "10:00",
+          "closes": "18:00"
+        }
+      ],
+      "areaServed": {
+        "@type": "City",
+        "name": "Гомель"
+      },
+      "sameAs": [
+        "{{ request.scheme }}://{{ request.get_host }}{% url 'repairs:contacts' %}",
+        "{{ request.scheme }}://{{ request.get_host }}{% url 'news:home' %}"
+      ]
+    }
+  </script>
+  {% endblock %}
 
   <style>
     :root {

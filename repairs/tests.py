@@ -84,6 +84,11 @@ class ContactsPageTests(TestCase):
 
 
 class SeoPagesTests(TestCase):
+    def test_homepage_is_available(self):
+        response = self.client.get(reverse("home"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ремонт телефонов в Гомеле")
+
     def test_robots_txt_exposes_sitemap(self):
         response = self.client.get(reverse("robots_txt"))
         self.assertEqual(response.status_code, 200)

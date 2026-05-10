@@ -2,7 +2,8 @@
 {% load static %}
 {% load repairs_extras %}
 
-{% block title %}Модели — {{ brand.name }}{% endblock %}
+{% block title %}Ремонт {{ brand.name }} в Гомеле: модели и цены | Tehsfera{% endblock %}
+{% block meta_description %}Ремонт {{ brand.name }} в Гомеле: выберите модель, узнайте цены на замену экрана, аккумулятора, разъёма зарядки и другие услуги в Tehsfera.{% endblock %}
 {% block canonical_href %}{{ request.scheme }}://{{ request.get_host }}{% url 'repairs:model_list' brand_slug=brand.slug %}?cat={{ selected_cat }}{% endblock %}
 
 {% block content %}
@@ -159,6 +160,25 @@
   .as-list .info .name{ color: var(--accent); }
   .as-list .btn{ padding:8px 12px; border-radius:8px }
 
+  .seo-copy{
+    margin-top:18px;
+    background:#fff;
+    border:1px solid #e5e7eb;
+    border-radius:14px;
+    padding:18px;
+  }
+  .seo-copy h2{
+    margin:0 0 10px;
+    font-size:22px;
+    line-height:1.3;
+  }
+  .seo-copy p{
+    margin:0 0 10px;
+    color:#334155;
+    line-height:1.65;
+  }
+  .seo-copy p:last-child{margin-bottom:0}
+
   /* ——— МОБИЛЬНАЯ АДАПТАЦИЯ ——— */
   @media (max-width:560px){
     .grid{grid-template-columns:1fr}
@@ -308,5 +328,18 @@
 {% else %}
   <p class="muted">Нет моделей выбранной категории.</p>
 {% endif %}
+
+<section class="seo-copy">
+  <h2>Ремонт {{ brand.name }} в Гомеле</h2>
+  <p>
+    В мастерской Tehsfera вы можете выбрать модель {{ brand.name }} и посмотреть доступные услуги ремонта в Гомеле.
+    На следующих страницах доступны цены на замену экрана, замену аккумулятора, ремонт разъёма зарядки,
+    восстановление после влаги и другие популярные работы для устройств {{ brand.name }}.
+  </p>
+  <p>
+    Если вам нужен ремонт {{ brand.name }} в Гомеле, выберите свою модель в списке выше.
+    Так вы быстро перейдёте к странице с ценами, сроками ремонта и возможностью онлайн-записи.
+  </p>
+</section>
 
 {% endblock %}
