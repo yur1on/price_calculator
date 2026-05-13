@@ -281,16 +281,21 @@ def brand_list(request):
 
 
 def home(request):
-    phone_brands = list(
+    choices = list(PhoneModel.CATEGORY_CHOICES)
+    sel = "phone"
+    brands = (
         PhoneBrand.objects
-        .filter(models__category="phone")
+        .filter(models__category=sel)
         .distinct()
         .annotate(name_lc=Lower("name"))
-        .order_by("name_lc", "name")[:12]
+        .order_by("name_lc", "name")
     )
 
-    return render(request, "repairs/home.html", {
-        "phone_brands": phone_brands,
+    return render(request, "repairs/brand_list.html", {
+        "brands": brands,
+        "categories": choices,
+        "selected_cat": sel,
+        "is_homepage": True,
     })
 
 # ---------- шаг 2: модели бренда ----------

@@ -6,7 +6,7 @@
 {% block meta_description %}
 Ремонт iPhone, Google Pixel, Samsung, Xiaomi, Huawei, Honor, Realme, Infinix, Vivo и других телефонов в Гомеле. Выберите бренд и модель, узнайте цену ремонта и запишитесь онлайн в Tehsfera.
 {% endblock %}
-{% block canonical_href %}{{ request.scheme }}://{{ request.get_host }}{% url 'repairs:brand_list' %}?cat={{ selected_cat }}{% endblock %}
+{% block canonical_href %}{% if is_homepage %}{{ request.scheme }}://{{ request.get_host }}{% url 'home' %}{% else %}{{ request.scheme }}://{{ request.get_host }}{% url 'repairs:brand_list' %}?cat={{ selected_cat }}{% endif %}{% endblock %}
 
 {% block content %}
 <style>
