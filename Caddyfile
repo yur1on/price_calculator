@@ -24,3 +24,21 @@ pay.tehsfera.by {
   encode gzip zstd
   reverse_proxy tg_monitor_web:8000
 }
+
+yanina-beauty.by, www.yanina-beauty.by {
+  encode gzip zstd
+
+  handle_path /static/* {
+    root * /srv/yanina-static
+    file_server
+    header Cache-Control "public, max-age=604800, immutable"
+  }
+
+  handle_path /media/* {
+    root * /srv/yanina-media
+    file_server
+    header Cache-Control "public, max-age=86400, immutable"
+  }
+
+  reverse_proxy yanina-beauty-web-1:8000
+}

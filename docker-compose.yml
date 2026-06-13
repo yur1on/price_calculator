@@ -78,6 +78,8 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - staticfiles:/srv/static:ro
       - ./media:/srv/media:ro
+      - /var/lib/docker/volumes/yanina-beauty_static_volume/_data:/srv/yanina-static:ro
+      - /var/lib/docker/volumes/yanina-beauty_media_volume/_data:/srv/yanina-media:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
