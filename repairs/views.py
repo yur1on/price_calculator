@@ -282,7 +282,10 @@ def brand_list(request):
 
 def home(request):
     choices = list(PhoneModel.CATEGORY_CHOICES)
-    sel = "phone"
+    valid = {k for k, _ in choices}
+    sel = request.GET.get("cat")
+    if sel not in valid:
+        sel = "phone"
     brands = (
         PhoneBrand.objects
         .filter(models__category=sel)
