@@ -15,6 +15,8 @@ from datetime import timedelta
 from django.db import models
 from django.utils import timezone
 
+from core.image_utils import convert_field_image_to_webp
+
 
 class PhoneBrand(models.Model):
     name = models.CharField("Название бренда", max_length=50, unique=True)
@@ -28,6 +30,10 @@ class PhoneBrand(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        convert_field_image_to_webp(self, "logo")
+        super().save(*args, **kwargs)
 
 
 class PhoneModel(models.Model):
@@ -45,6 +51,7 @@ class PhoneModel(models.Model):
     )
     name = models.CharField("Модель", max_length=80)
     slug = models.SlugField("Слаг", unique=True)
+    image = models.ImageField("Фото модели", upload_to="models/", blank=True, null=True)
     category = models.CharField(
         "Категория",
         max_length=10,
@@ -61,6 +68,10 @@ class PhoneModel(models.Model):
 
     def __str__(self) -> str:
         return f"{self.brand.name} {self.name}"
+
+    def save(self, *args, **kwargs) -> None:
+        convert_field_image_to_webp(self, "image")
+        super().save(*args, **kwargs)
 
 
 class RepairType(models.Model):

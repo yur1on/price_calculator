@@ -92,25 +92,64 @@
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
   .card{
     border:1px solid #000; border-radius:12px;
-    padding:12px;background:#fff;
-    display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;
-    transition:border-color .15s, box-shadow .15s, background-color .15s;
+    padding:0;background:#fff;
+    display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;
+    transition:border-color .15s, box-shadow .15s, background-color .15s, transform .15s;
+    text-decoration:none;
+    color:var(--ink);
+    overflow:hidden;
   }
-  .card:hover{background:#fafafa;box-shadow:0 1px 0 rgba(0,0,0,.04)}
+  .card:hover{background:#fafafa;box-shadow:0 8px 24px rgba(2,8,23,.08);transform:translateY(-2px)}
+  .card:focus-visible{outline:3px solid #111;outline-offset:2px}
+
+  .thumb{
+    width:116px;
+    min-height:100%;
+    overflow:hidden;
+    background:linear-gradient(180deg,#ffffff 0%, #f8fafc 100%);
+    display:grid;
+    place-items:center;
+    align-self:stretch;
+    padding:12px;
+  }
+  .thumb img{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    display:block;
+    background:transparent;
+  }
+  .thumb .letter{
+    width:100%;
+    height:100%;
+    display:grid;
+    place-items:center;
+    background:linear-gradient(135deg,var(--accent),#60a5fa);
+    color:#fff;
+    font-weight:800;
+    font-size:34px;
+  }
 
   .info .name{font-weight:700;margin-bottom:4px;line-height:1.25; color:var(--accent)}
   .info .name .paren{font-size:.85em;color:#64748b;font-weight:500;margin-left:4px}
+  .info{
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    padding:14px 0 14px 0;
+  }
+  .subtle{
+    font-size:13px;
+    color:#111;
+    margin-top:8px;
+    font-weight:800;
+    letter-spacing:.02em;
+    text-transform:uppercase;
+  }
 
   .meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
   .badge{font-size:12px;color:#111;background:#f3f4f6;border-radius:999px;padding:4px 8px}
-
-  .btn{
-    display:inline-flex;justify-content:center;align-items:center;padding:10px 14px;
-    border-radius:10px;background:#111;color:#fff;text-decoration:none;white-space:nowrap;border:1px solid #111;
-    transition:opacity .15s, transform .1s;
-  }
-  .btn:hover{opacity:.95}
-  .btn:active{transform:translateY(1px)}
 
   /* ——— ПАНЕЛЬ ИНСТРУМЕНТОВ (поиск + переключатель) ——— */
   .tools-bar{
@@ -151,14 +190,13 @@
     border:1px solid #e5e7eb; border-radius:14px; background:#fff; overflow:hidden;
   }
   .as-list .card{
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
     border:0; border-bottom:1px solid #f2f4f7; border-radius:0;
-    padding:14px 18px; background:#fff;
+    padding:0; background:#fff;
   }
   .as-list .card:last-child{ border-bottom:0 }
   .as-list .card:hover{ background:#fafafa }
   .as-list .info .name{ color: var(--accent); }
-  .as-list .btn{ padding:8px 12px; border-radius:8px }
 
   .seo-copy{
     margin-top:18px;
@@ -182,9 +220,10 @@
   /* ——— МОБИЛЬНАЯ АДАПТАЦИЯ ——— */
   @media (max-width:560px){
     .grid{grid-template-columns:1fr}
-    .card{grid-template-columns:1fr}
-    .card .btn{width:100%;margin-top:6px}
+    .card{grid-template-columns:auto 1fr}
     .btn-back{width:100%; justify-content:center}
+    .thumb{width:92px;padding:10px}
+    .thumb .letter{font-size:28px}
 
     .brand-title{ font-size:22px }
     .brand-pill{ padding:5px 10px; border-width:2px }
@@ -310,7 +349,16 @@
   <div class="{% if view_mode == 'list' %}as-list{% endif %}">
     <div class="grid">
       {% for m in models %}
-        <div class="card">
+        <a class="card" href="{% url 'repairs:repair_list' brand_slug=brand.slug model_slug=m.slug %}">
+          <div class="thumb">
+            {% if m.image %}
+              <img src="{{ m.image.url }}" alt="{{ brand.name }} {{ m.name|striptags }}" loading="lazy" decoding="async">
+            {% elif brand.logo %}
+              <img src="{{ brand.logo.url }}" alt="{{ brand.name }}" loading="lazy" decoding="async">
+            {% else %}
+              <span class="letter">{{ m.name|first|upper }}</span>
+            {% endif %}
+          </div>
           <div class="info">
             <div class="name">{{ m.name|shrink_parens }}</div>
             <div class="meta">
@@ -319,9 +367,9 @@
                 {% if m.category == 'phone' %}Телефон{% elif m.category == 'tablet' %}Планшет{% else %}Смарт-часы{% endif %}
               </span>
             </div>
+            <div class="subtle">Смотреть цены</div>
           </div>
-          <a class="btn" href="{% url 'repairs:repair_list' brand_slug=brand.slug model_slug=m.slug %}">Выбрать</a>
-        </div>
+        </a>
       {% endfor %}
     </div>
   </div>

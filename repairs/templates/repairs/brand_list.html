@@ -353,7 +353,16 @@
   </div>
 </div>
 
-<h2 class="section-title">Выберите бренд телефона</h2>
+<h2 class="section-title">
+  Выберите бренд
+  {% if selected_cat == 'tablet' %}
+    планшета
+  {% elif selected_cat == 'watch' %}
+    смарт-часов
+  {% else %}
+    телефона
+  {% endif %}
+</h2>
 
 {% if brands %}
   <div class="grid">

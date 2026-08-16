@@ -5,6 +5,8 @@ from django.utils import timezone
 from django.urls import reverse
 from django.core.exceptions import ValidationError
 
+from core.image_utils import convert_field_image_to_webp
+
 
 class NewsCategory(models.Model):
     """
@@ -103,6 +105,7 @@ class NewsPost(models.Model):
     def save(self, *args, **kwargs):
         if self.status == self.Status.PUBLISHED and not self.published_at:
             self.published_at = timezone.now()
+        convert_field_image_to_webp(self, "cover")
         super().save(*args, **kwargs)
 
 
@@ -173,6 +176,10 @@ class NewsImage(models.Model):
                 qs = qs.exclude(pk=self.pk)
             if qs.count() >= 5:
                 raise ValidationError("Для одной новости можно добавить максимум 5 изображений.")
+
+    def save(self, *args, **kwargs):
+        convert_field_image_to_webp(self, "image")
+        super().save(*args, **kwargs)
 
 
 class ReactionType(models.TextChoices):

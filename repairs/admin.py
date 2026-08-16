@@ -84,13 +84,25 @@ class PhoneBrandAdmin(ModelAdmin):
 # -------------------------------------------------------------------
 @admin.register(PhoneModel)
 class PhoneModelAdmin(ModelAdmin):
-    list_display = ("name_no_parens", "brand", "category", "slug")
+    list_display = ("image_thumb", "name_no_parens", "brand", "category", "slug")
     list_filter = ("brand", "category")
     search_fields = ("name", "brand__name", "slug")
     prepopulated_fields = {"slug": ("name",)}
     ordering = ("brand__name", "category", "name")
     inlines = (ModelRepairPriceInline,)
     list_select_related = ("brand",)
+
+    @admin.display(description="Фото")
+    def image_thumb(self, obj: PhoneModel):
+        if getattr(obj, "image", None):
+            try:
+                return format_html(
+                    '<img src="{}" style="height:56px;width:56px;object-fit:contain;border-radius:10px;background:#fff;padding:2px;border:1px solid #e5e7eb">',
+                    obj.image.url,
+                )
+            except Exception:
+                return "—"
+        return "—"
 
     @admin.display(ordering="name", description="Название")
     def name_no_parens(self, obj: PhoneModel):

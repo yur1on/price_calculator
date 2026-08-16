@@ -1,12 +1,22 @@
 from datetime import timedelta
+from io import BytesIO
 
 from django.core import signing
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from repairs.models import Appointment, PhoneBrand, PhoneModel, RepairType
 from repairs.views import BOOKING_SUCCESS_TOKEN_SALT
+from news.models import NewsCategory, NewsImage, NewsPost
+
+
+def make_uploaded_image(name: str = "test.jpg", color: str = "red") -> SimpleUploadedFile:
+    buffer = BytesIO()
+    Image.new("RGB", (40, 40), color=color).save(buffer, format="JPEG")
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/jpeg")
 
 
 class BookingSuccessViewTests(TestCase):
@@ -99,3 +109,41 @@ class SeoPagesTests(TestCase):
         response = self.client.get(reverse("django.contrib.sitemaps.views.sitemap"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "<urlset", html=False)
+
+
+class WebpConversionTests(TestCase):
+    def test_phone_brand_logo_converts_to_webp(self):
+        brand = PhoneBrand.objects.create(
+            name="TestBrand",
+            slug="testbrand",
+            logo=make_uploaded_image("brand.jpg"),
+        )
+        self.assertTrue(brand.logo.name.endswith(".webp"))
+
+    def test_phone_model_image_converts_to_webp(self):
+        brand = PhoneBrand.objects.create(name="Brand", slug="brand")
+        model = PhoneModel.objects.create(
+            brand=brand,
+            name="Model 1",
+            slug="model-1",
+            category="phone",
+            image=make_uploaded_image("model.jpg"),
+        )
+        self.assertTrue(model.image.name.endswith(".webp"))
+
+    def test_news_images_convert_to_webp(self):
+        category = NewsCategory.objects.create(title="Tech", slug="tech")
+        post = NewsPost.objects.create(
+            category=category,
+            title="Post",
+            slug="post",
+            cover=make_uploaded_image("cover.jpg"),
+            status=NewsPost.Status.DRAFT,
+        )
+        image = NewsImage.objects.create(
+            post=post,
+            position=1,
+            image=make_uploaded_image("body.jpg"),
+        )
+        self.assertTrue(post.cover.name.endswith(".webp"))
+        self.assertTrue(image.image.name.endswith(".webp"))
