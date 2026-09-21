@@ -164,7 +164,7 @@
         <div>
           <h2>Работа</h2>
           <dl>
-            <div class="row"><dt>Услуга</dt><dd>{{ appointment.repair_type.name }}</dd></div>
+            <div class="row"><dt>{% if appointment.services_count > 1 %}Услуги{% else %}Услуга{% endif %}</dt><dd>{{ appointment.services_display }}</dd></div>
           </dl>
         </div>
       </div>
@@ -258,7 +258,7 @@
         <div>
           <h2>Работа</h2>
           <dl>
-            <div class="row"><dt>Услуга</dt><dd>{{ appointment.repair_type.name }}</dd></div>
+            <div class="row"><dt>{% if appointment.services_count > 1 %}Услуги{% else %}Услуга{% endif %}</dt><dd>{{ appointment.services_display }}</dd></div>
           </dl>
         </div>
       </div>

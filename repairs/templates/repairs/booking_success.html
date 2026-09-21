@@ -119,8 +119,8 @@
         <div class="val">{{ appointment.phone_model.brand.name }} {{ appointment.phone_model.name }}</div>
       </div>
       <div class="s-row">
-        <strong>Услуга</strong>
-        <div class="val">{{ appointment.repair_type.name }}</div>
+        <strong>{% if appointment.services_count > 1 %}Услуги{% else %}Услуга{% endif %}</strong>
+        <div class="val">{{ appointment.services_display }}</div>
       </div>
       <div class="s-row">
         <strong>Дата</strong>

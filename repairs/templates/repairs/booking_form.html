@@ -36,6 +36,50 @@
     padding:16px;
   }
   .summary-title{margin:0 0 10px;font-weight:800;letter-spacing:.2px}
+  .services-list{
+    display:grid;
+    gap:4px;
+  }
+  .services-list span{color:var(--ink)}
+  .price-note{
+    display:block;
+    color:var(--muted);
+    font-size:12px;
+    margin-top:4px;
+  }
+  .extras{
+    max-width:720px;
+    margin:0 0 18px;
+    padding:16px;
+    border:1px solid var(--brd);
+    border-radius:16px;
+    background:#fff;
+    box-shadow:0 8px 20px rgba(2,8,23,.04);
+  }
+  .extras h2{margin:0 0 8px;font-size:16px;letter-spacing:.2px}
+  .extras p{margin:0 0 12px;color:var(--muted);line-height:1.6}
+  .extras-list{display:grid;gap:10px}
+  .extra-row{
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    gap:12px;
+    align-items:center;
+    padding:12px 14px;
+    border-radius:12px;
+    background:#f8fafc;
+  }
+  .extra-check{
+    width:18px;
+    height:18px;
+    accent-color:#111;
+  }
+  .extra-check[disabled]{opacity:.45;cursor:not-allowed}
+  .extra-name{font-weight:700;color:#111}
+  .extra-note{font-size:12px;color:var(--muted);margin-top:4px}
+  .extra-note--warn{color:#b45309}
+  .extra-price{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+  .extra-price del{color:#94a3b8;font-size:13px}
+  .extra-price strong{font-size:16px;color:#111}
 
   /* Детали всегда в один столбик */
   .summary-items{
@@ -124,8 +168,12 @@
         <svg viewBox="0 0 24 24" fill="none"><path d="M3 21l6-6" stroke-width="2" stroke-linecap="round"/><path d="M15 3a4 4 0 105.66 5.66L13 16 8 11l7.66-7.66z" stroke-width="2" stroke-linejoin="round"/></svg>
       </span>
       <div>
-        <strong>Услуга</strong>
-        <span>{{ repair_type.name }}</span>
+        <strong id="servicesLabel">{% if services_count > 1 %}Услуги{% else %}Услуга{% endif %}</strong>
+        <div class="services-list" id="servicesList">
+          {% for repair_name in selected_repairs %}
+            <span>{{ repair_name }}</span>
+          {% endfor %}
+        </div>
       </div>
     </div>
 
@@ -139,26 +187,63 @@
       </div>
     </div>
 
-<div class="summary-item">
-  <span class="ic" aria-hidden="true">
-    <!-- ₽ (рубль) -->
-    <svg viewBox="0 0 24 24" fill="none">
-      <!-- «P»-образный штрих с округлением -->
-      <path d="M7 4h6a4 4 0 1 1 0 8H7V4z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      <!-- Вертикальная ножка -->
-      <path d="M7 12v8" stroke-width="2" stroke-linecap="round"/>
-      <!-- Горизонтальные перекладины ₽ -->
-      <path d="M7 15h10M7 19h10" stroke-width="2" stroke-linecap="round"/>
-    </svg>
-  </span>
-  <div>
-    <strong>Цена</strong>
-    <span>{{ price }} BYN</span>
-  </div>
-</div>
-
+    <div class="summary-item">
+      <span class="ic" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M7 4h6a4 4 0 1 1 0 8H7V4z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M7 12v8" stroke-width="2" stroke-linecap="round"/>
+          <path d="M7 15h10M7 19h10" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <div>
+        <strong>Цена</strong>
+        <span id="summaryPrice">{{ subtotal }} BYN</span>
+        <small class="price-note" id="summaryPriceNote" {% if not combo_discount %}style="display:none"{% endif %}>
+          Базовая сумма: <span id="summaryBasePrice">{{ price }}</span> BYN,
+          скидка за дополнительные ремонты: −<span id="summaryDiscount">{{ combo_discount }}</span> BYN
+        </small>
+      </div>
+    </div>
   </div>
 </section>
+
+{% if extra_repairs %}
+<section class="extras">
+  <h2>Можно добавить к этой записи</h2>
+  <div class="extras-list">
+    {% for extra in extra_repairs %}
+      <div class="extra-row">
+        <input
+          class="extra-check"
+          type="checkbox"
+          name="extra_repairs"
+          value="{{ extra.slug }}"
+          form="booking-form"
+          data-name="{{ extra.name }}"
+          data-price="{{ extra.price }}"
+          data-discount="{{ extra.discount_amount }}"
+          {% if extra.selected %}checked{% endif %}
+          {% if not extra.is_available_online %}disabled{% endif %}
+        >
+        <div>
+          <div class="extra-name">{{ extra.name }}</div>
+          <div class="extra-note{% if not extra.is_available_online %} extra-note--warn{% endif %}">
+            {% if extra.is_available_online %}
+              Если добавить к текущей записи
+            {% else %}
+              По согласованию: не для онлайн-записи
+            {% endif %}
+          </div>
+        </div>
+        <div class="extra-price">
+          <del>{{ extra.price }} BYN</del>
+          <strong>{{ extra.discounted_price }} BYN</strong>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 
 <form id="booking-form" method="post" action="" novalidate>
   {% csrf_token %}
@@ -220,5 +305,54 @@
     toggle();
     consent.addEventListener('change', toggle, {passive:true});
   }
+
+  (function () {
+    const extraChecks = Array.from(document.querySelectorAll('input[name="extra_repairs"]'));
+    const servicesLabel = document.getElementById('servicesLabel');
+    const servicesList = document.getElementById('servicesList');
+    const summaryPrice = document.getElementById('summaryPrice');
+    const summaryBasePrice = document.getElementById('summaryBasePrice');
+    const summaryDiscount = document.getElementById('summaryDiscount');
+    const summaryPriceNote = document.getElementById('summaryPriceNote');
+    if (!extraChecks.length || !servicesLabel || !servicesList || !summaryPrice || !summaryBasePrice || !summaryDiscount || !summaryPriceNote) {
+      return;
+    }
+
+    const baseRepairName = '{{ repair_type.name|escapejs }}';
+    const basePrice = parseFloat('{{ selection.primary_price|default:price|escapejs }}'.replace(',', '.')) || 0;
+    function parseMoney(value) {
+      return parseFloat(String(value || '0').replace(',', '.')) || 0;
+    }
+
+    function formatMoney(value) {
+      return value.toFixed(2).replace('.', ',');
+    }
+
+    function updateSummary() {
+      const selectedExtras = extraChecks.filter((input) => input.checked);
+      const extraNames = selectedExtras.map((input) => input.dataset.name || '');
+      const extrasTotal = selectedExtras.reduce((sum, input) => sum + parseMoney(input.dataset.price), 0);
+      const extrasDiscount = selectedExtras.reduce((sum, input) => sum + parseMoney(input.dataset.discount), 0);
+      const totalBase = basePrice + extrasTotal;
+      const totalDiscount = extrasDiscount;
+      const totalFinal = Math.max(totalBase - totalDiscount, 0);
+
+      servicesLabel.textContent = selectedExtras.length ? 'Услуги' : 'Услуга';
+      servicesList.innerHTML = '';
+      [baseRepairName, ...extraNames].forEach((name) => {
+        const item = document.createElement('span');
+        item.textContent = name;
+        servicesList.appendChild(item);
+      });
+
+      summaryPrice.textContent = `${formatMoney(totalFinal)} BYN`;
+      summaryBasePrice.textContent = formatMoney(totalBase);
+      summaryDiscount.textContent = formatMoney(totalDiscount);
+      summaryPriceNote.style.display = selectedExtras.length ? 'block' : 'none';
+    }
+
+    updateSummary();
+    extraChecks.forEach((input) => input.addEventListener('change', updateSummary, {passive:true}));
+  })();
 </script>
 {% endblock %}

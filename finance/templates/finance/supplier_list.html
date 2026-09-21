@@ -1,0 +1,23 @@
+{% extends "finance/base.html" %}{% load finance_extras %}
+{% block finance_title %}Взаиморасчёты с поставщиками{% endblock %}
+{% block finance_content %}
+{% include "finance/_parts_nav.html" %}
+<div class="fin-actions"><a class="fin-btn primary" href="{% url 'finance:supplier_create' %}">＋ Поставщик</a><a class="fin-btn" href="{% url 'finance:supplier_payment_create' %}">＋ Внести оплату</a><a class="fin-btn" href="{% url 'finance:supplier_payment_list' %}">История оплат</a></div>
+<section class="fin-metrics" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+  <div class="fin-metric cost"><div class="label">Вы должны поставщикам</div><div class="value amount-neg">{{ total_debt|money_byn }}</div></div>
+  <div class="fin-metric income"><div class="label">Ваш аванс у поставщиков</div><div class="value amount-pos">{{ total_credit|money_byn }}</div></div>
+  <div class="fin-metric net {% if net_balance < 0 %}loss{% endif %}" style="grid-column:auto"><div class="label">Итоговый баланс</div><div class="value">{{ net_balance|money_byn }}</div></div>
+</section>
+<p class="fin-muted">Минус в итоговом балансе означает, что вы должны поставщикам. Плюс означает, что у поставщиков находится ваш аванс.</p>
+<form method="get" class="fin-filters"><label>Поиск<input name="q" value="{{ q }}" placeholder="Название, контакт, телефон"></label><button class="fin-btn primary">Найти</button></form>
+<div class="fin-grid">
+{% for supplier in suppliers %}
+  <article class="fin-card">
+    <div style="display:flex;justify-content:space-between;gap:10px"><div><h2><a class="fin-link" href="{% url 'finance:supplier_detail' supplier.pk %}">{{ supplier.name }}</a></h2><span class="fin-badge {% if not supplier.is_active %}off{% endif %}">{% if supplier.is_active %}Активен{% else %}Неактивен{% endif %}</span></div><div class="fin-row-actions"><a href="{% url 'finance:supplier_edit' supplier.pk %}">Изменить</a><a href="{% url 'finance:supplier_delete' supplier.pk %}">Удалить</a></div></div>
+    <div class="fin-kpis" style="margin-top:15px"><div class="fin-kpi"><span class="fin-muted">Получено товара</span><strong>{{ supplier.received_total|money_byn }}</strong></div><div class="fin-kpi"><span class="fin-muted">Оплачено</span><strong>{{ supplier.paid_total|money_byn }}</strong></div></div>
+    {% if supplier.debt_amount > 0 %}<div style="margin-top:14px;padding:14px;border-radius:11px;background:#fff1f2;color:#9f1239"><strong>Вы должны поставщику: {{ supplier.debt_amount|money_byn }}</strong></div>{% elif supplier.credit_amount > 0 %}<div style="margin-top:14px;padding:14px;border-radius:11px;background:#ecfdf3;color:#067647"><strong>Поставщик должен вам / ваш аванс: {{ supplier.credit_amount|money_byn }}</strong></div>{% else %}<div style="margin-top:14px;padding:14px;border-radius:11px;background:#f2f4f7;color:#475467"><strong>Расчёты закрыты: 0.00 BYN</strong></div>{% endif %}
+    <p>{{ supplier.contact_person|default:'Контакт не указан' }}{% if supplier.phone %} · {{ supplier.phone }}{% endif %}</p>
+  </article>
+{% empty %}<section class="fin-card fin-empty">Поставщиков нет</section>{% endfor %}
+</div>
+{% endblock %}

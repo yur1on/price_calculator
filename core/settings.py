@@ -6,6 +6,7 @@
 from pathlib import Path
 import os
 import mimetypes
+import sys
 
 mimetypes.init()
 mimetypes.add_type("image/webp", ".webp", strict=True)
@@ -70,6 +71,7 @@ INSTALLED_APPS = [
     "repairs.apps.RepairsConfig",
     "notify_tg",
     "news.apps.NewsConfig",
+    "finance.apps.FinanceConfig",
 ]
 
 # ──────────────────────────────────────────────────────────────
@@ -201,8 +203,12 @@ if not DEBUG:
         SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
         USE_X_FORWARDED_HOST = True
 
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    # Локальный runserver обычно открыт по http://127.0.0.1. Secure-cookie в таком
+    # режиме браузер не возвращает, из-за чего успешный вход сразу теряет сессию.
+    # На production-сервере (gunicorn/uwsgi) cookies всегда остаются Secure.
+    _local_runserver = "runserver" in sys.argv
+    SESSION_COOKIE_SECURE = not _local_runserver
+    CSRF_COOKIE_SECURE = not _local_runserver
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = "DENY"

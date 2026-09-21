@@ -1,0 +1,1 @@
+{% if page_obj.has_other_pages %}<nav class="fin-pagination">{% if page_obj.has_previous %}<a class="fin-btn" href="?page={{ page_obj.previous_page_number }}">←</a>{% endif %}<span>{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a class="fin-btn" href="?page={{ page_obj.next_page_number }}">→</a>{% endif %}</nav>{% endif %}

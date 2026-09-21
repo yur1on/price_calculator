@@ -95,22 +95,30 @@ def _track_prev_status(sender, instance: Appointment, **kwargs):
 def sync_referral_on_appointment_save(sender, instance: Appointment, created: bool, **kwargs):
     # --- уведомление админам о ЛЮБОЙ новой заявке ---
     if created:
-        a = instance
-        admin_msg = (
-            "Новая заявка\n"
-            f"ID: #{a.id}\n"
-            f"Клиент: {a.customer_name} ({_short_phone(a.customer_phone)})\n"
-            f"Устройство: {a.phone_model}\n"
-            f"Услуга: {a.repair_type.name}\n"
-            f"Дата/время: {a.start:%d.%m.%Y %H:%M}\n"
-            f"Итоговая цена: {a.price_final} BYN"
-            + (f"\nПартнёрский код: {a.referral_code}" if a.referral_code else "")
-            + f"\nАдминка: {admin_appointment_link(a.id)}"
-        )
-        try:
-            notify_admins(admin_msg)
-        except Exception:
-            pass
+        def _notify_admins_after_commit(appointment_id: int) -> None:
+            try:
+                a = (
+                    Appointment.objects
+                    .select_related("phone_model", "repair_type")
+                    .prefetch_related("items__repair_type")
+                    .get(pk=appointment_id)
+                )
+                admin_msg = (
+                    "Новая заявка\n"
+                    f"ID: #{a.id}\n"
+                    f"Клиент: {a.customer_name} ({_short_phone(a.customer_phone)})\n"
+                    f"Устройство: {a.phone_model}\n"
+                    f"Услуги: {a.services_display}\n"
+                    f"Дата/время: {a.start:%d.%m.%Y %H:%M}\n"
+                    f"Итоговая цена: {a.price_final} BYN"
+                    + (f"\nПартнёрский код: {a.referral_code}" if a.referral_code else "")
+                    + f"\nАдминка: {admin_appointment_link(a.id)}"
+                )
+                notify_admins(admin_msg)
+            except Exception:
+                pass
+
+        transaction.on_commit(lambda: _notify_admins_after_commit(instance.id))
 
     # ==========================================================
     # 1) РЕФЕРАЛКИ (как у вас) + анти-самореферал (комиссия 0)
@@ -123,8 +131,9 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
             partner = None
 
         if partner:
+            subtotal_for_referral = (Decimal(instance.price_original) - Decimal(instance.combo_discount_amount or 0)).quantize(Decimal("0.01"))
             discount, commission = calc_discount_and_commission(
-                instance.price_original,
+                subtotal_for_referral,
                 partner.client_discount_pct,
                 partner.partner_commission_pct,
             )
@@ -172,23 +181,34 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
                     redemption.save(update_fields=["discount_amount", "commission_amount", "status", "paid_at"])
 
                 if was_created:
-                    try:
-                        notify_partner(
-                            partner,
-                            (
-                                "Новая заявка с вашим кодом\n"
-                                f"Заявка #{instance.id}\n"
-                                f"Клиент: {instance.customer_name} ({_short_phone(instance.customer_phone)})\n"
-                                f"Услуга: {instance.repair_type.name}\n"
-                                f"Устройство: {instance.phone_model}\n"
-                                f"Дата/время: {instance.start:%d.%m.%Y %H:%M}\n"
-                                f"Скидка клиенту: {redemption.discount_amount} BYN\n"
-                                f"Накопления владельцу кода: {redemption.commission_amount} BYN\n"
-                                f"Статус: {redemption.get_status_display()}"
-                            ),
-                        )
-                    except Exception:
-                        pass
+                    def _notify_partner_after_commit(appointment_id: int, partner_id: int) -> None:
+                        try:
+                            appointment = (
+                                Appointment.objects
+                                .select_related("phone_model", "repair_type")
+                                .prefetch_related("items__repair_type")
+                                .get(pk=appointment_id)
+                            )
+                            fresh_partner = ReferralPartner.objects.get(pk=partner_id)
+                            fresh_redemption = ReferralRedemption.objects.get(partner=fresh_partner, appointment=appointment)
+                            notify_partner(
+                                fresh_partner,
+                                (
+                                    "Новая заявка с вашим кодом\n"
+                                    f"Заявка #{appointment.id}\n"
+                                    f"Клиент: {appointment.customer_name} ({_short_phone(appointment.customer_phone)})\n"
+                                    f"Услуги: {appointment.services_display}\n"
+                                    f"Устройство: {appointment.phone_model}\n"
+                                    f"Дата/время: {appointment.start:%d.%m.%Y %H:%M}\n"
+                                    f"Скидка клиенту: {fresh_redemption.discount_amount} BYN\n"
+                                    f"Накопления владельцу кода: {fresh_redemption.commission_amount} BYN\n"
+                                    f"Статус: {fresh_redemption.get_status_display()}"
+                                ),
+                            )
+                        except Exception:
+                            pass
+
+                    transaction.on_commit(lambda: _notify_partner_after_commit(instance.id, partner.id))
 
     # ==========================================================
     # 2) ОТКАТ СПИСАНИЯ, если заявку отменили

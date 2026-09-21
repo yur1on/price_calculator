@@ -1,0 +1,4 @@
+<form method="get" class="fin-period">
+  <label>Период<select name="period" onchange="this.form.submit()"><option value="today" {% if period == 'today' %}selected{% endif %}>Сегодня</option><option value="yesterday" {% if period == 'yesterday' %}selected{% endif %}>Вчера</option><option value="week" {% if period == 'week' %}selected{% endif %}>Эта неделя</option><option value="month" {% if period == 'month' %}selected{% endif %}>Этот месяц</option><option value="last_month" {% if period == 'last_month' %}selected{% endif %}>Прошлый месяц</option><option value="year" {% if period == 'year' %}selected{% endif %}>Этот год</option><option value="custom" {% if period == 'custom' %}selected{% endif %}>Произвольный</option></select></label>
+  <label>Дата от<input type="date" name="from" value="{{ date_from|date:'Y-m-d' }}"></label><label>Дата до<input type="date" name="to" value="{{ date_to|date:'Y-m-d' }}"></label><button class="fin-btn primary">Показать</button>
+</form>

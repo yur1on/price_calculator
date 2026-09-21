@@ -50,7 +50,7 @@
         <td>{{ op.created_at|date:"d.m.Y H:i" }}</td>
         <td>{{ op.appointment.customer_name }}<br><span class="muted">{{ op.phone }}</span></td>
         <td>{{ op.appointment.phone_model.brand.name }} {{ op.appointment.phone_model.name }}</td>
-        <td>{{ op.appointment.repair_type.name }}</td>
+        <td>{{ op.appointment.services_display }}</td>
         <td>{{ op.discount_amount }}</td>
         <td>{{ op.commission_amount }}</td>
         {% if has_status %}<td>{{ op.get_status_display }}</td>{% endif %}

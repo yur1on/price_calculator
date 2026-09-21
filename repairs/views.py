@@ -30,6 +30,7 @@ from .models import (
     RepairType,
     ModelRepairPrice,
     Appointment,
+    AppointmentItem,
     WorkingHour,
     ReferralPartner,
     ReferralRedemption,
@@ -37,6 +38,9 @@ from .models import (
 MAX_BOOK_AHEAD_DAYS = int(getattr(settings, "REPAIRS_MAX_BOOK_AHEAD_DAYS", 30))
 BOOKING_SUCCESS_TOKEN_SALT = "repairs.booking_success"
 BOOKING_SUCCESS_TOKEN_MAX_AGE = 60 * 60 * 24 * 30
+BOOKING_SUCCESS_EXTRA_REPAIR_DISCOUNT = Decimal("30.00")
+BOOKING_SUCCESS_EXTRA_REPAIR_LOW_PRICE_DISCOUNT = Decimal("20.00")
+BOOKING_SUCCESS_EXTRA_REPAIR_LOW_PRICE_THRESHOLD = Decimal("80.00")
 # ---------- утилиты ----------
 
 
@@ -56,6 +60,156 @@ def _is_valid_booking_success_token(token: str | None, appointment_id: int) -> b
     except (BadSignature, SignatureExpired):
         return False
     return payload.get("appointment_id") == appointment_id
+
+
+def _normalize_repair_text(value: str) -> str:
+    return re.sub(r"\s+", " ", (value or "").strip().lower())
+
+
+def _is_display_repair(repair_type: RepairType) -> bool:
+    text = _normalize_repair_text(f"{repair_type.name} {repair_type.slug}")
+    markers = (
+        "диспле",
+        "экран",
+        "тачскрин",
+        "screen",
+        "display",
+    )
+    return any(marker in text for marker in markers)
+
+
+def _extra_repair_discount(price: Decimal) -> Decimal:
+    price_value = Decimal(price or 0).quantize(Decimal("0.01"))
+    discount = (
+        BOOKING_SUCCESS_EXTRA_REPAIR_LOW_PRICE_DISCOUNT
+        if price_value < BOOKING_SUCCESS_EXTRA_REPAIR_LOW_PRICE_THRESHOLD
+        else BOOKING_SUCCESS_EXTRA_REPAIR_DISCOUNT
+    )
+    return min(discount, price_value).quantize(Decimal("0.01"))
+
+
+def _should_exclude_extra_repair(candidate: RepairType, current_repair_type: RepairType) -> bool:
+    if candidate.pk == current_repair_type.pk:
+        return True
+    if _is_display_repair(candidate) and _is_display_repair(current_repair_type):
+        return True
+    return False
+
+
+def _get_extra_repairs_for_model(
+    phone_model: PhoneModel,
+    current_repair_type: RepairType,
+    excluded_slugs: set[str] | None = None,
+) -> list[dict]:
+    extra_repairs = []
+    excluded = set(excluded_slugs or set())
+    excluded.add(current_repair_type.slug)
+    related_prices = (
+        ModelRepairPrice.objects
+        .filter(phone_model=phone_model, is_active=True)
+        .exclude(repair_type__slug__in=excluded)
+        .select_related("repair_type")
+        .order_by("repair_type__name")
+    )
+    for price_entry in related_prices:
+        if _should_exclude_extra_repair(price_entry.repair_type, current_repair_type):
+            continue
+        discount_amount = _extra_repair_discount(price_entry.price)
+        discounted_price = max(
+            Decimal("0.00"),
+            (price_entry.price - discount_amount).quantize(Decimal("0.01")),
+        )
+        extra_repairs.append({
+            "name": price_entry.repair_type.name,
+            "price": price_entry.price,
+            "discounted_price": discounted_price,
+        })
+    return extra_repairs
+
+
+def _build_booking_selection(
+    request,
+    model: PhoneModel,
+    primary_repair_type: RepairType,
+) -> dict:
+    requested_extra_slugs = []
+    values = request.POST.getlist("extra_repairs") if request.method == "POST" else request.GET.getlist("extra_repairs")
+    for slug in values:
+        cleaned = (slug or "").strip()
+        if cleaned and cleaned != primary_repair_type.slug and cleaned not in requested_extra_slugs:
+            requested_extra_slugs.append(cleaned)
+
+    primary_price_entry = (
+        ModelRepairPrice.objects
+        .filter(phone_model=model, repair_type=primary_repair_type, is_active=True)
+        .select_related("repair_type")
+        .first()
+    )
+    primary_price = primary_price_entry.price if primary_price_entry else Decimal("0.00")
+    primary_duration = primary_price_entry.duration_min if primary_price_entry else primary_repair_type.default_duration_min
+
+    available_extra_entries = list(
+        ModelRepairPrice.objects
+        .filter(phone_model=model, is_active=True)
+        .select_related("repair_type")
+        .order_by("repair_type__name")
+    )
+    available_extra_entries = [
+        item for item in available_extra_entries
+        if not _should_exclude_extra_repair(item.repair_type, primary_repair_type)
+    ]
+    extras_by_slug = {item.repair_type.slug: item for item in available_extra_entries}
+    selected_extra_entries = [extras_by_slug[slug] for slug in requested_extra_slugs if slug in extras_by_slug]
+    selected_extra_slugs = [item.repair_type.slug for item in selected_extra_entries]
+
+    combo_discount = sum(
+        (_extra_repair_discount(item.price) for item in selected_extra_entries),
+        Decimal("0.00"),
+    ).quantize(Decimal("0.01"))
+    total_price = (
+        primary_price + sum((item.price for item in selected_extra_entries), Decimal("0.00"))
+    ).quantize(Decimal("0.01"))
+    subtotal = max(
+        Decimal("0.00"),
+        (total_price - combo_discount).quantize(Decimal("0.01")),
+    )
+
+    selected_names = [primary_repair_type.name] + [item.repair_type.name for item in selected_extra_entries]
+    total_duration = int(primary_duration or 0) + sum(int(item.duration_min or 0) for item in selected_extra_entries)
+
+    extra_options = []
+    for item in available_extra_entries:
+        discount_amount = _extra_repair_discount(item.price)
+        discounted_price = max(
+            Decimal("0.00"),
+            (item.price - discount_amount).quantize(Decimal("0.01")),
+        )
+        total_with_extra = int(primary_duration or 0) + int(item.duration_min or 0)
+        is_available_online = total_with_extra <= 560
+        extra_options.append({
+            "slug": item.repair_type.slug,
+            "name": item.repair_type.name,
+            "price": item.price,
+            "discount_amount": discount_amount,
+            "discounted_price": discounted_price,
+            "selected": item.repair_type.slug in selected_extra_slugs,
+            "duration_min": item.duration_min,
+            "is_available_online": is_available_online,
+        })
+
+    return {
+        "primary_price": primary_price,
+        "primary_duration": int(primary_duration or 0),
+        "selected_names": selected_names,
+        "selected_extra_slugs": selected_extra_slugs,
+        "selected_extra_entries": selected_extra_entries,
+        "services_count": len(selected_names),
+        "total_price": total_price,
+        "total_duration": total_duration,
+        "combo_discount": combo_discount,
+        "subtotal": subtotal,
+        "extra_options": extra_options,
+    }
 
 
 
@@ -684,16 +838,14 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
         return redirect("repairs:slot_select",
                         brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 
-    # длительность и цена
-    try:
-        price_entry = ModelRepairPrice.objects.get(
-            phone_model=model, repair_type=repair_type, is_active=True
-        )
-        duration_min = price_entry.duration_min
-        price = price_entry.price
-    except ModelRepairPrice.DoesNotExist:
-        duration_min = repair_type.default_duration_min
-        price = Decimal("0.00")
+    selection = _build_booking_selection(request, model, repair_type)
+    duration_min = selection["total_duration"]
+    price = selection["total_price"]
+
+    if duration_min and duration_min > 560:
+        messages.error(request, "При добавлении этих услуг онлайн-запись недоступна. Пожалуйста, позвоните нам.")
+        return redirect("repairs:slot_select",
+                        brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 
     end_dt = slot_dt + timedelta(minutes=duration_min)
 
@@ -738,23 +890,55 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
                     price_original=price,
                 )
                 # Применяем реф.код и считаем финальную цену
-                app.apply_referral()
+                app.apply_referral(
+                    services_count=selection["services_count"],
+                    combo_discount_amount=selection["combo_discount"],
+                )
                 if not app.price_final:
                     app.price_final = app.price_original - app.discount_amount
                 app.save()
+                AppointmentItem.objects.bulk_create(
+                    [
+                        AppointmentItem(
+                            appointment=app,
+                            repair_type=repair_type,
+                            price=selection["primary_price"],
+                            duration_min=selection["primary_duration"],
+                            position=1,
+                        )
+                    ] + [
+                        AppointmentItem(
+                            appointment=app,
+                            repair_type=item.repair_type,
+                            price=item.price,
+                            duration_min=item.duration_min,
+                            position=index,
+                        )
+                        for index, item in enumerate(selection["selected_extra_entries"], start=2)
+                    ]
+                )
 
             token = _make_booking_success_token(app.id)
             return redirect(f'{redirect("repairs:booking_success", appointment_id=app.id).url}?token={token}')
     else:
         form = BookingForm()
 
+    extra_repairs = _get_extra_repairs_for_model(model, repair_type)
+
     return render(request, "repairs/booking_form.html", {
         "brand": brand,
         "model": model,
         "repair_type": repair_type,
+        "selection": selection,
         "slot": slot_dt,
         "duration": duration_min,
         "price": price,
+        "selected_repairs": selection["selected_names"],
+        "services_count": selection["services_count"],
+        "combo_discount": selection["combo_discount"],
+        "subtotal": selection["subtotal"],
+        "extra_repairs": selection["extra_options"],
+        "extra_repair_discount": BOOKING_SUCCESS_EXTRA_REPAIR_DISCOUNT,
         "form": form,
     })
 
@@ -763,8 +947,18 @@ def booking_success(request, appointment_id: int):
     """Страница подтверждения после успешного бронирования."""
     if not _is_valid_booking_success_token(request.GET.get("token"), appointment_id):
         return render(request, "404.html", {"path": request.path}, status=404)
-    appointment = get_object_or_404(Appointment, id=appointment_id)
-    return render(request, "repairs/booking_success.html", {"appointment": appointment})
+    appointment = get_object_or_404(
+        Appointment.objects.select_related("phone_model", "phone_model__brand", "repair_type").prefetch_related("items__repair_type"),
+        id=appointment_id,
+    )
+    selected_slugs = {item.repair_type.slug for item in appointment.items.all()}
+    extra_repairs = _get_extra_repairs_for_model(appointment.phone_model, appointment.repair_type, selected_slugs)
+
+    return render(request, "repairs/booking_success.html", {
+        "appointment": appointment,
+        "extra_repairs": extra_repairs,
+        "extra_repair_discount": BOOKING_SUCCESS_EXTRA_REPAIR_DISCOUNT,
+    })
 
 # ---------- отчёты по партнёрам ----------
 

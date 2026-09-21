@@ -236,6 +236,7 @@ class TimeOff(models.Model):
 
 
 class Appointment(models.Model):
+    COMBO_DISCOUNT_PER_EXTRA_REPAIR = Decimal("30.00")
     STATUS_CHOICES = [
         ("new", "Новая"),
         ("confirmed", "Подтверждена"),
@@ -269,6 +270,12 @@ class Appointment(models.Model):
     customer_phone = models.CharField("Телефон клиента", max_length=20)
     referral_code = models.CharField("Код продавца", max_length=16, blank=True)
     price_original = models.DecimalField("Цена до скидки", max_digits=10, decimal_places=2)
+    combo_discount_amount = models.DecimalField(
+        "Скидка за несколько ремонтов",
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
     discount_amount = models.DecimalField("Скидка", max_digits=10, decimal_places=2, default=Decimal("0.00"))
     price_final = models.DecimalField("Итоговая цена", max_digits=10, decimal_places=2)
     status = models.CharField("Статус", max_length=12, choices=STATUS_CHOICES, default="new")
@@ -286,31 +293,103 @@ class Appointment(models.Model):
     def duration(self) -> timedelta:
         return self.end - self.start
 
-    def apply_referral(self) -> None:
+    @classmethod
+    def combo_discount_for_count(cls, services_count: int) -> Decimal:
+        extra_repairs = max(int(services_count or 0) - 1, 0)
+        return (cls.COMBO_DISCOUNT_PER_EXTRA_REPAIR * extra_repairs).quantize(Decimal("0.01"))
+
+    @property
+    def services_count(self) -> int:
+        if not self.pk:
+            return 1
+        prefetched = getattr(self, "_prefetched_objects_cache", {}).get("items")
+        if prefetched is not None:
+            return max(len(prefetched), 1)
+        return self.items.count() or 1
+
+    @property
+    def services_display(self) -> str:
+        if not self.pk:
+            return self.repair_type.name
+        prefetched = getattr(self, "_prefetched_objects_cache", {}).get("items")
+        if prefetched is not None:
+            names = [item.repair_type.name for item in prefetched]
+        else:
+            names = list(
+                self.items.select_related("repair_type")
+                .order_by("position", "id")
+                .values_list("repair_type__name", flat=True)
+            )
+        if not names:
+            return self.repair_type.name
+        return ", ".join(names)
+
+    def apply_referral(
+        self,
+        services_count: int | None = None,
+        combo_discount_amount: Decimal | None = None,
+    ) -> None:
+        base_price = Decimal(self.price_original or 0).quantize(Decimal("0.01"))
+        if combo_discount_amount is None:
+            combo_discount = min(
+                self.combo_discount_for_count(services_count or self.services_count),
+                base_price,
+            )
+        else:
+            combo_discount = min(Decimal(combo_discount_amount), base_price).quantize(Decimal("0.01"))
+        self.combo_discount_amount = combo_discount
+        subtotal = (base_price - combo_discount).quantize(Decimal("0.01"))
+
         if not self.referral_code:
-            self.discount_amount = Decimal("0")
-            self.price_final = self.price_original
+            self.discount_amount = combo_discount
+            self.price_final = subtotal
             return
         try:
             partner = ReferralPartner.objects.get(code__iexact=self.referral_code)
         except ReferralPartner.DoesNotExist:
-            self.discount_amount = Decimal("0")
-            self.price_final = self.price_original
+            self.discount_amount = combo_discount
+            self.price_final = subtotal
             return
 
         if not partner.is_active():
-            self.discount_amount = Decimal("0")
-            self.price_final = self.price_original
+            self.discount_amount = combo_discount
+            self.price_final = subtotal
             return
 
-        discount = (self.price_original * partner.client_discount_pct / Decimal("100")).quantize(Decimal("0.01"))
-        self.discount_amount = discount
-        self.price_final = self.price_original - discount
+        referral_discount = (subtotal * partner.client_discount_pct / Decimal("100")).quantize(Decimal("0.01"))
+        self.discount_amount = (combo_discount + referral_discount).quantize(Decimal("0.01"))
+        self.price_final = (base_price - self.discount_amount).quantize(Decimal("0.01"))
 
     def save(self, *args, **kwargs) -> None:
         if not self.price_final:
             self.price_final = self.price_original - self.discount_amount
         super().save(*args, **kwargs)
+
+
+class AppointmentItem(models.Model):
+    appointment = models.ForeignKey(
+        Appointment,
+        verbose_name="Запись",
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    repair_type = models.ForeignKey(
+        RepairType,
+        verbose_name="Тип ремонта",
+        on_delete=models.PROTECT,
+        related_name="appointment_items",
+    )
+    price = models.DecimalField("Цена (BYN)", max_digits=10, decimal_places=2)
+    duration_min = models.PositiveIntegerField("Длительность (мин)")
+    position = models.PositiveSmallIntegerField("Порядок", default=0)
+
+    class Meta:
+        verbose_name = "Услуга в заявке"
+        verbose_name_plural = "Услуги в заявке"
+        ordering = ["position", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.appointment_id} • {self.repair_type.name}"
 
 
 

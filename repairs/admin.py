@@ -14,7 +14,7 @@ from unfold.admin import ModelAdmin  # базовый класс от Unfold
 from .models import (
     PhoneBrand, PhoneModel, RepairType, ModelRepairPrice,
     ReferralPartner, ReferralRedemption,
-    Technician, WorkingHour, TimeOff, Appointment,
+    Technician, WorkingHour, TimeOff, Appointment, AppointmentItem,
     PageView,
 )
 
@@ -54,6 +54,13 @@ class ModelRepairPriceInline(admin.TabularInline):
     autocomplete_fields = ("repair_type",)
     fields = ("repair_type", "price", "duration_min", "is_active")
     show_change_link = True
+
+
+class AppointmentItemInline(admin.TabularInline):
+    model = AppointmentItem
+    extra = 0
+    autocomplete_fields = ("repair_type",)
+    fields = ("position", "repair_type", "price", "duration_min")
 
 
 # -------------------------------------------------------------------
@@ -261,13 +268,14 @@ class AppointmentAdmin(StripPhoneModelLabelsMixin, ModelAdmin):
     list_select_related = ("phone_model", "phone_model__brand", "repair_type", "technician")
     autocomplete_fields = ("phone_model", "repair_type", "technician")
     ordering = ("-start",)
-    readonly_fields = ("created_at",)
+    readonly_fields = ("created_at", "services_summary")
+    inlines = (AppointmentItemInline,)
 
     fieldsets = (
         ("Клиент", {"fields": ("customer_name", "customer_phone", "referral_code", "status")}),
-        ("Устройство и услуга", {"fields": ("phone_model", "repair_type", "technician")}),
+        ("Устройство и услуга", {"fields": ("phone_model", "repair_type", "services_summary", "technician")}),
         ("Время", {"fields": ("start", "end")}),
-        ("Оплата", {"fields": ("price_original", "discount_amount", "price_final")}),
+        ("Оплата", {"fields": ("price_original", "combo_discount_amount", "discount_amount", "price_final")}),
         ("Служебное", {"fields": ("created_at",), "classes": ("collapse",)}),
     )
 
@@ -311,6 +319,10 @@ class AppointmentAdmin(StripPhoneModelLabelsMixin, ModelAdmin):
     @admin.display(ordering="phone_model__name", description="Модель")
     def phone_model_no_parens(self, obj: Appointment):
         return strip_parens_text(getattr(obj.phone_model, "name", ""))
+
+    @admin.display(description="Все услуги")
+    def services_summary(self, obj: Appointment):
+        return obj.services_display
 
     @admin.display(description="Статус")
     def status_badge(self, obj: Appointment):

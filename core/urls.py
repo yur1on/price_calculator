@@ -29,6 +29,7 @@ def robots_txt(request):
         "User-agent: *",
         "Allow: /",
         "Disallow: /admin/",
+        "Disallow: /master/",
         "Disallow: /payments/",
         "Sitemap: " + request.build_absolute_uri("/sitemap.xml"),
         "",
@@ -57,6 +58,8 @@ urlpatterns = [
     # приложение
     path("repairs/", include("repairs.urls")),
     path("news/", include("news.urls")),
+    path("finance/", include("finance.urls")),
+    path("master/", include("finance.master_urls")),
 
 
     # корень

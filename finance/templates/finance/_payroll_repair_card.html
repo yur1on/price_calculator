@@ -1,0 +1,5 @@
+{% load finance_extras %}
+<article class="fin-mobile-card payroll-repair-card">
+  <div class="fin-mobile-head"><strong>{% if item.repair %}<a class="fin-link" href="{% url 'finance:repair_edit' item.repair.pk %}?next={% url 'finance:payroll_period_detail' period.pk %}%3Femployee%3D{{ row.employee.pk }}">{{ item.description }}</a>{% else %}{{ item.description }}{% endif %}</strong><span>{{ item.repair_date|date:'d.m' }}</span></div>
+  <div class="fin-mobile-values"><span>Ремонт<strong>{{ item.revenue|money_byn }}</strong></span><span>Запчасти<strong>−{{ item.parts_cost|money_byn }}</strong></span><span>Другие затраты<strong>−{{ item.other_direct_costs|money_byn }}</strong></span><span>Маржа<strong>{{ item.salary_base|money_byn }}</strong></span><span>Процент<strong>{{ item.percent }}%</strong></span><span>Начислено<strong class="amount-pos">{{ item.salary_amount|money_byn }}</strong></span></div>
+</article>
