@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model, password_validation
 from .models import (
     Employee, Expense, ExpenseCategory, OtherIncome, PartCatalog, PartItem,
     RepairFinance, RepairPart, SalaryPayment, StockReceipt, Supplier,
-    SupplierPayment, WarrantyClaim,
+    SupplierPayment, WarrantyClaim, SupplierReturn,
     DistributedExpense, PayrollPeriod,
 )
 
@@ -254,24 +254,26 @@ class StockReceiptForm(StyledModelForm):
 class SupplierPaymentForm(StyledModelForm):
     class Meta:
         model = SupplierPayment
-        fields = ["date", "supplier", "receipt", "amount", "comment"]
-        widgets = {"date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}), "comment": forms.Textarea(attrs={"rows": 3})}
+        fields = ["paid_at", "supplier", "receipt", "amount", "payment_method", "document_number", "comment"]
+        widgets = {"paid_at": forms.DateTimeInput(format="%Y-%m-%dT%H:%M", attrs={"type": "datetime-local"}), "comment": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["paid_at"].required = True
         self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True) | Supplier.objects.filter(pk=getattr(self.instance, "supplier_id", None))
         if not self.is_bound and not self.instance.pk:
-            self.fields["date"].initial = timezone.localdate()
+            self.fields["paid_at"].initial = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
 
 
 class WarrantyClaimForm(StyledModelForm):
     class Meta:
         model = WarrantyClaim
-        fields = ["part_item", "opened_at", "reason", "defect_description", "inspection_result", "status", "comment", "sent_to_supplier_at", "supplier_decision", "closed_at"]
+        fields = ["part_item", "opened_at", "reason", "defect_description", "inspection_result", "status", "comment", "sent_to_supplier_at", "supplier_decision", "financial_resolution_date", "financial_resolution_amount", "replacement_part_item", "closed_at"]
         widgets = {
             "opened_at": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
             "sent_to_supplier_at": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
             "closed_at": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "financial_resolution_date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
             "defect_description": forms.Textarea(attrs={"rows": 3}), "inspection_result": forms.Textarea(attrs={"rows": 3}),
             "comment": forms.Textarea(attrs={"rows": 3}), "supplier_decision": forms.Textarea(attrs={"rows": 3}),
         }
@@ -282,6 +284,29 @@ class WarrantyClaimForm(StyledModelForm):
         self.fields["part_item"].queryset = eligible
         if not self.is_bound and not self.instance.pk:
             self.fields["opened_at"].initial = timezone.localdate()
+        self.fields["replacement_part_item"].queryset = PartItem.objects.filter(status=PartItem.Status.IN_STOCK).select_related("receipt__part")
+
+
+class SupplierReturnForm(StyledModelForm):
+    class Meta:
+        model = SupplierReturn
+        fields = ["supplier", "part_item", "date", "reason", "status", "financial_date", "financial_amount", "replacement_part_item", "document_number", "comment"]
+        widgets = {
+            "date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "financial_date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "comment": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        supplier_id = self.data.get("supplier") or getattr(self.instance, "supplier_id", None) or self.initial.get("supplier")
+        items = PartItem.objects.select_related("receipt__part", "receipt__supplier")
+        if supplier_id:
+            items = items.filter(receipt__supplier_id=supplier_id)
+        self.fields["part_item"].queryset = items
+        self.fields["replacement_part_item"].queryset = items.filter(status=PartItem.Status.IN_STOCK)
+        if not self.is_bound and not self.instance.pk:
+            self.fields["date"].initial = timezone.localdate()
 
 
 class DistributedExpenseForm(StyledModelForm):

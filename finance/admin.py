@@ -6,7 +6,7 @@ from unfold.admin import ModelAdmin
 from .models import (
     Employee, Expense, ExpenseCategory, FinanceDashboard, OtherIncome, PartCatalog,
     PartItem, RepairFinance, RepairPart, SalaryPayment, StockReceipt, Supplier,
-    SupplierPayment, WarrantyClaim,
+    SupplierPayment, SupplierReturn, WarrantyClaim,
     DistributedExpense, DistributedExpenseAllocation, PayrollCalculation, PayrollPeriod, PayrollRepairSnapshot,
 )
 
@@ -70,5 +70,5 @@ class SalaryPaymentAdmin(ModelAdmin):
     search_fields = ("employee__name", "comment")
 
 
-for model in (Supplier, PartCatalog, StockReceipt, PartItem, RepairPart, WarrantyClaim, SupplierPayment, DistributedExpense, DistributedExpenseAllocation, PayrollCalculation, PayrollPeriod, PayrollRepairSnapshot):
+for model in (Supplier, PartCatalog, StockReceipt, PartItem, RepairPart, WarrantyClaim, SupplierPayment, SupplierReturn, DistributedExpense, DistributedExpenseAllocation, PayrollCalculation, PayrollPeriod, PayrollRepairSnapshot):
     admin.site.register(model, ModelAdmin)

@@ -374,6 +374,9 @@ class WarrantyClaim(models.Model):
     sent_to_supplier_at = models.DateField("Дата отправки поставщику", null=True, blank=True)
     supplier_decision = models.TextField("Решение поставщика", blank=True)
     closed_at = models.DateField("Дата закрытия", null=True, blank=True)
+    financial_resolution_date = models.DateField("Дата финансовой корректировки", null=True, blank=True)
+    financial_resolution_amount = models.DecimalField("Сумма возврата / зачёта", max_digits=12, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(0)])
+    replacement_part_item = models.ForeignKey("PartItem", verbose_name="Деталь на замену", on_delete=models.PROTECT, related_name="replacement_for_claims", null=True, blank=True)
     created_at = models.DateTimeField("Создан", auto_now_add=True)
 
     class Meta:
@@ -391,10 +394,20 @@ class WarrantyClaim(models.Model):
 
 
 class SupplierPayment(models.Model):
+    class Method(models.TextChoices):
+        CASH = "cash", "Наличные"
+        CARD = "card", "Карта"
+        TRANSFER = "transfer", "Перевод"
+        BANK = "bank", "Расчётный счёт"
+        OTHER = "other", "Другое"
+
     supplier = models.ForeignKey(Supplier, verbose_name="Поставщик", on_delete=models.PROTECT, related_name="payments")
     receipt = models.ForeignKey(StockReceipt, verbose_name="Поступление", on_delete=models.PROTECT, related_name="payments", null=True, blank=True)
     date = models.DateField("Дата оплаты")
+    paid_at = models.DateTimeField("Дата и время оплаты", null=True, blank=True)
     amount = models.DecimalField("Сумма", max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))])
+    payment_method = models.CharField("Способ оплаты", max_length=20, choices=Method.choices, default=Method.TRANSFER)
+    document_number = models.CharField("Номер документа / транзакции", max_length=120, blank=True)
     comment = models.TextField("Комментарий", blank=True)
     created_at = models.DateTimeField("Создана", auto_now_add=True)
 
@@ -410,11 +423,59 @@ class SupplierPayment(models.Model):
             raise ValidationError({"receipt": "Поступление относится к другому поставщику."})
 
     def save(self, *args, **kwargs):
+        if self.paid_at:
+            self.date = self.paid_at.date()
         self.full_clean()
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.supplier} — {self.amount} BYN"
+
+
+class SupplierReturn(models.Model):
+    class Status(models.TextChoices):
+        SENT = "sent", "Отправлено поставщику"
+        RECEIVED = "received", "Поставщик получил"
+        REVIEW = "review", "Рассматривается"
+        REPLACED = "replaced", "Заменено"
+        REFUNDED = "refunded", "Возврат денег"
+        CREDITED = "credited", "Зачтено"
+        REJECTED = "rejected", "Отказано"
+
+    supplier = models.ForeignKey(Supplier, verbose_name="Поставщик", on_delete=models.PROTECT, related_name="returns")
+    part_item = models.ForeignKey(PartItem, verbose_name="Деталь", on_delete=models.PROTECT, related_name="supplier_returns")
+    date = models.DateField("Дата возврата")
+    reason = models.CharField("Причина", max_length=200)
+    status = models.CharField("Статус", max_length=20, choices=Status.choices, default=Status.SENT)
+    financial_date = models.DateField("Дата возврата денег / зачёта", null=True, blank=True)
+    financial_amount = models.DecimalField("Сумма возврата / зачёта", max_digits=12, decimal_places=2, default=Decimal("0.00"), validators=[MinValueValidator(0)])
+    replacement_part_item = models.ForeignKey(PartItem, verbose_name="Деталь на замену", on_delete=models.PROTECT, related_name="replacement_for_returns", null=True, blank=True)
+    document_number = models.CharField("Документ", max_length=120, blank=True)
+    comment = models.TextField("Комментарий", blank=True)
+    created_at = models.DateTimeField("Создан", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Возврат поставщику"
+        verbose_name_plural = "Возвраты поставщикам"
+        ordering = ["-date", "-created_at"]
+        indexes = [models.Index(fields=["supplier", "date"])]
+
+    def clean(self):
+        super().clean()
+        if self.part_item_id and self.supplier_id and self.part_item.receipt.supplier_id != self.supplier_id:
+            raise ValidationError({"part_item": "Деталь получена от другого поставщика."})
+        if self.replacement_part_item_id and self.replacement_part_item.receipt.supplier_id != self.supplier_id:
+            raise ValidationError({"replacement_part_item": "Деталь на замену должна относиться к этому поставщику."})
+        if self.financial_amount and self.status not in {self.Status.REFUNDED, self.Status.CREDITED}:
+            raise ValidationError({"financial_amount": "Финансовая сумма допустима только для возврата денег или зачёта."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+        PartItem.objects.filter(pk=self.part_item_id).update(status=PartItem.Status.RETURNED)
+
+    def __str__(self):
+        return f"{self.supplier} — {self.part_item}"
 
 
 class DistributedExpense(models.Model):

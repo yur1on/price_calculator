@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from .models import (
     Employee, Expense, OtherIncome, PartItem, RepairFinance, SalaryPayment,
-    StockReceipt, SupplierPayment, WarrantyClaim, money,
+    StockReceipt, Supplier, SupplierPayment, WarrantyClaim, money,
     DistributedExpense, DistributedExpenseAllocation, PayrollCalculation, PayrollPeriod,
     PayrollRepairSnapshot,
 )
@@ -98,17 +98,20 @@ def stock_summary(start, end):
     purchased = StockReceipt.objects.filter(date__range=(start, end)).aggregate(v=Coalesce(Sum(purchase_expression), ZERO))["v"]
     all_received = StockReceipt.objects.aggregate(v=Coalesce(Sum(purchase_expression), ZERO))["v"]
     paid = SupplierPayment.objects.aggregate(v=Coalesce(Sum("amount"), ZERO))["v"]
-    net_supplier_balance = money(paid - all_received)
+    from .supplier_ledger import supplier_ledger
+    supplier_credits = sum((supplier_ledger(supplier)["summary"]["credits_total"] for supplier in Supplier.objects.all()), ZERO)
+    net_supplier_balance = money(paid + supplier_credits - all_received)
     return {
         "stock_count": stock.count(), "stock_value": money(stock_value), "purchased": money(purchased),
         "supplier_balance": net_supplier_balance,
-        "supplier_debt": money(max(all_received - paid, ZERO)),
-        "supplier_credit": money(max(paid - all_received, ZERO)),
+        "supplier_debt": money(max(all_received - paid - supplier_credits, ZERO)),
+        "supplier_credit": money(max(paid + supplier_credits - all_received, ZERO)),
         "open_warranties": WarrantyClaim.objects.exclude(status=WarrantyClaim.Status.CLOSED).count(),
     }
 
 
 def supplier_summary(supplier, start, end):
+    from .supplier_ledger import supplier_ledger
     receipts = supplier.receipts.filter(date__range=(start, end))
     items = PartItem.objects.filter(receipt__in=receipts)
     received_value = sum((receipt.total_cost for receipt in receipts), ZERO)
@@ -116,7 +119,9 @@ def supplier_summary(supplier, start, end):
     all_received = sum((receipt.total_cost for receipt in supplier.receipts.all()), ZERO)
     all_paid = supplier.payments.aggregate(v=Coalesce(Sum("amount"), ZERO))["v"]
     claims = WarrantyClaim.objects.filter(part_item__receipt__supplier=supplier, opened_at__range=(start, end))
-    balance = money(all_paid - all_received)
+    ledger = supplier_ledger(supplier, start, end)
+    credits = supplier_ledger(supplier)["summary"]["credits_total"]
+    balance = money(all_paid + credits - all_received)
     return {
         "received_count": items.count(), "received_value": money(received_value),
         "installed": items.filter(status=PartItem.Status.INSTALLED).count(),
@@ -125,8 +130,9 @@ def supplier_summary(supplier, start, end):
         "rejected": claims.filter(status=WarrantyClaim.Status.REJECTED).count(),
         "pending": claims.exclude(status__in=[WarrantyClaim.Status.APPROVED, WarrantyClaim.Status.REJECTED, WarrantyClaim.Status.CLOSED]).count(),
         "paid_period": money(paid_period), "paid": money(all_paid), "balance": balance,
-        "debt": money(max(all_received - all_paid, ZERO)),
-        "credit": money(max(all_paid - all_received, ZERO)),
+        "debt": money(max(all_received - all_paid - credits, ZERO)),
+        "credit": money(max(all_paid + credits - all_received, ZERO)),
+        "returns": ledger["summary"]["credits_total"],
     }
 
 

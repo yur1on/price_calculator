@@ -9,6 +9,7 @@ from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -16,15 +17,16 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from .forms import (
     EmployeeForm, ExpenseCategoryForm, ExpenseForm, OtherIncomeForm, PartCatalogForm,
     RepairFinanceForm, SalaryPaymentForm, StockReceiptForm, SupplierForm,
-    SupplierPaymentForm, WarrantyClaimForm,
+    SupplierPaymentForm, WarrantyClaimForm, SupplierReturnForm,
     DistributedExpenseForm, PayrollPeriodForm, MasterAccessCreateForm, MasterPasswordForm,
 )
 from .models import (
     Employee, Expense, ExpenseCategory, OtherIncome, PartCatalog, PartItem,
-    RepairFinance, SalaryPayment, StockReceipt, Supplier, SupplierPayment, WarrantyClaim,
+    RepairFinance, SalaryPayment, StockReceipt, Supplier, SupplierPayment, SupplierReturn, WarrantyClaim,
     DistributedExpense, PayrollPeriod,
 )
 from .services import close_payroll_period, employee_rows, financial_summary, monthly_chart, payroll_preview, resolve_period, stock_summary, supplier_summary
+from .supplier_ledger import supplier_ledger
 
 
 finance_staff_required = user_passes_test(
@@ -385,9 +387,10 @@ def supplier_list(request):
     total_debt = Decimal("0.00")
     total_credit = Decimal("0.00")
     for supplier in suppliers:
-        supplier.received_total = sum((receipt.total_cost for receipt in supplier.receipts.all()), Decimal("0.00"))
-        supplier.paid_total = supplier.payments.aggregate(v=Sum("amount"))["v"] or Decimal("0.00")
-        supplier.account_balance = supplier.paid_total - supplier.received_total
+        ledger_summary = supplier_ledger(supplier)["summary"]
+        supplier.received_total = ledger_summary["received"]
+        supplier.paid_total = ledger_summary["paid"]
+        supplier.account_balance = -ledger_summary["current"]
         supplier.debt_amount = max(-supplier.account_balance, Decimal("0.00"))
         supplier.credit_amount = max(supplier.account_balance, Decimal("0.00"))
         total_debt += supplier.debt_amount
@@ -427,6 +430,8 @@ def supplier_detail(request, pk):
 def supplier_payment_list(request):
     start, end, context = _period_context(request)
     qs = SupplierPayment.objects.select_related("supplier", "receipt").filter(date__range=(start, end))
+    if request.GET.get("supplier"):
+        qs = qs.filter(supplier_id=request.GET["supplier"])
     context.update(page_obj=_page(qs, request))
     return render(request, "finance/supplier_payment_list.html", context)
 
@@ -440,6 +445,103 @@ def supplier_payment_create(request):
 @finance_staff_required
 def supplier_payment_edit(request, pk):
     return _form_view(request, SupplierPaymentForm, "Изменить оплату поставщику", "Оплата обновлена.", "finance:supplier_payment_list", get_object_or_404(SupplierPayment, pk=pk))
+
+
+@finance_staff_required
+def supplier_return_list(request):
+    supplier_id = request.GET.get("supplier")
+    items = SupplierReturn.objects.select_related("supplier", "part_item__receipt__part").all()
+    if supplier_id:
+        items = items.filter(supplier_id=supplier_id)
+    return render(request, "finance/supplier_return_list.html", {"items": items, "supplier_id": supplier_id})
+
+
+@finance_staff_required
+def supplier_return_create(request):
+    initial = {"supplier": request.GET.get("supplier")} if request.GET.get("supplier") else None
+    return _form_view(request, SupplierReturnForm, "Возврат поставщику", "Возврат сохранён.", "finance:supplier_return_list", initial=initial)
+
+
+@finance_staff_required
+def supplier_return_edit(request, pk):
+    return _form_view(request, SupplierReturnForm, "Изменить возврат", "Возврат обновлён.", "finance:supplier_return_list", get_object_or_404(SupplierReturn, pk=pk))
+
+
+def _reconciliation_context(request, supplier):
+    preset = request.GET.get("period", "month")
+    if preset == "all":
+        start = end = None
+    else:
+        start, end, preset = resolve_period(request)
+    query = (request.GET.get("q") or "").strip()
+    operation_type = request.GET.get("type", "all")
+    ledger = supplier_ledger(supplier, start, end, query, operation_type)
+    return {
+        "supplier": supplier, "rows": ledger["rows"], "summary": ledger["summary"],
+        "date_from": start, "date_to": end, "period": preset, "q": query,
+        "operation_type": operation_type,
+        "operation_types": [("all", "Все операции"), ("receipt", "Поставки"), ("payment", "Оплаты"), ("return", "Возвраты"), ("warranty", "Гарантия"), ("replacement", "Замены"), ("adjustment", "Корректировки")],
+    }
+
+
+@finance_staff_required
+def supplier_reconciliation(request, pk):
+    supplier = get_object_or_404(Supplier, pk=pk)
+    return render(request, "finance/supplier_reconciliation.html", _reconciliation_context(request, supplier))
+
+
+@finance_staff_required
+def supplier_reconciliation_excel(request, pk):
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    from django.utils.text import slugify
+
+    supplier = get_object_or_404(Supplier, pk=pk)
+    context = _reconciliation_context(request, supplier)
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Сверка"
+    sheet.append(["ТЕХСФЕРА"])
+    sheet.append(["Сверка с поставщиком"])
+    sheet.append(["Поставщик", supplier.name])
+    period_text = "Всё время" if not context["date_from"] else f'{context["date_from"]:%d.%m.%Y} — {context["date_to"]:%d.%m.%Y}'
+    sheet.append(["Период", period_text])
+    sheet.append(["Дата формирования", timezone.localdate()])
+    sheet.append(["Начальное сальдо", context["summary"]["opening"]])
+    sheet.append([])
+    headers = ["Дата", "Тип операции", "Документ", "Деталь", "Модель", "Количество", "Цена", "Приход", "Возврат/зачёт", "Оплата", "Корректировка", "Долг после операции", "Комментарий"]
+    sheet.append(headers)
+    header_row = sheet.max_row
+    for row in context["rows"]:
+        sheet.append([row.date, row.operation_label, row.document, row.description, row.device_model, row.quantity, row.unit_price, row.debit or None, row.return_amount or None, row.payment or None, row.adjustment or None, row.balance, row.comment])
+    summary = context["summary"]
+    sheet.append([])
+    sheet.append(["ИТОГО"])
+    for label, value in (("Начальное сальдо", summary["opening"]), ("Поставки", summary["received"]), ("Оплаты", summary["paid"]), ("Возвраты/зачёты", summary["returns"]), ("Гарантийные корректировки", summary["warranty_adjustments"]), ("Другие корректировки", summary["adjustments"]), ("Конечное сальдо", summary["closing"])):
+        sheet.append([label, value])
+    sheet["A1"].font = Font(bold=True, size=16)
+    sheet["A2"].font = Font(bold=True, size=14)
+    for cell in sheet[header_row]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="1D4ED8")
+        cell.alignment = Alignment(wrap_text=True)
+    sheet.freeze_panes = f"A{header_row + 1}"
+    sheet.auto_filter.ref = f"A{header_row}:M{header_row + len(context['rows'])}"
+    widths = [13, 23, 18, 30, 24, 12, 14, 14, 17, 14, 17, 20, 42]
+    for index, width in enumerate(widths, 1):
+        sheet.column_dimensions[get_column_letter(index)].width = width
+    for row in sheet.iter_rows(min_row=header_row + 1):
+        row[0].number_format = "DD.MM.YYYY"
+        row[12].alignment = Alignment(wrap_text=True, vertical="top")
+        for index in range(6, 12):
+            row[index].number_format = '#,##0.00 "BYN"'
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    start_name = context["date_from"].isoformat() if context["date_from"] else "all"
+    end_name = context["date_to"].isoformat() if context["date_to"] else "all"
+    response["Content-Disposition"] = f'attachment; filename="Supplier_Reconciliation_{slugify(supplier.name) or supplier.pk}_{start_name}_{end_name}.xlsx"'
+    workbook.save(response)
+    return response
 
 
 @finance_staff_required

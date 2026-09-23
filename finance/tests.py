@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -10,11 +11,12 @@ from django.urls import reverse
 from .models import (
     Employee, Expense, ExpenseCategory, OtherIncome, PartCatalog, PartItem,
     RepairFinance, RepairPart, SalaryPayment, StockReceipt, Supplier,
-    SupplierPayment, WarrantyClaim,
+    SupplierPayment, SupplierReturn, WarrantyClaim,
     DistributedExpense, DistributedExpenseAllocation, PayrollCalculation, PayrollPeriod,
     PayrollRepairSnapshot,
 )
 from .services import close_payroll_period, employee_rows, financial_summary, payroll_preview, supplier_summary
+from .supplier_ledger import supplier_ledger
 
 
 DAY = date(2026, 9, 19)
@@ -604,3 +606,106 @@ class MasterPortalTests(TestCase):
         response = self.client.get(reverse("repairs:contacts"))
         self.assertNotContains(response, "Моя зарплата")
         self.assertEqual(self.client.get("/register/").status_code, 404)
+
+
+class SupplierReconciliationTests(TestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_superuser(username="recon-admin", password="test")
+        self.client.force_login(self.admin)
+        self.supplier = Supplier.objects.create(name="PartsMarket")
+        self.iphone = PartCatalog.objects.create(brand="Apple", device_model="iPhone 11", name="OLED")
+        self.samsung = PartCatalog.objects.create(brand="Samsung", device_model="A55", name="OLED")
+        self.first = StockReceipt.objects.create(date=date(2026, 9, 1), supplier=self.supplier, part=self.iphone, quantity=2, unit_cost="120", order_number="НК-125")
+        self.second = StockReceipt.objects.create(date=date(2026, 9, 1), supplier=self.supplier, part=self.samsung, quantity=1, unit_cost="150", order_number="НК-125")
+
+    def test_invoice_items_are_separate_and_purchases_increase_debt(self):
+        ledger = supplier_ledger(self.supplier)
+        receipts = [row for row in ledger["rows"] if row.operation_type == "receipt"]
+        self.assertEqual(len(receipts), 2)
+        self.assertEqual([row.document for row in receipts], ["НК-125", "НК-125"])
+        self.assertEqual([row.balance for row in receipts], [Decimal("240.00"), Decimal("390.00")])
+        self.assertEqual(ledger["summary"]["current"], Decimal("390.00"))
+
+    def test_partial_and_second_payment_reduce_balance(self):
+        SupplierPayment.objects.create(supplier=self.supplier, date=date(2026, 9, 3), amount="100", payment_method="transfer")
+        SupplierPayment.objects.create(supplier=self.supplier, date=date(2026, 9, 5), amount="140", payment_method="cash")
+        ledger = supplier_ledger(self.supplier)
+        payments = [row for row in ledger["rows"] if row.operation_type == "payment"]
+        self.assertEqual([row.balance for row in payments], [Decimal("290.00"), Decimal("150.00")])
+        self.assertEqual(ledger["summary"]["paid"], Decimal("240.00"))
+
+    def test_physical_return_does_not_reduce_debt_until_confirmed(self):
+        item = self.first.items.first()
+        returned = SupplierReturn.objects.create(supplier=self.supplier, part_item=item, date=date(2026, 9, 7), reason="Брак", status=SupplierReturn.Status.SENT)
+        self.assertEqual(supplier_ledger(self.supplier)["summary"]["current"], Decimal("390.00"))
+        returned.status = SupplierReturn.Status.CREDITED
+        returned.financial_date = date(2026, 9, 9)
+        returned.financial_amount = Decimal("120.00")
+        returned.save()
+        ledger = supplier_ledger(self.supplier)
+        self.assertEqual(ledger["summary"]["returns"], Decimal("120.00"))
+        self.assertEqual(ledger["summary"]["current"], Decimal("270.00"))
+
+    def test_warranty_and_replacement_have_no_fake_money(self):
+        item = self.second.items.first()
+        claim = WarrantyClaim.objects.create(part_item=item, opened_at=date(2026, 9, 4), reason="Полосы", defect_description="Полосы", sent_to_supplier_at=date(2026, 9, 6))
+        before = supplier_ledger(self.supplier)["summary"]["current"]
+        claim.status = WarrantyClaim.Status.REPLACED
+        claim.closed_at = date(2026, 9, 10)
+        claim.replacement_part_item = self.first.items.last()
+        claim.save()
+        ledger = supplier_ledger(self.supplier)
+        self.assertEqual(ledger["summary"]["current"], before)
+        self.assertTrue(any(row.operation_type == "replacement" for row in ledger["rows"]))
+
+    def test_opening_closing_search_type_and_stable_order(self):
+        SupplierPayment.objects.create(supplier=self.supplier, date=date(2026, 9, 1), amount="100", document_number="TX-1")
+        third = StockReceipt.objects.create(date=date(2026, 9, 10), supplier=self.supplier, part=self.samsung, quantity=1, unit_cost="210", order_number="НК-132")
+        period = supplier_ledger(self.supplier, date(2026, 9, 10), date(2026, 9, 30))
+        self.assertEqual(period["summary"]["opening"], Decimal("290.00"))
+        self.assertEqual(period["summary"]["closing"], Decimal("500.00"))
+        self.assertEqual(period["rows"][0].description, third.part.name)
+        search = supplier_ledger(self.supplier, query="A55")
+        self.assertTrue(search["rows"])
+        self.assertTrue(all("A55".lower() in row.search_text for row in search["rows"]))
+        invoice = supplier_ledger(self.supplier, query="НК-125")
+        self.assertEqual(len([row for row in invoice["rows"] if row.operation_type == "receipt"]), 2)
+        only_payments = supplier_ledger(self.supplier, operation_type="payment")
+        self.assertEqual({row.operation_type for row in only_payments["rows"]}, {"payment"})
+        same_day = supplier_ledger(self.supplier, date(2026, 9, 1), date(2026, 9, 1))["rows"]
+        self.assertEqual([row.operation_type for row in same_day], ["receipt", "receipt", "payment"])
+
+    def test_installing_part_does_not_change_supplier_debt(self):
+        master = Employee.objects.create(name="Мастер сверки", default_percent="35")
+        repair = RepairFinance.objects.create(date=date(2026, 9, 8), description="Установка", revenue="300", part_cost="0", employee=master, master_percent="35")
+        before = supplier_ledger(self.supplier)["summary"]["current"]
+        RepairPart.objects.create(repair=repair, part_item=self.first.items.first(), cost_used="120", installed_at=date(2026, 9, 8))
+        self.assertEqual(supplier_ledger(self.supplier)["summary"]["current"], before)
+
+    def test_web_and_excel_match_selected_supplier_and_period(self):
+        SupplierPayment.objects.create(supplier=self.supplier, date=date(2026, 9, 3), amount="100", document_number="PAY-1")
+        params = {"period": "custom", "from": "2026-09-01", "to": "2026-09-30"}
+        web = self.client.get(reverse("finance:supplier_reconciliation", args=[self.supplier.pk]), params)
+        self.assertEqual(web.status_code, 200)
+        self.assertContains(web, "PartsMarket")
+        self.assertEqual([row.document for row in web.context["rows"]].count("НК-125"), 2)
+        excel = self.client.get(reverse("finance:supplier_reconciliation_excel", args=[self.supplier.pk]), params)
+        self.assertEqual(excel.status_code, 200)
+        self.assertEqual(excel["Content-Type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        from openpyxl import load_workbook
+        sheet = load_workbook(BytesIO(excel.content), data_only=True).active
+        values = [cell.value for row in sheet.iter_rows() for cell in row]
+        self.assertIn("PartsMarket", values)
+        self.assertIn("01.09.2026 — 30.09.2026", values)
+        self.assertEqual(values.count("НК-125"), 2)
+        self.assertIn("PAY-1", values)
+        self.assertIn(Decimal("290.00"), [Decimal(str(value)) for value in values if isinstance(value, (int, float))])
+
+    def test_reconciliation_is_protected_from_master_and_regular_user(self):
+        master_user = get_user_model().objects.create_user(username="recon-master", password="test")
+        employee = Employee.objects.create(name="Закрытый мастер", default_percent="35", user=master_user)
+        url = reverse("finance:supplier_reconciliation", args=[self.supplier.pk])
+        self.client.force_login(master_user)
+        self.assertEqual(self.client.get(url).status_code, 302)
+        self.client.force_login(get_user_model().objects.create_user(username="recon-client", password="test"))
+        self.assertEqual(self.client.get(url).status_code, 302)
