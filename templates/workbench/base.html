@@ -1,0 +1,35 @@
+{% extends "repairs/base.html" %}
+{% load static %}
+{% block title %}{% block workbench_title %}Техсфера CRM{% endblock %}{% endblock %}
+{% block robots %}noindex, nofollow{% endblock %}
+{% block extra_head %}{{ block.super }}<link rel="stylesheet" href="{% static 'workbench/css/app.css' %}?v=4">{% block workbench_head %}{% endblock %}{% endblock %}
+{% block content %}
+<div class="wb-app" data-wb-app>
+  <div class="wb-backdrop" data-wb-close></div>
+  {% include "workbench/components/sidebar.html" %}
+  <div class="wb-stage">
+    <header class="wb-topbar">
+      <button class="wb-menu-toggle" type="button" data-wb-toggle aria-label="Открыть меню"><i class="fa-solid fa-bars"></i></button>
+      <a class="wb-mobile-brand" href="{% if account_is_client %}{% url 'accounts:client_dashboard' %}{% else %}{% url 'crm:dashboard' %}{% endif %}">Техсфера <span>{% if account_is_client %}Cabinet{% else %}CRM{% endif %}</span></a>
+      {% if perms.crm.access_crm %}<button class="wb-global-search-button" type="button" data-command-open aria-label="Открыть глобальный поиск"><i class="fa-solid fa-magnifying-glass"></i><span>Найти клиента, ремонт, устройство…</span><kbd>⌘ K</kbd></button>{% endif %}
+      <div class="wb-topbar__spacer"></div>
+      {% if account_is_client %}<a class="wb-button wb-button--primary wb-client-book" href="{% url 'repairs:brand_list' %}"><i class="fa-solid fa-calendar-plus"></i><span>Записаться</span></a>{% else %}<details class="wb-create-menu"><summary class="wb-button wb-button--primary"><i class="fa-solid fa-plus"></i><span>Создать</span></summary><div class="wb-create-menu__panel">{% if perms.crm.add_crmorder %}<a href="{% url 'crm:order_create' %}" hx-get="{% url 'crm:order_create' %}" hx-target="#intake-modal-host" hx-swap="innerHTML"><i class="fa-solid fa-screwdriver-wrench"></i><span><b>Новый ремонт</b><small>Принять устройство</small></span></a>{% endif %}{% if perms.crm.add_crmclient %}<a href="{% url 'crm:client_create' %}"><i class="fa-solid fa-user-plus"></i><span><b>Новый клиент</b><small>Добавить контакт</small></span></a>{% endif %}{% if request.user.is_staff and perms.finance %}<a href="{% url 'finance:expense_create' %}" hx-get="{% url 'finance:expense_create' %}" hx-target="#app-modal-content"><i class="fa-solid fa-arrow-trend-down"></i><span><b>Расход</b><small>Добавить операцию</small></span></a><a href="{% url 'finance:income_create' %}" hx-get="{% url 'finance:income_create' %}" hx-target="#app-modal-content"><i class="fa-solid fa-arrow-trend-up"></i><span><b>Доход</b><small>Добавить операцию</small></span></a>{% endif %}</div></details>{% endif %}
+      <div class="wb-user">
+        <span class="wb-user__avatar">{{ request.user.username|first|upper }}</span>
+        <span class="wb-user__text"><b>{{ request.user.get_full_name|default:request.user.username }}</b><small>{{ account_role_label }}</small></span>
+      </div>
+    </header>
+    <main class="wb-main">
+      {% include "workbench/components/messages.html" %}
+      {% block workbench_content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% if perms.crm.access_crm %}<div class="wb-command" data-command hidden><button class="wb-command__backdrop" type="button" data-command-close aria-label="Закрыть поиск"></button><section class="wb-command__dialog" role="dialog" aria-modal="true" aria-labelledby="wb-command-title"><div class="wb-command__input"><i class="fa-solid fa-magnifying-glass"></i><label class="sr-only" id="wb-command-title" for="wb-global-search">Глобальный поиск</label><input id="wb-global-search" name="q" placeholder="Номер, клиент, телефон, модель…" autocomplete="off" hx-get="{% url 'crm:global_search' %}" hx-trigger="keyup changed delay:350ms" hx-target="#wb-command-results" hx-indicator="#wb-command-spinner"><span id="wb-command-spinner" class="htmx-indicator wb-inline-spinner"></span><button type="button" data-command-close aria-label="Закрыть"><i class="fa-solid fa-xmark"></i></button></div><div id="wb-command-results" class="wb-command__results"><div class="wb-command-empty"><i class="fa-solid fa-keyboard"></i><span>Начните вводить запрос</span></div></div></section></div>{% endif %}
+<div id="wb-loading" class="wb-loading htmx-indicator" aria-hidden="true"><span></span></div>
+<div id="app-modal" class="wb-modal{% block app_modal_class %}{% endblock %}" data-wb-modal {% block app_modal_state %}hidden{% endblock %}><button class="wb-modal__backdrop" type="button" data-modal-close aria-label="Закрыть"></button><section class="wb-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="app-modal-title"><button class="wb-modal__close" type="button" data-modal-close aria-label="Закрыть"><i class="fa-solid fa-xmark"></i></button><div id="app-modal-content">{% block app_modal_content %}{% endblock %}</div></section></div>
+<div id="intake-modal-host">{% block intake_modal_content %}{% endblock %}</div>
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" defer></script>
+<script src="{% static 'workbench/js/app.js' %}?v=4" defer></script>
+{% block workbench_scripts %}{% endblock %}
+{% endblock %}

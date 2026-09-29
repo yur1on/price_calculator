@@ -1,0 +1,9 @@
+<div class="crm-quick-field">
+  {% if perms.crm.change_crmorder %}
+  <form method="post" action="{% url 'crm:order_assignee' order.pk %}" hx-post="{% url 'crm:order_assignee' order.pk %}" hx-target="closest .crm-quick-field" hx-swap="outerHTML">
+    {% csrf_token %}<label class="sr-only" for="employee-{{ order.pk }}">Мастер</label>
+    <select class="crm-quick-select" id="employee-{{ order.pk }}" name="employee" onchange="this.form.requestSubmit()"><option value="">Не назначен</option>{% for employee in employees %}<option value="{{ employee.pk }}" {% if order.employee_id == employee.pk %}selected{% endif %}>{{ employee.name }}</option>{% endfor %}</select>
+    <span class="htmx-indicator wb-inline-spinner" aria-label="Обновление"></span>
+  </form>
+  {% else %}<strong>{{ order.employee.name|default:"Не назначен" }}</strong>{% endif %}
+</div>

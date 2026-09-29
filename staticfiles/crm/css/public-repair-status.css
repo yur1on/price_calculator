@@ -1,0 +1,41 @@
+.repair-tracking-page{width:min(100%,860px);margin:16px auto 48px;color:var(--ink)}
+.repair-tracking-hero{display:flex;justify-content:center;align-items:center;gap:16px;padding:24px 16px 28px;text-align:left}
+.repair-tracking-hero__icon{display:inline-flex;flex:0 0 48px;width:48px;height:48px;align-items:center;justify-content:center;border:1px solid var(--brd);border-radius:var(--radius);background:#fff;color:#111827;box-shadow:0 8px 24px rgba(15,23,42,.06);font-size:19px}
+.repair-tracking-hero h1{margin:0;font-size:clamp(28px,5vw,40px);line-height:1.12;letter-spacing:-.025em}
+.repair-tracking-hero p{margin:5px 0 0;color:var(--muted);line-height:1.5}
+.repair-tracking-hero .repair-tracking-hero__lead{margin-top:8px;color:#334155;font-weight:650}
+.repair-tracking-search,.repair-tracking-result{border:1px solid var(--brd);border-radius:var(--radius);background:#fff;box-shadow:0 12px 36px rgba(15,23,42,.065)}
+.repair-tracking-search{padding:24px}
+.repair-tracking-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}
+.repair-tracking-field label{margin:0 0 8px;color:#334155;font-size:14px;font-weight:700}
+.repair-tracking-field input{width:100%;height:52px;padding:0 16px;border:1px solid var(--brd2);border-radius:10px;background:#fff;color:var(--ink);font:700 17px/1 system-ui,-apple-system,Segoe UI,Roboto,Arial;letter-spacing:.06em;text-transform:uppercase;transition:border-color .15s ease,box-shadow .15s ease}
+.repair-tracking-field input:focus{border-color:#111827;outline:none;box-shadow:0 0 0 3px rgba(15,23,42,.1)}
+.repair-tracking-submit{display:inline-flex;height:52px;align-items:center;justify-content:center;gap:8px;padding:0 20px;border-radius:10px;font-weight:750;white-space:nowrap;cursor:pointer}
+.repair-tracking-help{display:flex;align-items:center;gap:7px;margin:12px 0 0;color:var(--muted);font-size:13px;line-height:1.45}
+.repair-tracking-alert{display:flex;gap:12px;align-items:flex-start;margin-top:16px;padding:14px 16px;border:1px solid #fecdd3;border-radius:var(--radius);background:#fff1f2;color:#9f1239}
+.repair-tracking-alert>i{margin-top:3px}.repair-tracking-alert strong,.repair-tracking-alert span{display:block}.repair-tracking-alert span{margin-top:3px;font-size:14px;line-height:1.45}
+.repair-tracking-result{margin-top:24px;padding:32px}
+.repair-tracking-result__header{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,auto);gap:24px;align-items:start;background:transparent;color:var(--ink)}
+.repair-tracking-order{display:block;margin-bottom:8px;color:var(--muted);font-size:13px;font-weight:650}
+.repair-tracking-order b{color:#334155;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.04em}
+.repair-tracking-result h2{overflow-wrap:anywhere;margin:0;font-size:clamp(25px,5vw,34px);line-height:1.18;letter-spacing:-.02em}
+.repair-tracking-status{text-align:right}
+.repair-tracking-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-size:14px;font-weight:750}
+.repair-tracking-badge i{width:8px;height:8px;border-radius:50%;background:currentColor}
+.repair-tracking-badge--ready,.repair-tracking-badge--issued{background:#ecfdf5;color:#047857}.repair-tracking-badge--canceled{background:#f1f5f9;color:#475569}
+.repair-tracking-status p{max-width:310px;margin:10px 0 0 auto;color:var(--muted);font-size:14px;line-height:1.5}
+.repair-tracking-highlight{display:flex;gap:12px;align-items:flex-start;margin-top:24px;padding:16px;border:1px solid #a7f3d0;border-radius:var(--radius);background:#ecfdf5;color:#065f46}
+.repair-tracking-highlight--complete{border-color:#bbf7d0;background:#f0fdf4;color:#166534}
+.repair-tracking-highlight__icon{display:inline-flex;flex:0 0 28px;width:28px;height:28px;align-items:center;justify-content:center;border-radius:50%;background:#fff}
+.repair-tracking-highlight strong{font-size:16px}.repair-tracking-highlight p{margin:3px 0 0;font-size:14px;line-height:1.45}
+.repair-tracking-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:24px 0 0}
+.repair-tracking-summary>div{min-width:0;padding:16px;border:1px solid var(--brd);border-radius:var(--radius);background:#f8fafc}
+.repair-tracking-summary dt{color:var(--muted);font-size:12px;font-weight:650}.repair-tracking-summary dd{overflow-wrap:anywhere;margin:6px 0 0;color:var(--ink);font-size:16px;font-weight:750;line-height:1.35}.repair-tracking-pending{color:#92400e}
+.repair-tracking-section{margin-top:32px}.repair-tracking-section__title{display:flex;align-items:center;gap:9px;margin-bottom:14px}.repair-tracking-section__title>i{color:var(--muted);font-size:15px}.repair-tracking-section h3{margin:0;font-size:18px;line-height:1.3}
+.repair-tracking-issue p{overflow-wrap:anywhere;margin:0;padding:16px;border:1px solid var(--brd);border-radius:var(--radius);background:#f8fafc;line-height:1.65}
+.repair-tracking-work-list{overflow:hidden;border:1px solid var(--brd);border-radius:var(--radius)}.repair-tracking-work{display:flex;justify-content:space-between;gap:16px;padding:14px 16px}.repair-tracking-work+.repair-tracking-work{border-top:1px solid var(--brd)}.repair-tracking-work strong{overflow-wrap:anywhere}.repair-tracking-work span{flex:0 0 auto;color:#334155;font-weight:700}
+.repair-tracking-timeline{margin:0;padding:0;list-style:none}.repair-tracking-event{position:relative;display:grid;grid-template-columns:20px minmax(0,1fr);gap:12px;min-height:68px;padding-bottom:20px}.repair-tracking-event:last-child{min-height:auto;padding-bottom:0}.repair-tracking-event::before{content:"";position:absolute;top:14px;bottom:-2px;left:9px;width:2px;background:#e2e8f0}.repair-tracking-event:last-child::before{display:none}.repair-tracking-event__dot{position:relative;z-index:1;width:12px;height:12px;margin:4px 0 0 4px;border:3px solid #fff;border-radius:50%;background:#94a3b8;box-shadow:0 0 0 2px #cbd5e1}.repair-tracking-event--current .repair-tracking-event__dot{background:#111827;box-shadow:0 0 0 2px #111827}.repair-tracking-event strong{display:block;font-size:15px;line-height:1.35}.repair-tracking-event--current strong{color:#111827}.repair-tracking-event time{display:block;margin-top:4px;color:var(--muted);font-size:13px;line-height:1.4}
+.repair-tracking-warranty{display:flex;align-items:center;gap:12px;margin-top:32px;padding:16px;border:1px solid #bae6fd;border-radius:var(--radius);background:#f0f9ff;color:#075985}.repair-tracking-warranty__icon{display:inline-flex;flex:0 0 38px;width:38px;height:38px;align-items:center;justify-content:center;border-radius:50%;background:#fff}.repair-tracking-warranty span,.repair-tracking-warranty strong{display:block}.repair-tracking-warranty span{font-size:13px}.repair-tracking-warranty strong{margin-top:3px}
+@media(max-width:640px){.repair-tracking-page{margin-top:0;margin-bottom:32px}.repair-tracking-hero{display:block;padding:20px 4px 24px;text-align:center}.repair-tracking-hero__icon{margin:0 auto 12px}.repair-tracking-hero h1{font-size:clamp(26px,9vw,34px)}.repair-tracking-search,.repair-tracking-result{padding:20px}.repair-tracking-form,.repair-tracking-result__header{grid-template-columns:1fr}.repair-tracking-submit{width:100%}.repair-tracking-status{text-align:left}.repair-tracking-status p{margin-left:0}.repair-tracking-summary{grid-template-columns:1fr}.repair-tracking-section{margin-top:24px}}
+@media(max-width:360px){.repair-tracking-search,.repair-tracking-result{padding:16px}.repair-tracking-work{display:grid;gap:6px}}
+@media(prefers-reduced-motion:reduce){.repair-tracking-field input{transition:none}}

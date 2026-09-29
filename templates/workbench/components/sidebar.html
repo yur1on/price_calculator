@@ -1,0 +1,40 @@
+<aside class="wb-sidebar" data-wb-sidebar>
+  <a class="wb-brand" href="{% if account_is_client %}{% url 'accounts:client_dashboard' %}{% else %}{% url 'crm:dashboard' %}{% endif %}"><span class="wb-brand__mark">T</span><span>Техсфера<small>{% if account_is_client %}Личный кабинет{% else %}Service workspace{% endif %}</small></span></a>
+  <nav class="wb-nav" aria-label="Рабочие разделы">
+    {% if account_is_client %}
+      <span class="wb-nav__label">Личный кабинет</span>
+      <a href="{% url 'accounts:client_dashboard' %}" class="{% if request.resolver_match.url_name == 'client_dashboard' %}is-active{% endif %}"><i class="fa-solid fa-house"></i><span>Главная</span></a>
+      <a href="{% url 'accounts:client_appointments' %}" class="{% if 'client_appointment' in request.resolver_match.url_name %}is-active{% endif %}"><i class="fa-solid fa-calendar-check"></i><span>Мои записи</span></a>
+      <a href="{% url 'accounts:client_repairs' %}" class="{% if 'client_repair' in request.resolver_match.url_name %}is-active{% endif %}"><i class="fa-solid fa-screwdriver-wrench"></i><span>Мои ремонты</span></a>
+      <a href="{% url 'accounts:client_devices' %}" class="{% if request.resolver_match.url_name == 'client_devices' %}is-active{% endif %}"><i class="fa-solid fa-mobile-screen"></i><span>Мои устройства</span></a>
+      <a href="{% url 'accounts:client_warranties' %}" class="{% if request.resolver_match.url_name == 'client_warranties' %}is-active{% endif %}"><i class="fa-solid fa-shield-halved"></i><span>Гарантии</span></a>
+      <a href="{% url 'accounts:client_profile' %}" class="{% if request.resolver_match.url_name == 'client_profile' or request.resolver_match.url_name == 'phone_verify' or request.resolver_match.url_name == 'password_change' %}is-active{% endif %}"><i class="fa-solid fa-user"></i><span>Профиль</span></a>
+      <span class="wb-nav__label">Сервис</span><a href="{% url 'repairs:brand_list' %}"><i class="fa-solid fa-calendar-plus"></i><span>Записаться на ремонт</span></a>
+    {% else %}
+    <span class="wb-nav__label">Работа</span>
+    {% if perms.crm.access_crm %}
+      <a href="{% url 'crm:dashboard' %}" class="{% if request.resolver_match.app_name == 'crm' and request.resolver_match.url_name == 'dashboard' %}is-active{% endif %}"><i class="fa-solid fa-chart-pie"></i><span>Обзор CRM</span></a>
+      <a href="{% url 'crm:work_queue' %}" class="{% if request.resolver_match.url_name == 'work_queue' or 'work_queue_' in request.resolver_match.url_name %}is-active{% endif %}"><i class="fa-solid fa-list-check"></i><span>Моя работа</span></a>
+      <a href="{% url 'crm:order_list' %}" class="{% if request.resolver_match.app_name == 'crm' and 'order' in request.resolver_match.url_name %}is-active{% endif %}"><i class="fa-solid fa-screwdriver-wrench"></i><span>Ремонты</span></a>
+      <a href="{% url 'crm:appointment_list' %}" class="{% if 'appointment' in request.resolver_match.url_name %}is-active{% endif %}"><i class="fa-solid fa-calendar-check"></i><span>Записи</span>{% if upcoming_appointments_badge %}<small class="wb-nav-badge">{{ upcoming_appointments_badge }}</small>{% endif %}</a>
+      <a href="{% url 'crm:client_list' %}" class="{% if request.resolver_match.app_name == 'crm' and 'client' in request.resolver_match.url_name %}is-active{% endif %}"><i class="fa-solid fa-users"></i><span>Клиенты</span></a>
+      <a href="{% url 'crm:capacity' %}" class="{% if request.resolver_match.url_name == 'capacity' %}is-active{% endif %}"><i class="fa-solid fa-gauge-high"></i><span>Загрузка</span></a>
+    {% endif %}
+    {% if account_is_admin %}<a href="{% url 'crm:analytics' %}" class="{% if request.resolver_match.url_name == 'analytics' %}is-active{% endif %}"><i class="fa-solid fa-chart-line"></i><span>Аналитика</span></a>{% endif %}
+    {% if account_is_master %}
+      <span class="wb-nav__label">Мастерская</span>
+      <a href="{% url 'finance:stock_list' %}" class="{% if request.resolver_match.url_name == 'stock_list' or request.resolver_match.url_name == 'part_item_detail' %}is-active{% endif %}"><i class="fa-solid fa-boxes-stacked"></i><span>Склад</span></a>
+      <a href="{% url 'finance:supplier_list' %}" class="{% if 'supplier' in request.resolver_match.url_name %}is-active{% endif %}"><i class="fa-solid fa-truck-field"></i><span>Поставщики</span></a>
+      <a href="{% url 'finance:warranty_list' %}" class="{% if 'warranty' in request.resolver_match.url_name %}is-active{% endif %}"><i class="fa-solid fa-shield-halved"></i><span>Гарантии</span></a>
+      <a href="{% url 'accounts:my_salary' %}" class="{% if request.resolver_match.url_name == 'my_salary' %}is-active{% endif %}"><i class="fa-solid fa-coins"></i><span>Моя зарплата</span></a>
+    {% elif request.user.is_staff and perms.finance %}
+      <span class="wb-nav__label">Учёт</span>
+      <a href="{% url 'finance:dashboard' %}" class="{% if request.resolver_match.app_name == 'finance' and request.resolver_match.url_name == 'dashboard' %}is-active{% endif %}"><i class="fa-solid fa-wallet"></i><span>Финансы</span></a>
+      <a href="{% url 'finance:stock_list' %}"><i class="fa-solid fa-boxes-stacked"></i><span>Склад</span></a>
+      <a href="{% url 'finance:supplier_list' %}"><i class="fa-solid fa-truck-field"></i><span>Поставщики</span></a>
+      <a href="{% url 'finance:salary_list' %}"><i class="fa-solid fa-coins"></i><span>Зарплата</span></a>
+    {% endif %}
+    {% if perms.crm.manage_crm_settings %}<span class="wb-nav__label">Система</span><a href="{% url 'crm:settings' %}"><i class="fa-solid fa-gear"></i><span>Настройки</span></a>{% endif %}{% endif %}
+  </nav>
+  <div class="wb-sidebar__foot"><form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="wb-sidebar-logout"><i class="fa-solid fa-arrow-right-from-bracket"></i><span>Выйти</span></button></form><a href="{% url 'home' %}"><i class="fa-solid fa-arrow-up-right-from-square"></i><span>Основной сайт</span></a></div>
+</aside>

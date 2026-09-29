@@ -3,13 +3,14 @@ from operator import attrgetter
 from decimal import Decimal
 
 from django.contrib import messages
-from django.contrib.auth.decorators import user_passes_test
+from functools import wraps
 from django.core.paginator import Paginator
 from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.http import HttpResponse
+import json
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -19,6 +20,7 @@ from .forms import (
     RepairFinanceForm, SalaryPaymentForm, StockReceiptForm, SupplierForm,
     SupplierPaymentForm, WarrantyClaimForm, SupplierReturnForm,
     DistributedExpenseForm, PayrollPeriodForm, MasterAccessCreateForm, MasterPasswordForm,
+    WorkshopWarrantyClaimForm,
 )
 from .models import (
     Employee, Expense, ExpenseCategory, OtherIncome, PartCatalog, PartItem,
@@ -27,16 +29,44 @@ from .models import (
 )
 from .services import close_payroll_period, employee_rows, financial_summary, monthly_chart, payroll_preview, resolve_period, stock_summary, supplier_summary
 from .supplier_ledger import supplier_ledger
+from accounts.access import is_approved_master, is_tehsfera_admin, profile_for
 
 
-finance_staff_required = user_passes_test(
-    lambda user: user.is_active and user.is_staff and user.has_module_perms("finance"),
-    login_url="admin:login",
-)
+def finance_staff_required(view):
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect(f"/accounts/login/?next={request.get_full_path()}")
+        if not request.user.is_active or not (is_tehsfera_admin(request.user) or (request.user.is_staff and request.user.has_module_perms("finance"))):
+            if profile_for(request.user) is None:
+                return redirect(f"/admin/login/?next={request.get_full_path()}")
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied
+        return view(request, *args, **kwargs)
+    return wrapped
+
+
+def workshop_staff_required(view):
+    """Working inventory access without exposing owner finance views."""
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect(f"/accounts/login/?next={request.get_full_path()}")
+        if not request.user.is_active or not (is_tehsfera_admin(request.user) or is_approved_master(request.user)):
+            if profile_for(request.user) is None:
+                return redirect(f"/admin/login/?next={request.get_full_path()}")
+            from django.core.exceptions import PermissionDenied
+            raise PermissionDenied
+        return view(request, *args, **kwargs)
+    return wrapped
 
 
 def _page(queryset, request, size=40):
     return Paginator(queryset, size).get_page(request.GET.get("page"))
+
+
+def _is_htmx(request):
+    return request.headers.get("HX-Request") == "true"
 
 
 def _period_context(request):
@@ -50,11 +80,23 @@ def _form_view(request, form_class, title, success_message, return_name, instanc
     form = form_class(request.POST or None, instance=instance, initial=initial)
     if request.method == "POST" and form.is_valid():
         form.save()
+        if _is_htmx(request):
+            response = HttpResponse(status=204)
+            response["HX-Trigger"] = json.dumps({
+                "workbench:modal-close": {},
+                "workbench:toast": {"message": success_message, "level": "success"},
+                "finance:changed": {},
+            })
+            return response
         messages.success(request, success_message)
         return redirect(return_url or return_name)
-    return render(request, "finance/form.html", {
+    template = "finance/partials/modal_form.html" if _is_htmx(request) else "finance/form.html"
+    response = render(request, template, {
         "form": form, "title": title, "return_name": return_name, "return_url": return_url, "show_calculator": show_calculator,
     })
+    if _is_htmx(request) and request.method == "POST":
+        response.status_code = 422
+    return response
 
 
 def _delete_view(request, obj, title, return_name):
@@ -120,7 +162,7 @@ def repair_list(request):
     if query:
         qs = qs.filter(Q(description__icontains=query) | Q(comment__icontains=query))
     context.update(page_obj=_page(qs.order_by(sort if sort in allowed else "-date", "-created_at"), request), employees=Employee.objects.all(), selected_employee=employee_id, q=query, sort=sort)
-    return render(request, "finance/repair_list.html", context)
+    return render(request, "finance/partials/repair_results.html" if _is_htmx(request) else "finance/repair_list.html", context)
 
 
 @finance_staff_required
@@ -309,7 +351,7 @@ def employee_percent(request, pk):
     return JsonResponse({"percent": "0.00" if employee.is_owner else f"{employee.default_percent:.2f}", "is_owner": employee.is_owner})
 
 
-@finance_staff_required
+@workshop_staff_required
 def stock_list(request):
     query = (request.GET.get("q") or "").strip()
     status = request.GET.get("status", PartItem.Status.IN_STOCK)
@@ -324,17 +366,19 @@ def stock_list(request):
         )
         if query.upper().lstrip("#P").isdigit():
             qs = qs | PartItem.objects.filter(pk=int(query.upper().lstrip("#P"))).select_related("receipt__part", "receipt__supplier")
-    return render(request, "finance/stock_list.html", {"page_obj": _page(qs.distinct(), request), "q": query, "status": status, "statuses": PartItem.Status.choices})
+    context = {"page_obj": _page(qs.distinct(), request), "q": query, "status": status, "statuses": PartItem.Status.choices}
+    return render(request, "finance/partials/stock_results.html" if _is_htmx(request) else "finance/stock_list.html", context)
 
 
-@finance_staff_required
+@workshop_staff_required
 def part_item_detail(request, pk):
     item = get_object_or_404(PartItem.objects.select_related("receipt__part", "receipt__supplier").prefetch_related("warranty_claims"), pk=pk)
     usage = getattr(item, "repair_usage", None)
-    return render(request, "finance/part_item_detail.html", {"item": item, "usage": usage})
+    template = "finance/part_item_work_detail.html" if is_approved_master(request.user) else "finance/part_item_detail.html"
+    return render(request, template, {"item": item, "usage": usage})
 
 
-@finance_staff_required
+@workshop_staff_required
 def receipt_list(request):
     start, end, context = _period_context(request)
     qs = StockReceipt.objects.select_related("supplier", "part").filter(date__range=(start, end))
@@ -345,7 +389,7 @@ def receipt_list(request):
         qs = qs.filter(Q(part__brand__icontains=query) | Q(part__device_model__icontains=query) | Q(part__name__icontains=query) | Q(order_number__icontains=query))
     total_value = sum((row.total_cost for row in qs), 0)
     context.update(page_obj=_page(qs, request), suppliers=Supplier.objects.all(), selected_supplier=supplier_id, q=query, total_value=total_value)
-    return render(request, "finance/receipt_list.html", context)
+    return render(request, "finance/receipt_work_list.html" if is_approved_master(request.user) else "finance/receipt_list.html", context)
 
 
 @finance_staff_required
@@ -358,7 +402,7 @@ def receipt_edit(request, pk):
     return _form_view(request, StockReceiptForm, "Изменить поступление", "Поступление обновлено.", "finance:receipt_list", get_object_or_404(StockReceipt, pk=pk))
 
 
-@finance_staff_required
+@workshop_staff_required
 def catalog_list(request):
     query = (request.GET.get("q") or "").strip()
     qs = PartCatalog.objects.all()
@@ -367,23 +411,25 @@ def catalog_list(request):
     return render(request, "finance/catalog_list.html", {"page_obj": _page(qs, request), "q": query})
 
 
-@finance_staff_required
+@workshop_staff_required
 def catalog_create(request):
     return _form_view(request, PartCatalogForm, "Добавить наименование", "Запчасть добавлена в каталог.", "finance:catalog_list")
 
 
-@finance_staff_required
+@workshop_staff_required
 def catalog_edit(request, pk):
     return _form_view(request, PartCatalogForm, "Изменить наименование", "Каталог обновлён.", "finance:catalog_list", get_object_or_404(PartCatalog, pk=pk))
 
 
-@finance_staff_required
+@workshop_staff_required
 def supplier_list(request):
     query = (request.GET.get("q") or "").strip()
     qs = Supplier.objects.all()
     if query:
         qs = qs.filter(Q(name__icontains=query) | Q(contact_person__icontains=query) | Q(phone__icontains=query))
     suppliers = list(qs)
+    if is_approved_master(request.user):
+        return render(request, "finance/supplier_work_list.html", {"suppliers": suppliers, "q": query})
     total_debt = Decimal("0.00")
     total_credit = Decimal("0.00")
     for supplier in suppliers:
@@ -402,12 +448,12 @@ def supplier_list(request):
     })
 
 
-@finance_staff_required
+@workshop_staff_required
 def supplier_create(request):
     return _form_view(request, SupplierForm, "Добавить поставщика", "Поставщик сохранён.", "finance:supplier_list")
 
 
-@finance_staff_required
+@workshop_staff_required
 def supplier_edit(request, pk):
     return _form_view(request, SupplierForm, "Изменить поставщика", "Поставщик обновлён.", "finance:supplier_list", get_object_or_404(Supplier, pk=pk))
 
@@ -417,13 +463,15 @@ def supplier_delete(request, pk):
     return _delete_view(request, get_object_or_404(Supplier, pk=pk), "Поставщик", "finance:supplier_list")
 
 
-@finance_staff_required
+@workshop_staff_required
 def supplier_detail(request, pk):
     supplier = get_object_or_404(Supplier, pk=pk)
     start, end, context = _period_context(request)
     items = PartItem.objects.filter(receipt__supplier=supplier, receipt__date__range=(start, end)).select_related("receipt__part").prefetch_related("warranty_claims")
-    context.update(supplier=supplier, stats=supplier_summary(supplier, start, end), page_obj=_page(items, request))
-    return render(request, "finance/supplier_detail.html", context)
+    context.update(supplier=supplier, page_obj=_page(items, request))
+    if not is_approved_master(request.user):
+        context["stats"] = supplier_summary(supplier, start, end)
+    return render(request, "finance/supplier_work_detail.html" if is_approved_master(request.user) else "finance/supplier_detail.html", context)
 
 
 @finance_staff_required
@@ -549,7 +597,7 @@ def supplier_payment_delete(request, pk):
     return _delete_view(request, get_object_or_404(SupplierPayment, pk=pk), "Оплата поставщику", "finance:supplier_payment_list")
 
 
-@finance_staff_required
+@workshop_staff_required
 def warranty_list(request):
     query = (request.GET.get("q") or "").strip()
     qs = WarrantyClaim.objects.select_related("part_item__receipt__part", "part_item__receipt__supplier")
@@ -558,13 +606,14 @@ def warranty_list(request):
     return render(request, "finance/warranty_list.html", {"page_obj": _page(qs, request), "q": query})
 
 
-@finance_staff_required
+@workshop_staff_required
 def warranty_create(request):
     initial = {"part_item": request.GET.get("part_item")} if request.GET.get("part_item") else None
-    return _form_view(request, WarrantyClaimForm, "Открыть гарантийный случай", "Гарантийный случай открыт.", "finance:warranty_list", initial=initial)
+    form_class = WorkshopWarrantyClaimForm if is_approved_master(request.user) else WarrantyClaimForm
+    return _form_view(request, form_class, "Открыть гарантийный случай", "Гарантийный случай открыт.", "finance:warranty_list", initial=initial)
 
 
-@finance_staff_required
+@workshop_staff_required
 def warranty_detail(request, pk):
     claim = get_object_or_404(
         WarrantyClaim.objects.select_related(
@@ -572,12 +621,14 @@ def warranty_detail(request, pk):
             "part_item__repair_usage__repair__employee",
         ), pk=pk,
     )
-    return render(request, "finance/warranty_detail.html", {"claim": claim})
+    template = "finance/warranty_work_detail.html" if is_approved_master(request.user) else "finance/warranty_detail.html"
+    return render(request, template, {"claim": claim})
 
 
-@finance_staff_required
+@workshop_staff_required
 def warranty_edit(request, pk):
-    return _form_view(request, WarrantyClaimForm, "Изменить гарантийный случай", "Гарантийный случай обновлён.", "finance:warranty_list", get_object_or_404(WarrantyClaim, pk=pk))
+    form_class = WorkshopWarrantyClaimForm if is_approved_master(request.user) else WarrantyClaimForm
+    return _form_view(request, form_class, "Изменить гарантийный случай", "Гарантийный случай обновлён.", "finance:warranty_list", get_object_or_404(WarrantyClaim, pk=pk))
 
 
 @finance_staff_required

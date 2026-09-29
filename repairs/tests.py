@@ -1,5 +1,6 @@
 from datetime import timedelta
 from io import BytesIO
+from unittest.mock import patch
 
 from django.core import signing
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -8,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
-from repairs.models import Appointment, ModelRepairPrice, PhoneBrand, PhoneModel, RepairType, WorkingHour
+from repairs.models import Appointment, ModelRepairPrice, PhoneBrand, PhoneModel, ReferralPartner, RepairType, WorkingHour
 from repairs.views import BOOKING_SUCCESS_TOKEN_SALT
 from news.models import NewsCategory, NewsImage, NewsPost
 
@@ -112,6 +113,24 @@ class BookingSuccessViewTests(TestCase):
         self.assertNotContains(response, "Можно добавить к этой заявке")
         self.assertNotContains(response, "Если добавить к текущей записи")
 
+    def test_referral_financial_error_is_logged_without_pii(self):
+        partner = ReferralPartner.objects.create(
+            name="Партнёр", code="LOGTEST", contact="+375291112233",
+        )
+        start = self.appointment.start + timedelta(hours=4)
+        with patch("repairs.signals._available_credit", side_effect=RuntimeError("balance failed")):
+            with self.assertLogs("repairs.signals", level="ERROR") as captured:
+                appointment = Appointment.objects.create(
+                    phone_model=self.model, repair_type=self.repair_type,
+                    start=start, end=start + timedelta(hours=1),
+                    customer_name="Лог", customer_phone="+375291112233",
+                    price_original="100.00", price_final="100.00",
+                )
+        log = " ".join(captured.output)
+        self.assertIn(f"appointment_id={appointment.pk}", log)
+        self.assertIn(f"partner_id={partner.pk}", log)
+        self.assertNotIn("+375291112233", log)
+
 
 class BookingFormViewTests(TestCase):
     def setUp(self):
@@ -172,8 +191,15 @@ class BookingFormViewTests(TestCase):
         )
         WorkingHour.objects.create(weekday=0, start="10:00", end="18:00")
 
+    def _monday_slot(self):
+        local_now = timezone.localtime()
+        days_until_monday = (7 - local_now.weekday()) % 7 or 7
+        return (local_now + timedelta(days=days_until_monday)).replace(
+            hour=10, minute=0, second=0, microsecond=0,
+        ).isoformat()
+
     def test_booking_form_shows_extra_repairs_with_discounted_price(self):
-        slot = (timezone.now() + timedelta(days=1)).replace(second=0, microsecond=0).isoformat()
+        slot = self._monday_slot()
         response = self.client.get(
             reverse(
                 "repairs:book",
@@ -195,7 +221,7 @@ class BookingFormViewTests(TestCase):
         self.assertNotContains(response, "По согласованию: не для онлайн-записи")
 
     def test_booking_form_hides_alternative_display_repairs(self):
-        slot = (timezone.now() + timedelta(days=1)).replace(second=0, microsecond=0).isoformat()
+        slot = self._monday_slot()
         response = self.client.get(
             reverse(
                 "repairs:book",
@@ -211,7 +237,7 @@ class BookingFormViewTests(TestCase):
         self.assertNotContains(response, "Замена дисплея оригинал")
 
     def test_booking_form_uses_20_byn_discount_for_extra_repairs_cheaper_than_80(self):
-        slot = (timezone.now() + timedelta(days=1)).replace(second=0, microsecond=0).isoformat()
+        slot = self._monday_slot()
         response = self.client.get(
             reverse(
                 "repairs:book",
@@ -228,7 +254,7 @@ class BookingFormViewTests(TestCase):
         self.assertContains(response, "50,00 BYN")
 
     def test_booking_form_post_adds_selected_extra_repairs_to_appointment(self):
-        slot = (timezone.now() + timedelta(days=1)).replace(second=0, microsecond=0).isoformat()
+        slot = self._monday_slot()
         response = self.client.post(
             reverse(
                 "repairs:book",
@@ -248,6 +274,8 @@ class BookingFormViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         appointment = Appointment.objects.get(customer_phone="+375445684493")
+        self.assertEqual(appointment.end - appointment.start, timedelta(minutes=30))
+        self.assertEqual(appointment.workload_minutes, 180)
         self.assertEqual(appointment.services_count, 3)
         self.assertEqual(appointment.services_display, "Замена дисплея, Замена аккумулятора, Замена микрофона")
         self.assertEqual(str(appointment.price_original), "250.00")
@@ -257,6 +285,26 @@ class BookingFormViewTests(TestCase):
             list(appointment.items.order_by("position").values_list("repair_type__slug", flat=True)),
             [self.repair_type.slug, self.extra_repair_type.slug, self.cheap_repair_type.slug],
         )
+
+    @patch("repairs.views.lock_day")
+    @patch("repairs.views.slot_is_available", side_effect=[True, False])
+    def test_booking_rechecks_capacity_after_day_lock(self, availability, lock_day):
+        slot = self._monday_slot()
+        response = self.client.post(
+            reverse("repairs:book", kwargs={
+                "brand_slug": self.brand.slug,
+                "model_slug": self.model.slug,
+                "repair_slug": self.repair_type.slug,
+            }) + f"?slot={slot}",
+            data={
+                "customer_name": "Гонка", "customer_phone": "+375291234567",
+                "referral_code": "", "consent": "on",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        lock_day.assert_called_once()
+        self.assertEqual(availability.call_count, 2)
+        self.assertFalse(Appointment.objects.filter(customer_name="Гонка").exists())
 
 
 class ContactsPageTests(TestCase):

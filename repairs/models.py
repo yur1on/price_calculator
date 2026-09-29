@@ -13,6 +13,7 @@ from decimal import Decimal
 from datetime import timedelta
 
 from django.db import models
+from django.conf import settings
 from django.utils import timezone
 
 from core.image_utils import convert_field_image_to_webp
@@ -242,6 +243,7 @@ class Appointment(models.Model):
         ("confirmed", "Подтверждена"),
         ("done", "Завершена"),
         ("cancelled", "Отмена"),
+        ("no_show", "Не пришёл"),
     ]
 
     phone_model = models.ForeignKey(
@@ -279,15 +281,27 @@ class Appointment(models.Model):
     discount_amount = models.DecimalField("Скидка", max_digits=10, decimal_places=2, default=Decimal("0.00"))
     price_final = models.DecimalField("Итоговая цена", max_digits=10, decimal_places=2)
     status = models.CharField("Статус", max_length=12, choices=STATUS_CHOICES, default="new")
+    account = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="Аккаунт клиента", on_delete=models.SET_NULL,
+        related_name="repair_appointments", null=True, blank=True,
+    )
     created_at = models.DateTimeField("Создано", auto_now_add=True)
 
     class Meta:
         verbose_name = "Запись"
         verbose_name_plural = "Записи"
         ordering = ["-start"]
+        indexes = [models.Index(fields=["status", "start"])]
 
     def __str__(self) -> str:
         return f"{self.customer_name} • {self.phone_model} • {self.repair_type} • {self.start:%d.%m.%Y %H:%M}"
+
+    @property
+    def workload_minutes(self):
+        total = self.items.aggregate(total=models.Sum("duration_min"))["total"]
+        if total is not None:
+            return int(total)
+        return int((self.end - self.start).total_seconds() // 60)
 
     @property
     def duration(self) -> timedelta:
@@ -390,6 +404,51 @@ class AppointmentItem(models.Model):
 
     def __str__(self) -> str:
         return f"{self.appointment_id} • {self.repair_type.name}"
+
+
+class WorkshopDayCapacity(models.Model):
+    date = models.DateField("Дата", unique=True)
+    capacity_minutes = models.PositiveIntegerField("Мощность, минут", default=720)
+    reserve_minutes = models.PositiveIntegerField("Резерв, минут", default=120)
+    manual_adjustment_minutes = models.IntegerField("Корректировка, минут", default=0)
+    is_closed = models.BooleanField("День закрыт", default=False)
+    note = models.CharField("Комментарий", max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Мощность рабочего дня"
+        verbose_name_plural = "Мощность рабочих дней"
+        ordering = ["-date"]
+
+    @property
+    def effective_capacity(self):
+        return max(0, self.capacity_minutes - self.reserve_minutes + self.manual_adjustment_minutes)
+
+    def __str__(self):
+        return f"{self.date:%d.%m.%Y}: {self.effective_capacity} мин"
+
+
+class BookingBlock(models.Model):
+    date = models.DateField("Дата", db_index=True)
+    start_time = models.TimeField("Начало")
+    end_time = models.TimeField("Окончание")
+    reason = models.CharField("Причина", max_length=160, blank=True)
+    is_active = models.BooleanField("Активна", default=True)
+
+    class Meta:
+        verbose_name = "Блокировка онлайн-записи"
+        verbose_name_plural = "Блокировки онлайн-записи"
+        ordering = ["-date", "start_time"]
+        indexes = [models.Index(fields=["date", "is_active"])]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.end_time <= self.start_time:
+            raise ValidationError({"end_time": "Окончание должно быть позже начала."})
+
+    def __str__(self):
+        return f"{self.date:%d.%m.%Y} {self.start_time:%H:%M}–{self.end_time:%H:%M}"
 
 
 

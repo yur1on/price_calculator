@@ -1,0 +1,18 @@
+{% extends "accounts/client_base.html" %}
+{% block client_title %}Личный кабинет{% endblock %}
+{% block client_content %}
+<header class="client-hero">
+  <div><span>Личный кабинет</span><h1>Добрый день, {{ request.user.first_name|default:request.user.username }}</h1><p>Здесь вы можете следить за ремонтом ваших устройств.</p></div>
+  <a class="wb-button wb-button--primary client-cta" href="{% url 'repairs:brand_list' %}"><i class="fa-solid fa-calendar-plus"></i> Записаться на ремонт</a>
+</header>
+<div class="wb-kpis client-kpis">
+  <a class="wb-kpi wb-kpi--blue" href="{% url 'accounts:client_repairs' %}"><span class="wb-kpi__icon"><i class="fa-solid fa-screwdriver-wrench"></i></span><span>Активные ремонты<strong>{{ active_count }}</strong></span></a>
+  <a class="wb-kpi wb-kpi--amber" href="{% url 'accounts:client_repairs' %}"><span class="wb-kpi__icon"><i class="fa-solid fa-box-open"></i></span><span>Готовы к выдаче<strong>{{ ready_count }}</strong></span></a>
+  <a class="wb-kpi wb-kpi--green" href="{% url 'accounts:client_warranties' %}"><span class="wb-kpi__icon"><i class="fa-solid fa-shield-halved"></i></span><span>Гарантии<strong>{{ warranty_count }}</strong></span></a>
+  <a class="wb-kpi wb-kpi--violet" href="{% url 'accounts:client_devices' %}"><span class="wb-kpi__icon"><i class="fa-solid fa-mobile-screen"></i></span><span>Устройства<strong>{{ device_count }}</strong></span></a>
+</div>
+{% if not profile.phone_verified_at %}<div class="client-notice"><b>Подтвердите номер телефона, чтобы безопасно подключить предыдущие ремонты.</b><a href="{% url 'accounts:phone_verify' %}">Подтвердить</a></div>{% endif %}
+<section class="client-section"><div class="client-heading"><h2>Предстоящие записи</h2><a href="{% url 'accounts:client_appointments' %}">Все записи</a></div><div class="client-grid">{% for appointment in upcoming_appointments %}{% include "accounts/appointment_card.html" %}{% empty %}<div class="client-empty"><h3>Предстоящих записей нет</h3><p>Выберите удобное время для визита.</p></div>{% endfor %}</div></section>
+<section class="client-section"><div class="client-heading"><h2>Активные ремонты</h2><a href="{% url 'accounts:client_repairs' %}">Все ремонты</a></div><div class="client-grid">{% for order in active_orders %}{% include "accounts/order_card.html" %}{% empty %}<div class="client-empty"><h3>У вас пока нет активных ремонтов</h3><p>Запишитесь онлайн — это займёт пару минут.</p></div>{% endfor %}</div></section>
+<section class="client-section"><h2>Последние обращения</h2><div class="client-grid">{% for order in recent_orders %}{% include "accounts/order_card.html" %}{% empty %}<div class="client-empty">История ремонтов появится после безопасного подключения.</div>{% endfor %}</div></section>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "crm/base.html" %}{% block crm_title %}Настройки CRM{% endblock %}
+{% block crm_content %}
+<header class="crm-page-head crm-settings-head"><div><span class="crm-eyebrow">CRM</span><h1>Настройки</h1></div></header>
+<nav class="crm-settings-tabs" data-settings-tabs aria-label="Разделы настроек">
+  <a data-settings-tab="general" class="{% if section == 'general' %}is-active{% endif %}" href="?section=general">Общие</a>
+  <a data-settings-tab="device_types" class="{% if section == 'device_types' %}is-active{% endif %}" href="?section=device_types">Типы устройств</a>
+  <a data-settings-tab="brands" class="{% if section == 'brands' or section == 'models' %}is-active{% endif %}" href="?section=brands">Бренды и модели</a>
+  <a data-settings-tab="issues" class="{% if section == 'issues' %}is-active{% endif %}" href="?section=issues">Неисправности</a>
+  <a data-settings-tab="works" class="{% if section == 'works' %}is-active{% endif %}" href="?section=works">Работы</a>
+  <a data-settings-tab="warranty" class="{% if section == 'warranty' %}is-active{% endif %}" href="?section=warranty">Гарантия</a>
+  <a data-settings-tab="documents" class="{% if section == 'documents' %}is-active{% endif %}" href="?section=documents">Документы</a>
+  <a data-settings-tab="masters" class="{% if section == 'masters' %}is-active{% endif %}" href="?section=masters">Мастера</a>
+  <a data-settings-tab="security" class="{% if section == 'security' %}is-active{% endif %}" href="?section=security">Безопасность</a>
+</nav>
+
+<div class="crm-settings-panel {% if section == 'general' %}is-active{% endif %}" data-settings-panel="general"><div class="crm-settings-grid">
+  <section class="crm-panel"><h2>CRM Tehsfera</h2><p>Рабочие справочники применяются к новым заявкам. Уже созданные заказы и работы остаются неизменными.</p></section>
+  <section class="crm-panel"><h2>Быстрые переходы</h2><div class="crm-settings-links"><a data-settings-open="device_types" href="?section=device_types">Устройства</a><a data-settings-open="issues" href="?section=issues">Неисправности</a><a data-settings-open="works" href="?section=works">Работы</a><a data-settings-open="documents" href="?section=documents">Документы</a></div></section>
+</div></div>
+
+<div class="crm-settings-panel {% if section == 'issues' %}is-active{% endif %}" data-settings-panel="issues">{% include "crm/settings_section.html" with title="Неисправности" help="Текст подставляется в причину обращения и остаётся редактируемым." form=forms.issues items=issues %}</div>
+<div class="crm-settings-panel {% if section == 'works' %}is-active{% endif %}" data-settings-panel="works">{% include "crm/settings_section.html" with title="Шаблоны работ" help="Название и цена копируются в работу как snapshot." form=forms.works items=works show_price=1 %}</div>
+<div class="crm-settings-panel {% if section == 'device_types' %}is-active{% endif %}" data-settings-panel="device_types">{% include "crm/settings_section.html" with title="Типы устройств" help="Используются как подсказки, ручной ввод остаётся доступным." form=forms.device_types items=device_types %}</div>
+<div class="crm-settings-panel {% if section == 'warranty' %}is-active{% endif %}" data-settings-panel="warranty">{% include "crm/settings_section.html" with title="Гарантийные сроки" help="Заказ сохраняет количество дней независимо от дальнейших изменений шаблона." form=forms.warranty items=warranty_terms show_days=1 %}</div>
+
+<div class="crm-settings-panel {% if section == 'brands' or section == 'models' %}is-active{% endif %}" data-settings-panel="brands"><div class="crm-settings-grid">
+  <section>{% include "crm/settings_section.html" with title="Бренды" help="Справочник не связан с публичным каталогом сайта." form=forms.brands items=brands section_override="brands" %}</section>
+  <section>{% include "crm/settings_section.html" with title="Модели" help="Каждая модель относится к бренду." form=forms.models items=device_models section_override="models" show_brand=1 %}</section>
+</div></div>
+
+<div class="crm-settings-panel {% if section == 'documents' %}is-active{% endif %}" data-settings-panel="documents"><section class="crm-panel crm-settings-documents"><div class="crm-section-head"><div><h2>Документы мастерской</h2><p class="crm-muted">Квитанция, акт и гарантийный талон.</p></div>{% if last_order %}<div class="crm-docs-preview"><a target="_blank" href="{% url 'crm:receipt' last_order.pk %}">Квитанция</a><a target="_blank" href="{% url 'crm:act' last_order.pk %}">Акт</a><a target="_blank" href="{% url 'crm:warranty' last_order.pk %}">Гарантия</a></div>{% endif %}</div><form method="post" class="crm-settings-form crm-grid crm-grid--2">{% csrf_token %}<input type="hidden" name="section" value="documents"><input type="hidden" name="action" value="save_documents">{% for field in document_form %}{% include "crm/field.html" with field=field %}{% endfor %}<button class="crm-btn crm-btn--primary">Сохранить документы</button></form></section></div>
+
+<div class="crm-settings-panel {% if section == 'masters' %}is-active{% endif %}" data-settings-panel="masters"><section class="crm-panel"><div class="crm-section-head"><div><h2>Мастера</h2><p class="crm-muted">CRM использует существующих сотрудников Finance.</p></div><a class="crm-btn crm-btn--primary" href="{% url 'finance:master_list' %}">Управление мастерами →</a></div><div class="crm-settings-list">{% for employee in employees %}<div class="crm-setting-row"><b>{{ employee.name }}</b><span>{{ employee.default_percent }}%</span><span class="crm-badge {% if employee.is_active %}crm-badge--ready{% else %}crm-badge--canceled{% endif %}">{% if employee.is_active %}Активен{% else %}Отключён{% endif %}</span></div>{% endfor %}</div></section></div>
+
+<div class="crm-settings-panel {% if section == 'security' %}is-active{% endif %}" data-settings-panel="security"><section class="crm-panel"><h2>Безопасность</h2><p>Физическое удаление CRM-заказов в рабочем интерфейсе отключено. Сотрудники отменяют ремонт через статус. Доступ к настройкам определяется Django permission <code>manage_crm_settings</code>.</p><p class="crm-muted">Отдельные логины и пароли удаления из старой CRM не перенесены: Tehsfera использует существующую аутентификацию и хеширование Django.</p></section></div>
+{% endblock %}

@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
 
+from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
@@ -155,6 +156,13 @@ class FinanceCrudTests(TestCase):
         response = self.client.get(reverse("finance:repair_create"))
         self.assertContains(response, f'value="{date.today():%Y-%m-%d}"')
 
+    def test_htmx_repair_filter_returns_results_partial(self):
+        RepairFinance.objects.create(date=date.today(), description="Samsung A55", revenue="200", part_cost="20", employee=self.master, master_percent="35")
+        response = self.client.get(reverse("finance:repair_list"), {"period": "today", "q": "Samsung"}, HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="finance-repair-results"')
+        self.assertNotContains(response, 'class="wb-sidebar"')
+
     def test_repair_crud(self):
         response = self.client.post(reverse("finance:repair_create"), {
             "date": DAY, "description": "iPhone 11 — дисплей", "revenue": "250.00",
@@ -191,6 +199,20 @@ class FinanceCrudTests(TestCase):
         self.assertRedirects(response, reverse("finance:master_list"))
         self.assertTrue(Employee.objects.filter(name="Иван", default_percent="40.00").exists())
 
+    def test_htmx_expense_modal_validates_and_saves(self):
+        url = reverse("finance:expense_create")
+        get_response = self.client.get(url, HTTP_HX_REQUEST="true")
+        self.assertEqual(get_response.status_code, 200)
+        self.assertContains(get_response, 'class="wb-modal-form"')
+        invalid = self.client.post(url, {"date": DAY}, HTTP_HX_REQUEST="true")
+        self.assertEqual(invalid.status_code, 422)
+        valid = self.client.post(url, {
+            "date": DAY, "category": self.category.pk, "description": "Курьер", "amount": "15.00", "comment": "",
+        }, HTTP_HX_REQUEST="true")
+        self.assertEqual(valid.status_code, 204)
+        self.assertIn("workbench:modal-close", valid.headers["HX-Trigger"])
+        self.assertTrue(Expense.objects.filter(description="Курьер").exists())
+
 
 class InventoryTests(TestCase):
     def setUp(self):
@@ -211,6 +233,13 @@ class InventoryTests(TestCase):
         self.assertEqual(receipt.items.count(), 3)
         self.assertEqual(set(receipt.items.values_list("status", flat=True)), {PartItem.Status.IN_STOCK})
         self.assertEqual(receipt.items.first().inventory_code[:1], "P")
+
+    def test_htmx_stock_search_returns_results_partial(self):
+        self.receipt(quantity=1)
+        response = self.client.get(reverse("finance:stock_list"), {"q": "A55"}, HTTP_HX_REQUEST="true")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="finance-stock-results"')
+        self.assertNotContains(response, 'class="wb-sidebar"')
 
     def test_receipt_form_accepts_manually_typed_part(self):
         response = self.client.post(reverse("finance:receipt_create"), {
@@ -709,3 +738,49 @@ class SupplierReconciliationTests(TestCase):
         self.assertEqual(self.client.get(url).status_code, 302)
         self.client.force_login(get_user_model().objects.create_user(username="recon-client", password="test"))
         self.assertEqual(self.client.get(url).status_code, 302)
+
+
+class PayrollSnapshotImmutabilityTests(TestCase):
+    def setUp(self):
+        self.employee = Employee.objects.create(name="Исторический мастер", default_percent="35")
+        self.period = PayrollPeriod.objects.create(
+            start_date=date(2026, 9, 1), end_date=date(2026, 9, 14),
+            status=PayrollPeriod.Status.CLOSED,
+        )
+        self.calculation = PayrollCalculation.objects.create(
+            period=self.period, employee=self.employee, repairs_count=1,
+            revenue="100.00", direct_costs="20.00", repair_margin="80.00",
+            distributed_costs="0.00", salary_base="80.00", percent="35.00",
+            salary_amount="28.00",
+        )
+        self.snapshot = PayrollRepairSnapshot.objects.create(
+            calculation=self.calculation, repair_date=date(2026, 9, 2),
+            description="Исторический ремонт", revenue="100.00", parts_cost="20.00",
+            salary_base="80.00", percent="35.00", salary_amount="28.00",
+        )
+
+    def test_repair_snapshot_cannot_be_deleted_directly(self):
+        with self.assertRaises(ValidationError):
+            self.snapshot.delete()
+        self.assertTrue(PayrollRepairSnapshot.objects.filter(pk=self.snapshot.pk).exists())
+
+    def test_payroll_snapshots_cannot_be_changed_or_deleted_in_admin(self):
+        for model in (PayrollCalculation, DistributedExpenseAllocation, PayrollRepairSnapshot):
+            model_admin = admin.site._registry[model]
+            self.assertFalse(model_admin.has_add_permission(None))
+            self.assertFalse(model_admin.has_change_permission(None))
+            self.assertFalse(model_admin.has_delete_permission(None))
+
+    def test_closed_period_cannot_be_reopened_or_deleted(self):
+        self.period.status = PayrollPeriod.Status.OPEN
+        with self.assertRaises(ValidationError):
+            self.period.save()
+        self.period.refresh_from_db()
+        self.assertEqual(self.period.status, PayrollPeriod.Status.CLOSED)
+        with self.assertRaises(ValidationError):
+            self.period.delete()
+
+    def test_closed_period_is_read_only_in_admin(self):
+        model_admin = admin.site._registry[PayrollPeriod]
+        self.assertFalse(model_admin.has_change_permission(None, self.period))
+        self.assertFalse(model_admin.has_delete_permission(None, self.period))

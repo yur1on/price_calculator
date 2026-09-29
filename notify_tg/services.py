@@ -1,6 +1,14 @@
 from __future__ import annotations
+import logging
+from decimal import Decimal
+from html import escape
+
 from django.conf import settings
 from telegram import Bot
+
+from .models import PartnerTelegram
+
+logger = logging.getLogger(__name__)
 
 def get_bot() -> Bot | None:
     token = getattr(settings, "TELEGRAM_BOT_TOKEN", "") or ""
@@ -25,3 +33,106 @@ def notify_partner(partner, text: str) -> bool:
     if not tg or not tg.is_active or not tg.chat_id:
         return False
     return notify_partner_by_chat(tg.chat_id, text)
+
+
+def _phone_key(value: str) -> str:
+    digits = "".join(char for char in (value or "") if char.isdigit())
+    return digits[-9:] if len(digits) >= 9 else digits
+
+
+def client_telegram_for_phone(phone: str):
+    """Return an active, phone-confirmed Telegram binding. Names are never used."""
+    target = _phone_key(phone)
+    if not target:
+        return None
+    bindings = PartnerTelegram.objects.filter(is_active=True).select_related("partner").only(
+        "chat_id", "is_active", "partner__contact",
+    )
+    return next((binding for binding in bindings if _phone_key(binding.partner.contact) == target), None)
+
+
+def client_has_telegram(phone: str) -> bool:
+    return client_telegram_for_phone(phone) is not None
+
+
+def _public_status_url() -> str:
+    base = (getattr(settings, "SITE_URL", "") or "").rstrip("/")
+    return f"{base}/repair-status/" if base else "/repair-status/"
+
+
+def _safe_send_to_phone(phone: str, text: str) -> bool:
+    binding = client_telegram_for_phone(phone)
+    if not binding:
+        return False
+    try:
+        return notify_partner_by_chat(binding.chat_id, text)
+    except Exception:
+        logger.exception("Telegram client notification failed")
+        return False
+
+
+def appointment_created_message(appointment) -> str:
+    settings_obj = None
+    try:
+        from crm.models import CRMDocumentSettings
+        settings_obj = CRMDocumentSettings.load()
+    except Exception:
+        pass
+    lines = [
+        "Запись подтверждена",
+        f"Дата и время: {appointment.start:%d.%m.%Y %H:%M}",
+        f"Устройство: {escape(str(appointment.phone_model))}",
+        f"Услуга: {escape(appointment.services_display)}",
+    ]
+    if settings_obj and settings_obj.address:
+        lines.append(f"Адрес: {escape(settings_obj.address)}")
+    if settings_obj and settings_obj.phone:
+        lines.append(f"Контакт: {escape(settings_obj.phone)}")
+    return "\n".join(lines)
+
+
+def notify_appointment_created(appointment_id: int) -> bool:
+    from repairs.models import Appointment
+    try:
+        appointment = Appointment.objects.select_related("phone_model__brand", "repair_type").prefetch_related("items__repair_type").get(pk=appointment_id)
+        return _safe_send_to_phone(appointment.customer_phone, appointment_created_message(appointment))
+    except Exception:
+        logger.exception("Appointment Telegram notification failed for appointment_id=%s", appointment_id)
+        return False
+
+
+def order_status_message(order, status: str | None = None) -> str | None:
+    from crm.models import CRMOrder
+    status = status or order.status
+    head = {
+        CRMOrder.Status.ACCEPTED: "Устройство принято в ремонт.",
+        CRMOrder.Status.APPROVAL: "Ремонт ожидает вашего согласования.",
+        CRMOrder.Status.WAITING_PART: "Для ремонта ожидается запчасть.",
+        CRMOrder.Status.READY: "Ваше устройство готово к выдаче.",
+        CRMOrder.Status.ISSUED: "Устройство выдано. Спасибо.",
+    }.get(status)
+    if not head:
+        return None
+    lines = [head, f"Номер ремонта: {escape(order.number)}", f"Устройство: {escape(order.device.display_name)}"]
+    if status == CRMOrder.Status.APPROVAL and Decimal(order.agreed_price or 0) > 0:
+        lines.append(f"Согласованная сумма: {order.agreed_price} BYN")
+    if status == CRMOrder.Status.READY:
+        total = order.final_price if order.final_price is not None else order.agreed_price
+        if total is not None and Decimal(total) > 0:
+            lines.append(f"Сумма: {total} BYN")
+        lines.append("Устройство можно забрать в мастерской.")
+    if status == CRMOrder.Status.ISSUED and order.warranty_until:
+        lines.append(f"Гарантия действует до {order.warranty_until:%d.%m.%Y}.")
+    lines.append(f"Проверить статус: {_public_status_url()}")
+    return "\n".join(lines)
+
+
+def notify_order_status(order_id: int, status: str | None = None) -> bool:
+    from crm.models import CRMOrder
+    try:
+        order = CRMOrder.objects.select_related("client", "device").get(pk=order_id)
+        text = order_status_message(order, status)
+        return bool(text and _safe_send_to_phone(order.client.phone, text))
+    except Exception:
+        logger.exception("Order Telegram notification failed for order_id=%s", order_id)
+        return False

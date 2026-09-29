@@ -14,7 +14,7 @@ from unfold.admin import ModelAdmin  # базовый класс от Unfold
 from .models import (
     PhoneBrand, PhoneModel, RepairType, ModelRepairPrice,
     ReferralPartner, ReferralRedemption,
-    Technician, WorkingHour, TimeOff, Appointment, AppointmentItem,
+    Technician, WorkingHour, TimeOff, Appointment, AppointmentItem, WorkshopDayCapacity, BookingBlock,
     PageView,
 )
 
@@ -243,6 +243,19 @@ class TimeOffAdmin(ModelAdmin):
     ordering = ("-start",)
 
 
+@admin.register(WorkshopDayCapacity)
+class WorkshopDayCapacityAdmin(ModelAdmin):
+    list_display = ("date", "capacity_minutes", "reserve_minutes", "manual_adjustment_minutes", "is_closed")
+    list_filter = ("is_closed",)
+    ordering = ("-date",)
+
+
+@admin.register(BookingBlock)
+class BookingBlockAdmin(ModelAdmin):
+    list_display = ("date", "start_time", "end_time", "reason", "is_active")
+    list_filter = ("is_active", "date")
+
+
 # -------------------------------------------------------------------
 # Записи (Appointment) — печатные формы + бейджи статусов
 # -------------------------------------------------------------------
@@ -265,7 +278,7 @@ class AppointmentAdmin(StripPhoneModelLabelsMixin, ModelAdmin):
     )
     list_filter = ("status", "phone_model__brand", "repair_type")
     search_fields = ("customer_name", "customer_phone", "referral_code", "phone_model__name")
-    list_select_related = ("phone_model", "phone_model__brand", "repair_type", "technician")
+    list_select_related = ("phone_model", "phone_model__brand", "repair_type", "technician", "account")
     autocomplete_fields = ("phone_model", "repair_type", "technician")
     ordering = ("-start",)
     readonly_fields = ("created_at", "services_summary")

@@ -217,11 +217,13 @@ class StockReceiptForm(StyledModelForm):
 
     class Meta:
         model = StockReceipt
-        fields = ["date", "supplier", "part_name", "quantity", "unit_cost", "order_number", "comment"]
+        fields = ["date", "supplier", "part_name", "quantity", "unit_cost", "warranty_days", "order_number", "comment"]
         widgets = {"date": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}), "comment": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["warranty_days"].required = False
+        self.fields["warranty_days"].initial = self.instance.warranty_days if self.instance.pk else 0
         self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True) | Supplier.objects.filter(pk=getattr(self.instance, "supplier_id", None))
         if self.instance.pk and self.instance.part_id:
             self.fields["part_name"].initial = str(self.instance.part)
@@ -233,6 +235,9 @@ class StockReceiptForm(StyledModelForm):
         if not value:
             raise forms.ValidationError("Укажите запчасть.")
         return value
+
+    def clean_warranty_days(self):
+        return self.cleaned_data.get("warranty_days") or 0
 
     def save(self, commit=True):
         value = self.cleaned_data["part_name"]
@@ -285,6 +290,16 @@ class WarrantyClaimForm(StyledModelForm):
         if not self.is_bound and not self.instance.pk:
             self.fields["opened_at"].initial = timezone.localdate()
         self.fields["replacement_part_item"].queryset = PartItem.objects.filter(status=PartItem.Status.IN_STOCK).select_related("receipt__part")
+
+
+class WorkshopWarrantyClaimForm(WarrantyClaimForm):
+    """Operational warranty form without supplier financial settlement fields."""
+    class Meta(WarrantyClaimForm.Meta):
+        fields = [
+            "part_item", "opened_at", "reason", "defect_description",
+            "inspection_result", "status", "comment", "sent_to_supplier_at",
+            "supplier_decision", "replacement_part_item", "closed_at",
+        ]
 
 
 class SupplierReturnForm(StyledModelForm):

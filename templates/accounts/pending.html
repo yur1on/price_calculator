@@ -1,0 +1,18 @@
+{% extends "accounts/base.html" %}
+{% block title %}Статус заявки — Tehsfera{% endblock %}
+{% block account_content %}
+  <section class="account-card account-state">
+    {% if profile and profile.approval_status == profile.Approval.REJECTED %}
+      <div class="account-card__icon"><i class="fa-solid fa-circle-exclamation"></i></div>
+      <h1>Заявка отклонена</h1>
+      <p>Ваша заявка мастера не была подтверждена. Доступ к рабочей системе не предоставлен.</p>
+      <p>Если это произошло по ошибке, свяжитесь с администратором Tehsfera.</p>
+    {% else %}
+      <div class="account-card__icon account-card__icon--waiting"><i class="fa-solid fa-clock"></i></div>
+      <h1>Регистрация завершена</h1>
+      <p>Ваша заявка ожидает подтверждения администратора.</p>
+      <p>После подтверждения вы получите доступ к рабочей системе.</p>
+    {% endif %}
+    <a class="account-button" href="{% url 'home' %}">На главную</a>
+  </section>
+{% endblock %}

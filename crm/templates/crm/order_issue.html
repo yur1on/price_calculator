@@ -1,0 +1,43 @@
+{% extends "crm/base.html" %}{% block crm_title %}Выдача {{ order.number }}{% endblock %}
+{% block crm_content %}
+<div class="crm-issue-page">
+  <header class="crm-issue-hero">
+    <div><span class="crm-eyebrow">Финальная проверка · {{ order.number }}</span><h1>Выдача устройства</h1><p>{{ order.device.display_name }} · {{ order.client.name }}</p></div>
+    <a class="crm-btn" href="{% url 'crm:order_detail' order.pk %}"><i class="fa-solid fa-arrow-left"></i> К ремонту</a>
+  </header>
+  <form method="post" class="crm-issue-layout" data-issue-form>{% csrf_token %}
+    <main class="crm-issue-main">
+      {% if form.non_field_errors %}<div class="crm-issue-alert crm-issue-alert--error">{{ form.non_field_errors }}</div>{% endif %}
+      <section class="crm-panel crm-issue-section">
+        <div class="crm-section-head"><div><span class="crm-step">01</span><h2>Ремонт и клиент</h2></div><span class="crm-badge crm-badge--ready">{{ order.get_status_display }}</span></div>
+        <dl class="crm-issue-data"><div><dt>Устройство</dt><dd>{{ order.device.display_name }}</dd></div><div><dt>Клиент</dt><dd>{{ order.client.name }}</dd></div><div><dt>Телефон</dt><dd>{{ order.client.phone }}</dd></div><div><dt>Принят</dt><dd>{{ order.accepted_at|date:"d.m.Y H:i" }}</dd></div><div><dt>Готов</dt><dd>{{ order.ready_at|date:"d.m.Y H:i"|default:"—" }}</dd></div></dl>
+      </section>
+      <section class="crm-panel crm-issue-section">
+        <div class="crm-section-head"><div><span class="crm-step">02</span><h2>Выполнено</h2></div><strong>{{ order.works_total }} BYN</strong></div>
+        <div class="crm-issue-list">{% for work in order.work_items.all %}<div><span><i class="fa-solid fa-check"></i> {{ work.name }}{% if work.quantity != 1 %} · {{ work.quantity }} шт.{% endif %}</span><b>{{ work.total }} BYN</b></div>{% empty %}<p class="crm-muted">Работы не указаны.</p>{% endfor %}</div>
+        {% if installed_parts %}<h3 class="crm-issue-subtitle">Установленные детали</h3><div class="crm-issue-chips">{% for usage in installed_parts %}<span><i class="fa-solid fa-microchip"></i> {{ usage.part_item.receipt.part }}</span>{% endfor %}</div>{% endif %}
+        {% if order.diagnostic_result %}<div class="crm-issue-result"><b>Результат ремонта</b><p>{{ order.diagnostic_result|linebreaksbr }}</p></div>{% endif %}
+      </section>
+      <section class="crm-panel crm-issue-section">
+        <div class="crm-section-head"><div><span class="crm-step">03</span><h2>Сумма и оплата</h2></div></div>
+        <div class="crm-issue-agreed"><span>Согласовано с клиентом</span><strong>{% if order.agreed_price %}{{ order.agreed_price }} BYN{% else %}Уточняется{% endif %}</strong></div>
+        <div class="crm-issue-form-grid">{% for field in form %}<div class="crm-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<div class="crm-field-errors">{{ field.errors }}</div>{% endif %}</div>{% endfor %}</div>
+        <div class="crm-payment-summary"><div><span>Итоговая сумма</span><strong data-final-total>0.00 BYN</strong></div><div><span>Оплачено</span><strong data-paid-total>0.00 BYN</strong></div><div class="crm-payment-summary__remaining"><span>Остаток</span><strong data-payment-remaining>0.00 BYN</strong></div></div>
+        <p class="crm-muted crm-issue-hint">Для платного ремонта выдача доступна после подтверждения полной оплаты. Гарантийный ремонт оформляется с нулевой суммой.</p>
+      </section>
+      <section class="crm-panel crm-issue-section">
+        <div class="crm-section-head"><div><span class="crm-step">04</span><h2>Гарантия</h2></div></div>
+        <p>Гарантия начнётся в момент подтверждения выдачи. Дата окончания будет рассчитана автоматически по указанному сроку.</p>
+      </section>
+    </main>
+    <aside class="crm-issue-confirm crm-panel">
+      <div class="crm-issue-confirm__icon"><i class="fa-solid fa-handshake"></i></div><h2>Подтверждение выдачи</h2>
+      <p>Проверьте сумму, оплату и срок гарантии. После подтверждения ремонт получит статус «Выдано», а операция будет зафиксирована в финансах и истории.</p>
+      <div class="crm-issue-alert"><i class="fa-solid fa-triangle-exclamation"></i><span>Повторная выдача и повторное финансовое начисление заблокированы.</span></div>
+      <button class="crm-btn crm-btn--primary crm-issue-submit" type="submit"><i class="fa-solid fa-circle-check"></i> Подтвердить выдачу</button>
+      <a class="crm-btn crm-issue-cancel" href="{% url 'crm:order_detail' order.pk %}">Отмена</a>
+    </aside>
+  </form>
+</div>
+{% endblock %}
+{% block crm_scripts %}<script>document.addEventListener("DOMContentLoaded",function(){const form=document.querySelector("[data-issue-form]");if(!form)return;const finalInput=form.querySelector("#id_final_price"),paidInput=form.querySelector("#id_paid_amount");const money=value=>(Number(value||0)).toFixed(2)+" BYN";function update(){const finalValue=Number(finalInput&&finalInput.value||0),paidValue=Number(paidInput&&paidInput.value||0);form.querySelector("[data-final-total]").textContent=money(finalValue);form.querySelector("[data-paid-total]").textContent=money(paidValue);form.querySelector("[data-payment-remaining]").textContent=money(Math.max(0,finalValue-paidValue))}form.addEventListener("input",update);update()});</script>{% endblock %}

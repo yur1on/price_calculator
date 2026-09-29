@@ -1,0 +1,73 @@
+/* Consistent breathing room inside the shared Workbench shell. */
+.wb-main:has(.crm-shell) {
+  max-width: 1540px;
+  padding: 32px clamp(30px, 4vw, 68px) 72px;
+}
+
+.wb-main .crm-shell {
+  width: min(1320px, 100%);
+  margin-inline: auto;
+}
+
+.wb-main .crm-page-head {
+  box-sizing: border-box;
+  min-height: 98px;
+  margin-bottom: 22px;
+  padding: 22px 26px;
+  border: 1px solid var(--wb-line);
+  border-radius: 17px;
+  background: linear-gradient(135deg, #fff, #f7f9ff);
+  box-shadow: var(--wb-shadow);
+}
+
+.wb-main .crm-page-head h1 {
+  margin: 6px 0;
+}
+
+.wb-main .crm-page-head p {
+  margin-top: 7px;
+}
+
+.wb-main .crm-stats {
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.wb-main .crm-filter,
+.wb-main .crm-inline {
+  margin-bottom: 18px;
+}
+
+.wb-main .crm-panel {
+  padding: 18px;
+}
+
+@media (max-width: 900px) {
+  .wb-main:has(.crm-shell) {
+    padding: 24px 22px 60px;
+  }
+
+  .wb-main .crm-page-head {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 600px) {
+  .wb-main:has(.crm-shell) {
+    padding: 18px 14px 52px;
+  }
+
+  .wb-main .crm-page-head {
+    min-height: 0;
+    margin-bottom: 16px;
+    padding: 18px 16px;
+  }
+
+  .wb-main .crm-stats {
+    gap: 9px;
+  }
+
+  .wb-main .crm-panel {
+    padding: 15px;
+  }
+}

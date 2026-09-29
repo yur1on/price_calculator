@@ -70,5 +70,38 @@ class SalaryPaymentAdmin(ModelAdmin):
     search_fields = ("employee__name", "comment")
 
 
-for model in (Supplier, PartCatalog, StockReceipt, PartItem, RepairPart, WarrantyClaim, SupplierPayment, SupplierReturn, DistributedExpense, DistributedExpenseAllocation, PayrollCalculation, PayrollPeriod, PayrollRepairSnapshot):
+class ImmutablePayrollSnapshotAdmin(ModelAdmin):
+    """Closed payroll history is append-only, including through bulk admin actions."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+admin.site.register(PayrollCalculation, ImmutablePayrollSnapshotAdmin)
+admin.site.register(DistributedExpenseAllocation, ImmutablePayrollSnapshotAdmin)
+admin.site.register(PayrollRepairSnapshot, ImmutablePayrollSnapshotAdmin)
+
+
+class PayrollPeriodAdmin(ModelAdmin):
+    def has_change_permission(self, request, obj=None):
+        if obj and obj.status == PayrollPeriod.Status.CLOSED:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.status == PayrollPeriod.Status.CLOSED:
+            return False
+        return super().has_delete_permission(request, obj)
+
+
+admin.site.register(PayrollPeriod, PayrollPeriodAdmin)
+
+
+for model in (Supplier, PartCatalog, StockReceipt, PartItem, RepairPart, WarrantyClaim, SupplierPayment, SupplierReturn, DistributedExpense):
     admin.site.register(model, ModelAdmin)

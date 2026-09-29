@@ -1,0 +1,13 @@
+<div class="crm-quick-field">
+  {% if perms.crm.change_order_status and order.allowed_next_statuses %}
+  <form method="post" action="{% url 'crm:order_status' order.pk %}" hx-post="{% url 'crm:order_status' order.pk %}" hx-target="closest .crm-quick-field" hx-swap="outerHTML">
+    {% csrf_token %}
+    <label class="sr-only" for="status-{{ order.pk }}">Статус ремонта</label>
+    <select class="crm-quick-select crm-badge--{{ order.status }}" id="status-{{ order.pk }}" name="status" aria-label="Изменить статус" onchange="this.form.requestSubmit()">
+      <option value="" selected disabled>{{ order.get_status_display }}</option>
+      {% for value,label in statuses %}{% if value in order.allowed_next_statuses and value != 'issued' %}<option value="{{ value }}">{{ label }}</option>{% endif %}{% endfor %}
+    </select>
+    <span class="htmx-indicator wb-inline-spinner" aria-label="Обновление"></span>
+  </form>
+  {% else %}<span class="crm-badge crm-badge--{{ order.status }}">{{ order.get_status_display }}</span>{% endif %}
+</div>

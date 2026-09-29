@@ -1,0 +1,11 @@
+{% extends "crm/documents/base.html" %}{% block document %}
+<h1>Гарантийный талон</h1>
+<div class="grid"><div class="box"><b>Клиент</b><br>{{ order.client.name }}<br>{{ order.client.phone }}</div><div class="box"><b>Выдано</b><br>{% if order.issued_at %}{{ order.issued_at|date:"d.m.Y H:i" }}{% else %}Заказ ещё не выдан{% endif %}<br>Заказ {{ order.number }}</div></div>
+<h2>Устройство</h2><div class="box"><b>{{ order.device.display_name }}</b>{% if order.device.imei %}<br>IMEI: {{ order.device.imei }}{% endif %}{% if order.device.serial_number %}<br>Серийный номер: {{ order.device.serial_number }}{% endif %}</div>
+<h2>Выполненные работы</h2><table><thead><tr><th>Наименование</th><th>Количество</th></tr></thead><tbody>{% for work in order.work_items.all %}<tr><td>{{ work.name }}</td><td>{{ work.quantity }}</td></tr>{% empty %}<tr><td colspan="2">Работы не указаны</td></tr>{% endfor %}</tbody></table>
+{% with usages=order.part_usages.all %}{% if usages %}<h2>Установленные детали</h2><ul>{% for usage in usages %}{% if usage.status == 'installed' %}<li>{{ usage.part_item.receipt.part }}</li>{% endif %}{% endfor %}</ul>{% endif %}{% endwith %}
+<div class="grid"><div class="box"><b>Итоговая сумма</b><br>{% if order.final_price is not None %}{{ order.final_price }} BYN{% elif order.agreed_price %}{{ order.agreed_price }} BYN{% else %}Уточняется{% endif %}</div><div class="box"><b>Гарантия</b><br>{{ order.warranty_days }} дней{% if order.warranty_started_at %}<br>с {{ order.warranty_started_at|date:"d.m.Y" }}{% endif %}{% if order.warranty_until %}<br>до {{ order.warranty_until|date:"d.m.Y" }}{% endif %}</div></div>
+{% if settings.warranty_terms %}<h2>Условия гарантии</h2><p>{{ settings.warranty_terms|linebreaksbr }}</p>{% endif %}
+<p>Статус ремонта можно проверить по номеру <b>{{ order.number }}</b> на странице проверки ремонта сайта мастерской.</p>
+<div class="sign"><span>Устройство выдал: __________</span><span>Устройство получил: __________</span></div>
+{% endblock %}

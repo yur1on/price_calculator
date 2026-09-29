@@ -30,6 +30,9 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-dev-key-change-me")
 BOOKING_TIME_STEP_MIN = 60
 BOOKING_PREP_BUFFER_MIN = 0     # при желании можно менять
 BOOKING_CLEANUP_BUFFER_MIN = 0  # при желании можно менять
+BOOKING_INTAKE_SLOT_MINUTES = int(os.getenv("BOOKING_INTAKE_SLOT_MINUTES", "30"))
+WORKSHOP_DEFAULT_CAPACITY_MINUTES = int(os.getenv("WORKSHOP_DEFAULT_CAPACITY_MINUTES", "720"))
+WORKSHOP_DEFAULT_RESERVE_MINUTES = int(os.getenv("WORKSHOP_DEFAULT_RESERVE_MINUTES", "120"))
 
 # Режим отладки
 # DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
@@ -72,6 +75,8 @@ INSTALLED_APPS = [
     "notify_tg",
     "news.apps.NewsConfig",
     "finance.apps.FinanceConfig",
+    "crm.apps.CrmConfig",
+    "accounts.apps.AccountsConfig",
 ]
 
 # ──────────────────────────────────────────────────────────────
@@ -102,6 +107,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "accounts.context_processors.account_access",
             ],
         },
     },
@@ -148,6 +154,10 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
+
+LOGIN_URL = "accounts:login"
+LOGIN_REDIRECT_URL = "accounts:workspace"
+LOGOUT_REDIRECT_URL = "home"
 
 LANGUAGE_CODE = "ru"
 LANGUAGES = [("ru", "Русский")]

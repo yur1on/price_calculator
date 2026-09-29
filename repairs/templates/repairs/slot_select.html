@@ -189,6 +189,8 @@
     {% endfor %}
   </div>
 
+  {% if not has_available_slots %}<p class="small" role="status" style="margin-top:12px;color:#64748b">На этот период нет свободного времени для выбранного ремонта. Выберите другой день.</p>{% endif %}
+
   <p class="small" style="margin-top:10px;color:#64748b">
     Модель: {{ model.brand.name }} {{ model.name }} • {{ repair_type.name }}
   </p>

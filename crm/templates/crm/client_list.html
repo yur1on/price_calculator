@@ -1,0 +1,10 @@
+{% extends "crm/base.html" %}
+{% block crm_title %}Клиенты{% endblock %}
+{% block crm_content %}
+<header class="crm-page-head">
+  <div><span class="crm-eyebrow">CRM</span><h1>База клиентов</h1><p class="crm-muted">Контакты, устройства и история обращений</p></div>
+  {% if perms.crm.add_crmclient %}<a class="crm-btn crm-btn--primary" href="{% url 'crm:client_create' %}"><i class="fa-solid fa-user-plus"></i> Новый клиент</a>{% endif %}
+</header>
+<form class="crm-panel crm-inline" method="get"><input class="crm-input crm-search" name="q" value="{{ q }}" placeholder="Имя, телефон или IMEI / SN"><button class="crm-btn crm-btn--primary"><i class="fa-solid fa-magnifying-glass"></i> Найти</button>{% if q %}<a class="crm-btn" href="{% url 'crm:client_list' %}">Сбросить</a>{% endif %}</form>
+<section class="crm-panel"><div class="wb-section-head"><h2><i class="fa-solid fa-address-book"></i> Клиенты</h2><span class="crm-muted">Всего: {{ page_obj.paginator.count }}</span></div><div class="crm-table-wrap"><table class="crm-table"><thead><tr><th>Клиент</th><th>Телефон</th><th>Устройств</th><th>Ремонтов</th><th>Последнее обращение</th><th></th></tr></thead><tbody>{% for client in page_obj %}<tr><td><b>{{ client.name }}</b></td><td>{{ client.phone }}</td><td>{{ client.devices_count }}</td><td>{{ client.orders_count }}</td><td>{{ client.last_visit|date:"d.m.Y H:i"|default:"—" }}</td><td><a class="wb-icon-action" title="Открыть клиента" href="{% url 'crm:client_detail' client.pk %}"><i class="fa-solid fa-arrow-right"></i></a></td></tr>{% empty %}<tr><td colspan="6" class="crm-empty"><div class="wb-empty"><span><i class="fa-solid fa-user-group"></i></span><b>Клиенты не найдены</b><p>Измените запрос или создайте первого клиента.</p></div></td></tr>{% endfor %}</tbody></table></div>{% include "crm/_pagination.html" %}</section>
+{% endblock %}

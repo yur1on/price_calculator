@@ -1,0 +1,16 @@
+{% extends "finance/base.html" %}
+{% block finance_title %}Поставщики{% endblock %}
+{% block finance_content %}
+{% include "finance/_parts_nav.html" %}
+<div class="fin-actions"><a class="fin-btn primary" href="{% url 'finance:supplier_create' %}">＋ Поставщик</a></div>
+<form method="get" class="fin-filters"><label>Поиск<input name="q" value="{{ q }}" placeholder="Название, контакт, телефон"></label><button class="fin-btn primary">Найти</button></form>
+<div class="fin-grid">
+{% for supplier in suppliers %}
+  <article class="fin-card">
+    <div class="fin-section-head"><div><h2><a class="fin-link" href="{% url 'finance:supplier_detail' supplier.pk %}">{{ supplier.name }}</a></h2><span class="fin-badge {% if not supplier.is_active %}off{% endif %}">{% if supplier.is_active %}Активен{% else %}Неактивен{% endif %}</span></div><a href="{% url 'finance:supplier_edit' supplier.pk %}">Изменить</a></div>
+    <p>{{ supplier.contact_person|default:"Контакт не указан" }}{% if supplier.phone %} · {{ supplier.phone }}{% endif %}</p>
+    {% if supplier.messenger %}<p class="fin-muted">{{ supplier.messenger }}</p>{% endif %}
+  </article>
+{% empty %}<section class="fin-card fin-empty">Поставщиков нет</section>{% endfor %}
+</div>
+{% endblock %}

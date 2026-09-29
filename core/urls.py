@@ -9,6 +9,8 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from repairs.views import home, yoomoney_webhook
 from repairs.sitemaps import SITEMAPS
+from accounts import views as account_views
+from crm import public_views as crm_public_views
 
 # --- error handlers ---
 def err_404(request, exception):
@@ -53,13 +55,17 @@ urlpatterns = [
     # статические страницы
     path("privacy/", TemplateView.as_view(template_name="legal/privacy.html"), name="privacy"),
     path("terms/", TemplateView.as_view(template_name="legal/terms.html"), name="terms"),
+    path("repair-status/", crm_public_views.repair_status, name="repair_status"),
     path("payments/yoomoney/", yoomoney_webhook, name="yoomoney_webhook"),
 
     # приложение
     path("repairs/", include("repairs.urls")),
     path("news/", include("news.urls")),
     path("finance/", include("finance.urls")),
+    path("crm/", include("crm.urls")),
     path("master/", include("finance.master_urls")),
+    path("accounts/", include("accounts.urls")),
+    path("workbench/", account_views.workspace, name="workbench"),
 
 
     # корень

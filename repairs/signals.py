@@ -1,6 +1,7 @@
 # repairs/signals.py
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 
 from django.db import transaction
@@ -12,6 +13,8 @@ from django.utils import timezone
 from .models import Appointment, ReferralPartner, ReferralRedemption
 from .services import calc_discount_and_commission
 from notify_tg.utils import notify_partner
+
+logger = logging.getLogger(__name__)
 
 # Пытаемся импортировать функции для уведомлений админам (могут отсутствовать).
 try:
@@ -119,6 +122,15 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
                 pass
 
         transaction.on_commit(lambda: _notify_admins_after_commit(instance.id))
+        # Client delivery reuses the existing phone-confirmed Telegram binding.
+        def _notify_client_after_commit(appointment_id: int) -> None:
+            try:
+                from notify_tg.services import notify_appointment_created
+                notify_appointment_created(appointment_id)
+            except Exception:
+                logger.exception("Client appointment notification failed for appointment_id=%s", appointment_id)
+
+        transaction.on_commit(lambda: _notify_client_after_commit(instance.id))
 
     # ==========================================================
     # 1) РЕФЕРАЛКИ (как у вас) + анти-самореферал (комиссия 0)
@@ -257,8 +269,9 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
     # доступные накопления
     try:
         with transaction.atomic():
-            # блокируем строки по партнёру, чтобы два параллельных заказа не потратили один и тот же баланс
-            ReferralRedemption.objects.select_for_update().filter(partner=owner)
+            # Блокируем одну стабильную строку партнёра. QuerySet без вычисления не
+            # выполняет SELECT FOR UPDATE и не защищает от двойного списания.
+            owner = ReferralPartner.objects.select_for_update().get(pk=owner.pk)
 
             available = _available_credit(owner)
             if available <= 0:
@@ -302,6 +315,11 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
 
     except Exception:
         # Не ломаем процесс записи, даже если что-то пошло не так
+        logger.exception(
+            "Failed to apply referral credit for appointment_id=%s partner_id=%s",
+            instance.pk,
+            owner.pk,
+        )
         return
 
 

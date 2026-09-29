@@ -1,0 +1,17 @@
+{% extends "crm/base.html" %}
+{% block crm_title %}Загрузка мастерской{% endblock %}
+{% block crm_content %}
+<header class="crm-page-head"><div><span class="crm-eyebrow">Планирование</span><h1>Загрузка мастерской</h1><p class="crm-muted">Прогноз учитывает активные ремонты и будущие онлайн-записи.</p></div></header>
+<section class="crm-stats crm-capacity-kpis">
+  <div class="crm-stat"><span>План на сегодня</span><strong>{{ capacity.today.load }} мин</strong></div>
+  <div class="crm-stat"><span>Доступная мощность</span><strong>{{ capacity.today.effective }} мин</strong></div>
+  <div class="crm-stat"><span>На паузе</span><strong>{{ capacity.paused_count }}</strong></div>
+  <div class="crm-stat"><span>Физически в сервисе</span><strong>{{ capacity.physical_count }}</strong></div>
+</section>
+<div class="crm-capacity-layout">
+  <section class="crm-panel"><div class="wb-section-head"><div><span class="crm-eyebrow">7 дней</span><h2>Прогноз загрузки</h2></div></div>
+    <div class="crm-capacity-days">{% for day in capacity.days %}<article class="crm-capacity-day{% if day.overload %} is-overload{% endif %}{% if day.closed %} is-closed{% endif %}"><div><b>{{ day.date|date:"D, d.m" }}</b><span>{% if day.closed %}День закрыт{% else %}{{ day.load }} / {{ day.effective }} мин{% endif %}</span></div><div class="crm-capacity-bar"><span style="width:{% if day.percent > 100 %}100{% else %}{{ day.percent }}{% endif %}%"></span></div><small>Записи: {{ day.reserved }} мин · Останется: {{ day.available }} мин{% if day.overload %} · <b>Перегруз {{ day.overload }} мин</b>{% endif %}</small></article>{% endfor %}</div>
+  </section>
+  <aside class="crm-panel"><h2>Мощность дня</h2>{% if can_edit %}<form method="post" class="crm-capacity-form">{% csrf_token %}{% for field in form %}{% include "crm/field.html" with field=field %}{% endfor %}<button class="crm-btn crm-btn--primary" type="submit">Сохранить</button></form>{% else %}<p class="crm-muted">Изменять мощность, резерв и закрывать дни может администратор.</p>{% endif %}<p class="crm-muted">Блокировки отдельных часов доступны администратору в разделе управления.</p></aside>
+</div>
+{% endblock %}

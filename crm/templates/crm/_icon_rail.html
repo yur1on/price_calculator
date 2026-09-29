@@ -1,0 +1,8 @@
+<nav class="crm-icon-rail" aria-label="Навигация CRM">
+  {% if perms.crm.add_crmorder %}<a href="{% url 'crm:order_create' %}" hx-get="{% url 'crm:order_create' %}" hx-target="#intake-modal-host" hx-swap="innerHTML" class="crm-icon-link crm-icon-link--new {% if request.resolver_match.url_name == 'order_create' %}is-active{% endif %}"><span class="crm-rail-icon crm-rail-icon--plus"></span><span>Новая заявка</span></a>{% endif %}
+  <a href="{% url 'crm:dashboard' %}" class="crm-icon-link crm-icon-link--orders {% if request.resolver_match.url_name == 'dashboard' or request.resolver_match.url_name == 'order_detail' %}is-active{% endif %}"><span class="crm-rail-icon crm-rail-icon--chart"></span><span>Заказы</span></a>
+  <a href="{% url 'crm:client_list' %}" class="crm-icon-link crm-icon-link--clients {% if 'client' in request.resolver_match.url_name %}is-active{% endif %}"><span class="crm-rail-icon crm-rail-icon--user"></span><span>Клиенты</span></a>
+  <a href="{% url 'crm:dashboard' %}?status=waiting_part" class="crm-icon-link crm-icon-link--parts"><span class="crm-rail-icon crm-rail-icon--box"></span><span>Ждут деталь</span></a>
+  <a href="{% url 'finance:dashboard' %}" class="crm-icon-link crm-icon-link--finance"><span class="crm-rail-icon crm-rail-icon--money"></span><span>Финансы</span></a>
+  {% if perms.crm.manage_crm_settings %}<a href="{% url 'crm:settings' %}" class="crm-icon-link crm-icon-link--settings {% if request.resolver_match.url_name == 'settings' %}is-active{% endif %}"><span class="crm-rail-icon crm-rail-icon--gear"></span><span>Настройки</span></a>{% endif %}
+</nav>

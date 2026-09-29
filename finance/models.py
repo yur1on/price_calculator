@@ -254,6 +254,7 @@ class StockReceipt(models.Model):
     part = models.ForeignKey(PartCatalog, verbose_name="Запчасть", on_delete=models.PROTECT, related_name="receipts")
     quantity = models.PositiveIntegerField("Количество", validators=[MinValueValidator(1)])
     unit_cost = models.DecimalField("Цена за единицу", max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))])
+    warranty_days = models.PositiveIntegerField("Гарантия поставщика, дней", default=0)
     order_number = models.CharField("Номер заказа / накладной", max_length=120, blank=True)
     comment = models.TextField("Комментарий", blank=True)
     created_at = models.DateTimeField("Создано", auto_now_add=True)
@@ -543,9 +544,16 @@ class PayrollPeriod(models.Model):
         if self.start_date and self.end_date and self.start_date > self.end_date:
             raise ValidationError({"end_date": "Конец периода не может быть раньше начала."})
         if self.pk and PayrollPeriod.objects.filter(pk=self.pk, status=self.Status.CLOSED).exists():
-            old = PayrollPeriod.objects.get(pk=self.pk)
-            if old.start_date != self.start_date or old.end_date != self.end_date:
-                raise ValidationError("Даты закрытого периода нельзя изменять.")
+            raise ValidationError("Закрытый расчётный период нельзя изменять.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.status == self.Status.CLOSED:
+            raise ValidationError("Закрытый расчётный период нельзя удалить.")
+        return super().delete(*args, **kwargs)
 
     def __str__(self):
         return f"{self.start_date:%d.%m.%Y} — {self.end_date:%d.%m.%Y}"
@@ -636,3 +644,6 @@ class PayrollRepairSnapshot(models.Model):
         if self.pk:
             raise ValidationError("Snapshot ремонта в закрытом расчёте нельзя изменять.")
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Snapshot ремонта в закрытом расчёте нельзя удалить.")

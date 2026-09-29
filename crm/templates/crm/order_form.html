@@ -1,0 +1,4 @@
+{% extends "crm/base.html" %}
+{% block crm_title %}Новая заявка{% endblock %}
+{% block crm_content %}<div class="crm-intake-underlay" aria-hidden="true"><span class="crm-eyebrow">CRM</span><h1>Ремонты</h1><p>Форма приёма открыта поверх рабочего пространства.</p></div>{% endblock %}
+{% block intake_modal_content %}{% include "crm/partials/intake_wizard.html" %}{% endblock %}

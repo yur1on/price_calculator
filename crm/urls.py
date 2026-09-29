@@ -1,0 +1,46 @@
+from django.urls import path
+
+from . import views
+
+app_name = "crm"
+
+urlpatterns = [
+    path("analytics/", views.analytics_view, name="analytics"),
+    path("analytics/export.xlsx", views.analytics_export, name="analytics_export"),
+    path("capacity/", views.capacity_view, name="capacity"),
+    path("", views.dashboard, name="dashboard"),
+    path("orders/", views.order_list, name="order_list"),
+    path("work/", views.work_queue, name="work_queue"),
+    path("work/<int:pk>/status/", views.work_queue_status, name="work_queue_status"),
+    path("work/<int:pk>/take/", views.work_queue_take, name="work_queue_take"),
+    path("orders/new/", views.order_create, name="order_create"),
+    path("appointments/", views.appointment_list, name="appointment_list"),
+    path("appointments/<int:pk>/", views.appointment_detail, name="appointment_detail"),
+    path("appointments/<int:pk>/no-show/", views.appointment_no_show, name="appointment_no_show"),
+    path("orders/<int:pk>/", views.order_detail, name="order_detail"),
+    path("orders/<int:pk>/edit/", views.order_edit, name="order_edit"),
+    path("orders/<int:pk>/issue/", views.order_issue, name="order_issue"),
+    path("orders/<int:pk>/notifications/resend/", views.order_notification_resend, name="order_notification_resend"),
+    path("orders/<int:pk>/status/", views.order_status, name="order_status"),
+    path("orders/<int:pk>/assignee/", views.order_assignee, name="order_assignee"),
+    path("orders/<int:pk>/parts/", views.order_part_search, name="order_part_search"),
+    path("orders/<int:pk>/parts/install/", views.order_part_install, name="order_part_install"),
+    path("orders/<int:pk>/parts/<int:usage_pk>/return/", views.order_part_return, name="order_part_return"),
+    path("orders/<int:pk>/works/add/", views.work_add, name="work_add"),
+    path("orders/<int:pk>/works/<int:work_pk>/edit/", views.work_edit, name="work_edit"),
+    path("orders/<int:pk>/works/<int:work_pk>/delete/", views.work_delete, name="work_delete"),
+    path("orders/<int:pk>/comments/add/", views.comment_add, name="comment_add"),
+    path("orders/<int:pk>/attachments/add/", views.attachment_add, name="attachment_add"),
+    path("attachments/<int:pk>/", views.attachment_open, name="attachment_open"),
+    path("orders/<int:pk>/receipt/", views.receipt, name="receipt"),
+    path("orders/<int:pk>/act/", views.act, name="act"),
+    path("orders/<int:pk>/warranty/", views.warranty, name="warranty"),
+    path("clients/", views.client_list, name="client_list"),
+    path("clients/new/", views.client_create, name="client_create"),
+    path("clients/search/", views.client_search, name="client_search"),
+    path("device-models/", views.device_models, name="device_models"),
+    path("search/", views.global_search, name="global_search"),
+    path("clients/<int:pk>/", views.client_detail, name="client_detail"),
+    path("clients/<int:pk>/edit/", views.client_edit, name="client_edit"),
+    path("settings/", views.settings_view, name="settings"),
+]

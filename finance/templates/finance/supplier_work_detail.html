@@ -1,0 +1,10 @@
+{% extends "finance/base.html" %}{% load finance_extras %}
+{% block finance_title %}{{ supplier.name }}{% endblock %}
+{% block finance_content %}
+{% include "finance/_parts_nav.html" %}
+<section class="fin-card">
+  <div class="fin-section-head"><div><h2>Контакты поставщика</h2><p>{{ supplier.contact_person|default:"Контакт не указан" }}{% if supplier.phone %} · {{ supplier.phone }}{% endif %}</p></div><a class="fin-btn" href="{% url 'finance:supplier_edit' supplier.pk %}">Изменить</a></div>
+  {% if supplier.messenger %}<p class="fin-muted">{{ supplier.messenger }}</p>{% endif %}
+</section>
+<section class="fin-card" style="margin-top:15px"><h2>Поставленные детали</h2><div class="fin-table-wrap"><table class="fin-table"><thead><tr><th>Дата</th><th>Запчасть</th><th>ID</th><th>Статус</th><th>Ремонт</th><th>Гарантия</th></tr></thead><tbody>{% for item in page_obj %}<tr><td>{{ item.receipt.date|date:"d.m.Y" }}</td><td>{{ item.receipt.part }}</td><td><a href="{% url 'finance:part_item_detail' item.pk %}">#{{ item.inventory_code }}</a></td><td>{{ item.get_status_display }}</td><td>{% if item.repair_usage %}{{ item.repair_usage.repair.description }}{% else %}—{% endif %}</td><td>{{ item.warranty_claims.count }}</td></tr>{% empty %}<tr><td colspan="6" class="fin-empty">Нет данных</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

@@ -1,0 +1,118 @@
+/* Spacious client layout layered on the shared Workbench tokens. */
+.wb-main:has(.client-app) {
+  max-width: 1480px;
+  padding: 32px clamp(28px, 4vw, 64px) 72px;
+}
+
+.client-app {
+  width: min(1180px, 100%);
+  margin-inline: auto;
+}
+
+.client-hero {
+  padding: clamp(24px, 3vw, 38px);
+  margin-bottom: 22px;
+}
+
+.client-hero h1 {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.client-kpis,
+.client-app > .wb-kpis {
+  gap: 14px;
+  margin: 0 0 22px;
+}
+
+.client-app .wb-kpi {
+  min-height: 94px;
+  padding: 17px 18px;
+}
+
+.client-notice {
+  margin: 0 0 28px;
+  padding: 17px 20px;
+}
+
+.client-section {
+  margin-top: 30px;
+}
+
+.client-section + .client-section {
+  margin-top: 38px;
+}
+
+.client-heading {
+  margin-bottom: 16px;
+}
+
+.client-grid {
+  gap: 18px;
+}
+
+.client-order,
+.client-panel,
+.client-empty {
+  padding: 22px;
+}
+
+.client-title {
+  margin-bottom: 22px;
+}
+
+.client-detail-head {
+  padding: 24px;
+}
+
+.client-detail-grid {
+  gap: 18px;
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .wb-main:has(.client-app) {
+    padding: 24px 22px 60px;
+  }
+}
+
+@media (max-width: 600px) {
+  .wb-main:has(.client-app) {
+    padding: 18px 14px 52px;
+  }
+
+  .client-hero {
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .client-app > .wb-kpis {
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .client-app .wb-kpi {
+    min-height: 82px;
+    padding: 13px;
+  }
+
+  .client-notice {
+    margin-bottom: 24px;
+    padding: 15px;
+  }
+
+  .client-section,
+  .client-section + .client-section {
+    margin-top: 28px;
+  }
+
+  .client-grid {
+    gap: 13px;
+  }
+
+  .client-order,
+  .client-panel,
+  .client-empty {
+    padding: 17px;
+  }
+}

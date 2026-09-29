@@ -3,6 +3,7 @@
 
 
 from __future__ import annotations
+import logging
 from django.core.paginator import Paginator
 import re
 from datetime import date, datetime, timedelta
@@ -35,6 +36,8 @@ from .models import (
     ReferralPartner,
     ReferralRedemption,
 )
+from .booking_capacity import lock_day, slot_is_available
+logger = logging.getLogger(__name__)
 MAX_BOOK_AHEAD_DAYS = int(getattr(settings, "REPAIRS_MAX_BOOK_AHEAD_DAYS", 30))
 BOOKING_SUCCESS_TOKEN_SALT = "repairs.booking_success"
 BOOKING_SUCCESS_TOKEN_MAX_AGE = 60 * 60 * 24 * 30
@@ -555,16 +558,12 @@ def get_available_slots(
         duration_min = price_entry.duration_min
     except ModelRepairPrice.DoesNotExist:
         duration_min = repair_type.default_duration_min or 60  # безопасный дефолт
-    duration = timedelta(minutes=int(duration_min))
+    workload_minutes = int(duration_min)
+    duration = timedelta(minutes=int(settings.BOOKING_INTAKE_SLOT_MINUTES))
 
-    # --- 2) Настройки шаг/буферы/ёмкость ---
-    step_min = int(getattr(settings, "BOOKING_TIME_STEP_MIN", 60))
-    prep_min = int(getattr(settings, "BOOKING_PREP_BUFFER_MIN", 0))
-    cleanup_min = int(getattr(settings, "BOOKING_CLEANUP_BUFFER_MIN", 0))
+    # --- 2) Сетка коротких окон приёма ---
+    step_min = int(settings.BOOKING_INTAKE_SLOT_MINUTES)
     step = timedelta(minutes=max(1, step_min))
-    prep_buf = timedelta(minutes=max(0, prep_min))
-    cleanup_buf = timedelta(minutes=max(0, cleanup_min))
-    capacity = int(getattr(settings, "REPAIRS_MAX_PARALLEL_APPOINTMENTS", 1))
 
     # --- 3) TZ/сейчас/стартовая дата ---
     tz = tz or timezone.get_current_timezone()
@@ -572,23 +571,7 @@ def get_available_slots(
     if start_date is None:
         start_date = now.date()
 
-    # --- 4) Границы диапазона для предзагрузки существующих заявок ---
-    # Берём чуть шире с учётом буферов
-    from datetime import time as _time
-    range_start = timezone.make_aware(datetime.combine(start_date, _time.min), tz) - prep_buf
-    range_end = timezone.make_aware(datetime.combine(start_date + timedelta(days=days), _time.min), tz) + cleanup_buf
-
-    existing = list(
-        Appointment.objects.filter(
-            status__in=["new", "confirmed", "done"],
-            start__lt=range_end,
-            end__gt=range_start,
-        ).values_list("start", "end")
-    )
-    # Преобразуем к локальной TZ (на всякий)
-    existing = [(timezone.localtime(s, tz), timezone.localtime(e, tz)) for s, e in existing]
-
-    # --- 5) Рабочие часы ---
+    # --- 4) Рабочие часы ---
     working_hours = list(WorkingHour.objects.all())
 
     slots: List[datetime] = []
@@ -636,17 +619,7 @@ def get_available_slots(
                 if slot_end > day_end:
                     break  # дальше только позже — тоже выйдет за окно
 
-                # С учётом буферов проверяем пересечения
-                check_start = slot_start - prep_buf
-                check_end = slot_end + cleanup_buf
-
-                overlaps = sum(
-                    1
-                    for s, e in existing
-                    if s < check_end and e > check_start
-                )
-
-                if overlaps < capacity:
+                if slot_is_available(slot_start, workload_minutes):
                     slots.append(slot_start)
 
                 # Следующий шаг по сетке
@@ -772,6 +745,7 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
         "limit_date": limit_date,
         "can_prev": can_prev,
         "can_next": can_next,
+        "has_available_slots": bool(all_slots),
     })
 
 
@@ -847,16 +821,10 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
         return redirect("repairs:slot_select",
                         brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 
-    end_dt = slot_dt + timedelta(minutes=duration_min)
+    end_dt = slot_dt + timedelta(minutes=settings.BOOKING_INTAKE_SLOT_MINUTES)
 
     # первичная проверка занятости (глобально по всем активным заявкам)
-    capacity = int(getattr(settings, "REPAIRS_MAX_PARALLEL_APPOINTMENTS", 1))
-    overlaps = Appointment.objects.filter(
-        status__in=["new", "confirmed", "done"],
-        start__lt=end_dt,
-        end__gt=slot_dt,
-    ).count()
-    if overlaps >= capacity:
+    if not slot_is_available(slot_dt, duration_min):
         messages.error(request, "Этот слот уже занят. Пожалуйста, выберите другое время.")
         return redirect("repairs:slot_select",
                         brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
@@ -866,15 +834,8 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
         if form.is_valid():
             # повторная проверка в транзакции — защита от гонок
             with transaction.atomic():
-                overlaps = (Appointment.objects
-                            .select_for_update()
-                            .filter(
-                                status__in=["new", "confirmed", "done"],
-                                start__lt=end_dt,
-                                end__gt=slot_dt,
-                            )
-                            .count())
-                if overlaps >= capacity:
+                lock_day(slot_local_date)
+                if not slot_is_available(slot_dt, duration_min):
                     messages.error(request, "К сожалению, этот слот только что заняли. Выберите другое время.")
                     return redirect("repairs:slot_select",
                                     brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
@@ -886,6 +847,7 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
                     end=end_dt,
                     customer_name=form.cleaned_data["customer_name"],
                     customer_phone=form.cleaned_data["customer_phone"],
+                    account=request.user if request.user.is_authenticated and getattr(getattr(request.user, "account_profile", None), "role", None) == "client" else None,
                     referral_code=form.cleaned_data.get("referral_code", "").strip(),
                     price_original=price,
                 )
@@ -921,7 +883,12 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
             token = _make_booking_success_token(app.id)
             return redirect(f'{redirect("repairs:booking_success", appointment_id=app.id).url}?token={token}')
     else:
-        form = BookingForm()
+        initial = {}
+        if request.user.is_authenticated:
+            profile = getattr(request.user, "account_profile", None)
+            if profile and profile.role == "client":
+                initial = {"customer_name": request.user.get_full_name(), "customer_phone": profile.phone}
+        form = BookingForm(initial=initial)
 
     extra_repairs = _get_extra_repairs_for_model(model, repair_type)
 
@@ -1094,8 +1061,9 @@ def yoomoney_webhook(request):
         return HttpResponse("YooMoney webhook endpoint", status=200)
 
     if request.method == "POST":
-        print("YooMoney POST received")
-        print("POST data:", request.POST.dict())
+        # This legacy endpoint intentionally has no business side effects. Never
+        # dump payment payloads (which may contain personal data) to stdout.
+        logger.info("YooMoney webhook request received")
         return HttpResponse("OK", status=200)
 
     return HttpResponse("Method not allowed", status=405)

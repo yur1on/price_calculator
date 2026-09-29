@@ -247,6 +247,108 @@
       gap: 14px;
     }
 
+    .nav-links {
+      display: flex;
+      align-items: center;
+    }
+
+    .public-auth {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-left: 16px;
+      padding-left: 16px;
+      border-left: 1px solid rgba(255,255,255,.16);
+    }
+
+    header nav .public-auth a {
+      margin: 0;
+      padding: 7px 11px;
+      border: 1px solid rgba(255,255,255,.22);
+      border-radius: 9px;
+      font-size: 13px;
+      line-height: 1;
+      text-decoration: none;
+    }
+
+    header nav .public-auth a:last-child {
+      background: rgba(255,255,255,.11);
+    }
+
+    header nav .public-auth a:hover {
+      background: rgba(255,255,255,.17);
+      text-decoration: none;
+    }
+
+    .public-account {
+      position: relative;
+      display: inline-block;
+      margin-left: 16px;
+      padding-left: 16px;
+      border-left: 1px solid rgba(255,255,255,.16);
+    }
+
+    .public-account summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 190px;
+      padding: 7px 10px;
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 10px;
+      background: rgba(255,255,255,.07);
+      cursor: pointer;
+      list-style: none;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .public-account summary::-webkit-details-marker { display: none; }
+    .public-account summary:hover { background: rgba(255,255,255,.12); }
+    .public-account__name { overflow: hidden; text-overflow: ellipsis; }
+    .public-account__chevron { font-size: 10px; opacity: .7; transition: transform .18s ease; }
+    .public-account[open] .public-account__chevron { transform: rotate(180deg); }
+
+    .public-account__menu {
+      position: absolute;
+      top: calc(100% + 9px);
+      right: 0;
+      z-index: 1000;
+      width: 210px;
+      padding: 7px;
+      border: 1px solid rgba(255,255,255,.13);
+      border-radius: 12px;
+      background: #0b1220;
+      box-shadow: 0 16px 34px rgba(0,0,0,.35);
+    }
+
+    header nav .public-account__menu a,
+    .public-account__logout {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      gap: 9px;
+      margin: 0;
+      padding: 10px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: #fff;
+      font: inherit;
+      font-size: 13px;
+      text-align: left;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    header nav .public-account__menu a:hover,
+    .public-account__logout:hover {
+      background: rgba(255,255,255,.08);
+      text-decoration: none;
+    }
+
+    .public-account__menu form { margin: 0; }
+
     .nav-toggle {
       display: none;
       width: 42px;
@@ -287,7 +389,7 @@
     .nav-toggle .bar::before { top: -6px; }
     .nav-toggle .bar::after  { top:  6px; }
 
-    @media (max-width: 560px) {
+    @media (max-width: 900px) {
       .nav-toggle {
         display: inline-flex;
       }
@@ -330,6 +432,47 @@
 
       .site-nav .nav-user-inline {
         display: none;
+      }
+
+      .public-auth {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 7px;
+        margin: 8px 0 0;
+        padding: 9px 0 0;
+        border-top: 1px solid rgba(255,255,255,.12);
+        border-left: 0;
+      }
+
+      header nav .public-auth a {
+        margin: 0;
+        text-align: center;
+      }
+
+      .public-account {
+        display: block;
+        margin: 8px 0 0;
+        padding: 9px 0 0;
+        border-top: 1px solid rgba(255,255,255,.12);
+        border-left: 0;
+      }
+
+      .public-account summary {
+        max-width: none;
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .public-account__chevron { margin-left: auto; }
+
+      .public-account__menu {
+        position: static;
+        width: 100%;
+        margin-top: 5px;
+        padding: 3px;
+        border: 0;
+        background: rgba(255,255,255,.035);
+        box-shadow: none;
       }
     }
 
@@ -458,6 +601,7 @@
       }
     }
   </style>
+  {% block extra_head %}{% endblock %}
 </head>
 
 <body>
@@ -474,6 +618,11 @@
           </button>
 
           <div class="nav-links" id="navLinks">
+            <a href="{% url 'repair_status' %}"
+               class="{% if request.path == '/repair-status/' %}active{% endif %}">
+              Проверить ремонт
+            </a>
+
             <a href="{% url 'repairs:contacts' %}"
                class="{% if request.path|slice:':10' == '/contacts' %}active{% endif %}">
               Контакты
@@ -489,7 +638,13 @@
               Новости
             </a>
 
-            {% if request.user.is_staff %}
+            {% if account_is_admin %}
+              {% if perms.crm.access_crm %}
+                <a href="{% url 'crm:dashboard' %}"
+                   class="{% if request.path|slice:':5' == '/crm/' %}active{% endif %}">
+                  🛠 CRM
+                </a>
+              {% endif %}
               {% if perms.finance.view_repairfinance %}
                 <a href="{% url 'finance:dashboard' %}"
                    class="{% if request.path|slice:':9' == '/finance/' %}active{% endif %}">
@@ -500,17 +655,38 @@
                  class="{% if request.path|slice:':11' == '/referrals' %}active{% endif %}">
                 Отчёт партнёров
               </a>
-            {% elif request.user.is_authenticated and request.user.employee_profile.is_active %}
+            {% elif account_is_master %}
               <a href="{% url 'master_portal:dashboard' %}"
                  class="{% if request.path|slice:':8' == '/master/' %}active{% endif %}">
                 💰 Моя зарплата
               </a>
             {% endif %}
 
-            {% if request.user.is_authenticated and request.user.is_staff %}
-              <a href="{% url 'admin:index' %}">Админ-панель</a>
-              <div class="small" style="opacity:.85; padding: 8px 10px;">
-                Вы вошли как: <b>{{ request.user.username }}</b>
+            {% if request.user.is_authenticated %}
+              <details class="public-account">
+                <summary aria-label="Открыть меню пользователя">
+                  <i class="fa-regular fa-circle-user" aria-hidden="true"></i>
+                  <span class="public-account__name">{{ request.user.get_full_name|default:request.user.username }}</span>
+                  <i class="fa-solid fa-chevron-down public-account__chevron" aria-hidden="true"></i>
+                </summary>
+                <div class="public-account__menu">
+                  <a href="{{ account_home_url }}">
+                    <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+                    Личный кабинет
+                  </a>
+                  <form method="post" action="{% url 'accounts:logout' %}">
+                    {% csrf_token %}
+                    <button class="public-account__logout" type="submit">
+                      <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
+                      Выйти
+                    </button>
+                  </form>
+                </div>
+              </details>
+            {% else %}
+              <div class="public-auth" aria-label="Аккаунт">
+                <a href="{% url 'accounts:login' %}">Войти</a>
+                <a href="{% url 'accounts:register' %}">Регистрация</a>
               </div>
             {% endif %}
           </div>
@@ -585,6 +761,7 @@
 
       const btn = nav.querySelector(".nav-toggle");
       const links = nav.querySelector(".nav-links");
+      const accountMenu = nav.querySelector(".public-account");
       if (!btn || !links) return;
 
       function setOpen(isOpen) {
@@ -598,11 +775,17 @@
       });
 
       document.addEventListener("click", function (e) {
-        if (!nav.contains(e.target)) setOpen(false);
+        if (!nav.contains(e.target)) {
+          setOpen(false);
+          if (accountMenu) accountMenu.removeAttribute("open");
+        }
       });
 
       document.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") setOpen(false);
+        if (e.key === "Escape") {
+          setOpen(false);
+          if (accountMenu) accountMenu.removeAttribute("open");
+        }
       });
 
       links.addEventListener("click", function (e) {
