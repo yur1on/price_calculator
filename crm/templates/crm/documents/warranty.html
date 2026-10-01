@@ -1,11 +1,35 @@
-{% extends "crm/documents/base.html" %}{% block document %}
-<h1>Гарантийный талон</h1>
-<div class="grid"><div class="box"><b>Клиент</b><br>{{ order.client.name }}<br>{{ order.client.phone }}</div><div class="box"><b>Выдано</b><br>{% if order.issued_at %}{{ order.issued_at|date:"d.m.Y H:i" }}{% else %}Заказ ещё не выдан{% endif %}<br>Заказ {{ order.number }}</div></div>
-<h2>Устройство</h2><div class="box"><b>{{ order.device.display_name }}</b>{% if order.device.imei %}<br>IMEI: {{ order.device.imei }}{% endif %}{% if order.device.serial_number %}<br>Серийный номер: {{ order.device.serial_number }}{% endif %}</div>
-<h2>Выполненные работы</h2><table><thead><tr><th>Наименование</th><th>Количество</th></tr></thead><tbody>{% for work in order.work_items.all %}<tr><td>{{ work.name }}</td><td>{{ work.quantity }}</td></tr>{% empty %}<tr><td colspan="2">Работы не указаны</td></tr>{% endfor %}</tbody></table>
-{% with usages=order.part_usages.all %}{% if usages %}<h2>Установленные детали</h2><ul>{% for usage in usages %}{% if usage.status == 'installed' %}<li>{{ usage.part_item.receipt.part }}</li>{% endif %}{% endfor %}</ul>{% endif %}{% endwith %}
-<div class="grid"><div class="box"><b>Итоговая сумма</b><br>{% if order.final_price is not None %}{{ order.final_price }} BYN{% elif order.agreed_price %}{{ order.agreed_price }} BYN{% else %}Уточняется{% endif %}</div><div class="box"><b>Гарантия</b><br>{{ order.warranty_days }} дней{% if order.warranty_started_at %}<br>с {{ order.warranty_started_at|date:"d.m.Y" }}{% endif %}{% if order.warranty_until %}<br>до {{ order.warranty_until|date:"d.m.Y" }}{% endif %}</div></div>
-{% if settings.warranty_terms %}<h2>Условия гарантии</h2><p>{{ settings.warranty_terms|linebreaksbr }}</p>{% endif %}
-<p>Статус ремонта можно проверить по номеру <b>{{ order.number }}</b> на странице проверки ремонта сайта мастерской.</p>
-<div class="sign"><span>Устройство выдал: __________</span><span>Устройство получил: __________</span></div>
+{% extends "crm/documents/base.html" %}
+{% block body_class %}warranty-page{% endblock %}
+{% block document_header %}{% endblock %}
+{% block document_style %}
+@page{size:A4 portrait;margin:8mm}
+body.warranty-page{box-sizing:border-box;max-width:210mm;margin:24px auto;padding:8mm;background:#eef1f5;font:11px/1.35 Arial,sans-serif;color:#18202b}
+.warranty-ticket{box-sizing:border-box;min-height:132mm;padding:6mm;background:white;border:1px solid #cbd3dc;box-shadow:0 6px 24px #18202b12;overflow-wrap:anywhere}
+.warranty-head{display:grid;grid-template-columns:1fr 1fr;gap:5mm;border-bottom:2px solid #26364a;padding-bottom:3mm}
+.warranty-brand{font-size:19px;font-weight:800}.warranty-contact{font-size:10px;color:#394553}.warranty-heading{text-align:right}
+.warranty-ticket h1{font-size:15px;line-height:1.2;margin:0 0 2mm}.warranty-ticket h2{font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 1.5mm;color:#465365}
+.warranty-info{display:grid;grid-template-columns:1.5fr 1fr;gap:5mm;margin:3mm 0}.warranty-info p{margin:1mm 0}.warranty-device{font-size:13px}.warranty-period{border-left:1px solid #cbd3dc;padding-left:4mm}.warranty-period strong{font-size:14px}
+.warranty-ticket table{font-size:11px;table-layout:fixed}.warranty-ticket th,.warranty-ticket td{padding:1.5mm 2mm;border-bottom:1px solid #d8dee5;vertical-align:top}.warranty-ticket th{font-size:9px;color:#465365}.warranty-ticket .warranty-quantity{width:17mm;text-align:right}.warranty-ticket .warranty-price{width:25mm;text-align:right;white-space:nowrap}
+.warranty-parts{margin:2mm 0}.warranty-part+.warranty-part:before{content:" · "}.warranty-total{margin:2mm 0;text-align:right;font-size:12px}.warranty-terms{margin-top:3mm;font-size:10px;line-height:1.35}.warranty-terms p{margin:0;orphans:3;widows:3}
+.warranty-footer{margin-top:4mm;font-size:9px}.warranty-signatures{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4mm;margin-top:5mm;font-size:10px}
+@media screen and (max-width:600px){body.warranty-page{margin:0;padding:12px;padding-top:60px}.warranty-ticket{padding:16px;min-height:0}.warranty-head,.warranty-info{grid-template-columns:1fr;gap:12px}.warranty-heading{text-align:left}.warranty-period{border-left:0;padding-left:0}.warranty-ticket .warranty-price{width:23mm}.warranty-ticket .warranty-quantity{width:12mm}}
+@media print{body.warranty-page{width:194mm;max-width:none;margin:0;padding:0;background:white}.warranty-ticket{width:194mm;min-height:132mm;box-shadow:none;border-color:#9aa5b1}.warranty-head,.warranty-info,.warranty-signatures,.warranty-total,.warranty-ticket tr{break-inside:avoid}.warranty-ticket h2{break-after:avoid}.warranty-ticket thead{display:table-header-group}}
+{% endblock %}
+{% block document %}
+<article class="warranty-ticket">
+  <header class="warranty-head">
+    <div><div class="warranty-brand">{{ settings.workshop_name }}</div><div class="warranty-contact">{{ settings.address }}<br>{{ settings.phone }}{% if settings.email %} · {{ settings.email }}{% endif %}</div></div>
+    <div class="warranty-heading"><h1>ГАРАНТИЙНЫЙ ТАЛОН</h1><b>№ {{ order.number }}</b><br>{% if order.issued_at %}Выдано {{ order.issued_at|date:"d.m.Y" }}{% else %}Заказ ещё не выдан{% endif %}</div>
+  </header>
+  <section class="warranty-info">
+    <div><h2>Устройство</h2><b class="warranty-device">{{ order.device.display_name }}</b>{% if order.device.imei %}<div>IMEI: {{ order.device.imei }}</div>{% endif %}{% if order.device.serial_number %}<div>S/N: {{ order.device.serial_number }}</div>{% endif %}<p>Клиент: {{ order.client.name }} · {{ order.client.phone }}</p></div>
+    <div class="warranty-period"><h2>Гарантия</h2><strong>{{ order.warranty_days }} дней</strong>{% if order.warranty_started_at %}<div>с {{ order.warranty_started_at|date:"d.m.Y" }}</div>{% else %}<div>Начнётся при выдаче устройства</div>{% endif %}{% if order.warranty_until %}<div>до <b>{{ order.warranty_until|date:"d.m.Y" }}</b></div>{% endif %}</div>
+  </section>
+  <h2>Выполненные работы</h2>
+  <table><thead><tr><th>Наименование</th><th class="warranty-quantity">Кол-во</th><th class="warranty-price">Сумма, BYN</th></tr></thead><tbody>{% for work in order.work_items.all %}<tr><td>{{ work.name }}</td><td class="warranty-quantity">{{ work.quantity }}</td><td class="warranty-price">{{ work.total }}</td></tr>{% empty %}<tr><td colspan="3">Работы не указаны</td></tr>{% endfor %}</tbody></table>
+  <div class="warranty-parts">{% for usage in order.part_usages.all %}{% if usage.status == 'installed' %}<span class="warranty-part">Установлено: {{ usage.part_item.receipt.part }}</span>{% endif %}{% endfor %}</div>
+  <div class="warranty-total">Итоговая стоимость ремонта: <b>{% if order.final_price is not None %}{{ order.final_price }} BYN{% elif order.agreed_price %}{{ order.agreed_price }} BYN{% else %}Уточняется{% endif %}</b></div>
+  {% if settings.warranty_terms %}<section class="warranty-terms"><h2>Условия гарантии</h2><p>{{ settings.warranty_terms|linebreaksbr }}</p></section>{% endif %}
+  <footer class="warranty-footer">Статус ремонта можно проверить по номеру <b>{{ order.number }}</b> на странице проверки ремонта сайта мастерской.<div class="warranty-signatures"><span>Устройство выдал: ______________</span><span>Устройство получил: ______________</span></div></footer>
+</article>
 {% endblock %}
