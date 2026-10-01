@@ -95,7 +95,8 @@ def sync_finance_repair(order):
 
 @transaction.atomic
 def issue_order(order_id, *, final_price, paid_amount, warranty_days, author):
-    order = CRMOrder.objects.select_for_update().select_related("client", "device", "employee", "finance_repair").get(pk=order_id)
+    # Nullable related rows use OUTER JOIN: PostgreSQL cannot lock that side.
+    order = CRMOrder.objects.select_for_update(of=("self",)).select_related("client", "device", "employee", "finance_repair").get(pk=order_id)
     if order.status != CRMOrder.Status.READY:
         raise ValidationError("Выдача доступна только для ремонта со статусом «Готово к выдаче».")
     if not order.employee_id:
@@ -119,7 +120,15 @@ def issue_order(order_id, *, final_price, paid_amount, warranty_days, author):
 
 @transaction.atomic
 def install_part(order, part_item_id, author):
-    order = CRMOrder.objects.select_for_update().select_related("employee", "device").get(pk=order.pk)
+    order = CRMOrder.objects.select_for_update(of=("self",)).select_related("employee", "device").get(pk=order.pk)
+    if order.status in {CRMOrder.Status.ISSUED, CRMOrder.Status.CANCELED}:
+        raise ValidationError("Нельзя менять детали выданного или отменённого ремонта.")
+    try:
+        part_item_id = int(part_item_id)
+    except (TypeError, ValueError, OverflowError):
+        raise ValidationError("Выберите деталь со склада.")
+    if not 0 < part_item_id <= 9223372036854775807:
+        raise ValidationError("Выберите деталь со склада.")
     item = PartItem.objects.select_for_update().select_related("receipt__part", "receipt__supplier").get(pk=part_item_id)
     if item.status != PartItem.Status.IN_STOCK:
         raise ValidationError("Деталь уже отсутствует на складе.")
@@ -136,7 +145,11 @@ def install_part(order, part_item_id, author):
 
 @transaction.atomic
 def return_part(usage, author):
-    usage = CRMOrderPartUsage.objects.select_for_update().select_related("order", "part_item", "finance_repair", "part_item__receipt__part").get(pk=usage.pk)
+    # Same order-first lock order as installation/issue, including a fresh status.
+    order = CRMOrder.objects.select_for_update().get(pk=usage.order_id)
+    if order.status in {CRMOrder.Status.ISSUED, CRMOrder.Status.CANCELED}:
+        raise ValidationError("Нельзя менять детали выданного или отменённого ремонта.")
+    usage = CRMOrderPartUsage.objects.select_for_update(of=("self",)).select_related("order", "part_item", "finance_repair", "part_item__receipt__part").get(pk=usage.pk)
     if usage.status != CRMOrderPartUsage.Status.INSTALLED:
         raise ValidationError("Деталь уже была снята с ремонта.")
     item = PartItem.objects.select_for_update().get(pk=usage.part_item_id)

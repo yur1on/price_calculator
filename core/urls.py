@@ -33,6 +33,7 @@ def robots_txt(request):
         "Disallow: /admin/",
         "Disallow: /master/",
         "Disallow: /payments/",
+        "Disallow: /repairs/*/slots/",
         "Sitemap: " + request.build_absolute_uri("/sitemap.xml"),
         "",
     ])

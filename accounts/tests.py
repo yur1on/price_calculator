@@ -200,6 +200,22 @@ class RoleAccessTests(TestCase):
         response = self.client.get(reverse("accounts:my_salary"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Работа мастера")
+        self.assertTemplateUsed(response, "crm/base.html")
+        self.assertContains(response, "87.50")
+        other = Employee.objects.create(name="Другой мастер", default_percent="35")
+        RepairFinance.objects.create(date=date(2026, 9, 5), description="ЧУЖОЙ-РЕМОНТ", revenue="999", employee=other, master_percent="35")
+        response = self.client.get(reverse("accounts:my_salary"), {"employee": other.pk, "master": other.pk})
+        self.assertNotContains(response, "ЧУЖОЙ-РЕМОНТ")
+        self.assertContains(response, "Работа мастера")
+        self.assertNotContains(response, 'href="/finance/"')
+
+    def test_salary_anonymous_redirect_and_empty_state(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("accounts:my_salary")).status_code, 302)
+        approve_master(self.profile)
+        self.client.force_login(get_user_model().objects.get(pk=self.master_user.pk))
+        response = self.client.get(reverse("accounts:my_salary"))
+        self.assertContains(response, "Открытого расчётного периода пока нет")
 
     def test_client_cannot_access_internal_system(self):
         client_user = get_user_model().objects.create_user("client@example.com", password="Secure-4826!")

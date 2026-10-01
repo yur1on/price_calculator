@@ -181,3 +181,20 @@
 .crm-intake-modal__footer{padding:9px 10px calc(9px + env(safe-area-inset-bottom))}
 .crm-intake-modal__footer .crm-btn{min-height:42px;font-size:12px}
 }
+.crm-dashboard-summary{display:grid;gap:8px;margin:0 0 16px}
+@media(min-width:1100px){.crm-dashboard-summary{grid-template-columns:1.4fr 1fr 1fr;align-items:start}.crm-summary-panel[open]{grid-column:1/-1}.crm-summary-panel[data-dashboard-panel="capacity"]>summary small{display:block;font-size:11px}.crm-dashboard-summary .crm-summary-panel>summary{min-height:58px}}
+.crm-summary-panel{min-width:0;border:1px solid var(--crm-line,#dfe6ef);border-radius:12px;background:#fff;overflow:hidden}
+.crm-summary-panel>summary{display:flex;align-items:center;gap:12px;min-height:48px;padding:10px 16px;cursor:pointer;list-style:none;color:var(--crm-text,#1d2733);font-size:14px;font-weight:600}
+.crm-summary-panel>summary::-webkit-details-marker{display:none}
+.crm-summary-panel>summary>strong{margin-left:auto;white-space:nowrap;font-size:14px}
+.crm-summary-panel>summary small{font-weight:400;color:var(--crm-muted,#657184)}
+.crm-summary-panel>summary>i{font-size:11px;color:var(--crm-muted,#657184);transition:transform .15s}
+.crm-summary-panel[open]>summary>i{transform:rotate(180deg)}
+.crm-summary-panel>summary:focus-visible{outline:3px solid #93c5fd;outline-offset:-3px}
+.crm-summary-panel>summary:hover{background:#f8fafc}
+.crm-summary-panel>summary .crm-summary-count{display:inline-flex;justify-content:center;min-width:28px;padding:2px 8px;border-radius:20px;background:#f1f5f9;color:#64748b}
+.crm-summary-panel>summary .is-warning{background:#fff3d6;color:#946000}
+.crm-summary-panel>summary .is-info{background:#eaf2ff;color:#1f6feb}
+.crm-dashboard-summary .crm-summary-panel>.crm-panel{margin:0;border:0;border-top:1px solid var(--crm-line,#dfe6ef);border-radius:0;box-shadow:none;padding:16px}
+@media(max-width:600px){.crm-summary-panel>summary{flex-wrap:wrap;gap:6px 10px;padding:10px 12px}.crm-summary-panel>summary>span{flex:1;min-width:0}.crm-summary-panel>summary small{display:block;font-size:11px}.crm-summary-panel>summary>strong{white-space:normal;text-align:right}.crm-dashboard-summary .wb-section-head{flex-wrap:wrap;gap:8px}.crm-dashboard-summary .crm-attention-list a{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){.crm-summary-panel>summary>i{transition:none}}

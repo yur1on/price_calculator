@@ -1,30 +1,61 @@
 from __future__ import annotations
 import logging
+import asyncio
 from decimal import Decimal
 from html import escape
 
 from django.conf import settings
+from asgiref.sync import async_to_sync
 from telegram import Bot
+from telegram.request import HTTPXRequest
 
 from .models import PartnerTelegram
 
 logger = logging.getLogger(__name__)
+SEND_TIMEOUT_SECONDS = 5
 
-def get_bot() -> Bot | None:
+
+class _TelegramURLFilter(logging.Filter):
+    def filter(self, record):
+        # HTTPX INFO logs contain the full Telegram URL, including the token.
+        return "api.telegram.org/bot" not in record.getMessage()
+
+
+logging.getLogger("httpx").addFilter(_TelegramURLFilter())
+
+def get_bot(*, request=None, get_updates_request=None) -> Bot | None:
     token = getattr(settings, "TELEGRAM_BOT_TOKEN", "") or ""
     if not token:
         return None
-    return Bot(token=token)
+    return Bot(token=token, request=request, get_updates_request=get_updates_request)
+
+
+async def _send_by_chat(chat_id: int, text: str) -> bool:
+    # Create, initialize and close the owned client in the same event loop.
+    if not getattr(settings, "TELEGRAM_BOT_TOKEN", ""):
+        return False
+    timeout = dict(connect_timeout=2, read_timeout=3, write_timeout=3, pool_timeout=1)
+    # Own both transports explicitly: Bot.shutdown() is a no-op when its
+    # initialization failed (including a cancelled getMe request).
+    async with HTTPXRequest(**timeout) as request, HTTPXRequest(**timeout) as updates:
+        bot = get_bot(request=request, get_updates_request=updates)
+        async with bot:
+            await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", disable_web_page_preview=True)
+    return True
+
+
+async def _send_with_timeout(chat_id: int, text: str) -> bool:
+    return await asyncio.wait_for(_send_by_chat(chat_id, text), timeout=SEND_TIMEOUT_SECONDS)
 
 def notify_partner_by_chat(chat_id: int, text: str) -> bool:
     """Отправка сообщения по chat_id. Возвращает True при успехе."""
-    bot = get_bot()
-    if not bot or not chat_id:
+    if not chat_id:
         return False
     try:
-        bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", disable_web_page_preview=True)
-        return True
-    except Exception:
+        return async_to_sync(_send_with_timeout)(chat_id, text)
+    except Exception as exc:
+        # API exception text/tracebacks may contain token URLs or customer data.
+        logger.warning("Telegram delivery failed (%s)", type(exc).__name__)
         return False
 
 def notify_partner(partner, text: str) -> bool:
@@ -66,8 +97,8 @@ def _safe_send_to_phone(phone: str, text: str) -> bool:
         return False
     try:
         return notify_partner_by_chat(binding.chat_id, text)
-    except Exception:
-        logger.exception("Telegram client notification failed")
+    except Exception as exc:
+        logger.warning("Telegram client notification failed (%s)", type(exc).__name__)
         return False
 
 
@@ -96,8 +127,8 @@ def notify_appointment_created(appointment_id: int) -> bool:
     try:
         appointment = Appointment.objects.select_related("phone_model__brand", "repair_type").prefetch_related("items__repair_type").get(pk=appointment_id)
         return _safe_send_to_phone(appointment.customer_phone, appointment_created_message(appointment))
-    except Exception:
-        logger.exception("Appointment Telegram notification failed for appointment_id=%s", appointment_id)
+    except Exception as exc:
+        logger.warning("Appointment Telegram notification failed (%s)", type(exc).__name__)
         return False
 
 
@@ -133,6 +164,6 @@ def notify_order_status(order_id: int, status: str | None = None) -> bool:
         order = CRMOrder.objects.select_related("client", "device").get(pk=order_id)
         text = order_status_message(order, status)
         return bool(text and _safe_send_to_phone(order.client.phone, text))
-    except Exception:
-        logger.exception("Order Telegram notification failed for order_id=%s", order_id)
+    except Exception as exc:
+        logger.warning("Order Telegram notification failed (%s)", type(exc).__name__)
         return False

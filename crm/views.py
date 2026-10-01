@@ -361,13 +361,17 @@ def order_create(request):
     form = IntakeForm(request.POST or None, initial=initial, warranty_source=warranty_source)
     if request.method == "POST" and form.is_valid():
         if appointment:
-            appointment = Appointment.objects.select_for_update().select_related("account__account_profile").get(pk=appointment.pk)
+            appointment = Appointment.objects.select_for_update(of=("self",)).select_related("account__account_profile").get(pk=appointment.pk)
             if hasattr(appointment, "crm_order"):
                 messages.info(request, f"Эта запись уже принята в ремонт {appointment.crm_order.number}.")
                 return redirect("crm:order_detail", pk=appointment.crm_order.pk)
         data = form.cleaned_data
         client = warranty_source.client if warranty_source else data.get("existing_client")
         profile = getattr(appointment.account, "account_profile", None) if appointment and appointment.account_id else None
+        if profile:
+            # Profile may be linked to a CRM client below; lock its existing row
+            # separately instead of locking the nullable OUTER JOIN.
+            profile = AccountProfile.objects.select_for_update().get(pk=profile.pk)
         if profile and profile.crm_client_id:
             client = profile.crm_client
         if not client:
@@ -465,7 +469,7 @@ def appointment_no_show(request, pk):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
     appointment = get_object_or_404(
-        Appointment.objects.select_for_update(), pk=pk,
+        Appointment.objects.select_for_update(of=("self",)), pk=pk,
         status__in=["new", "confirmed"], crm_order__isnull=True,
     )
     appointment.status = "no_show"

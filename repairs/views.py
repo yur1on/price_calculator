@@ -36,7 +36,7 @@ from .models import (
     ReferralPartner,
     ReferralRedemption,
 )
-from .booking_capacity import lock_day, slot_is_available
+from .booking_capacity import CapacitySnapshot, lock_day, slot_is_available
 logger = logging.getLogger(__name__)
 MAX_BOOK_AHEAD_DAYS = int(getattr(settings, "REPAIRS_MAX_BOOK_AHEAD_DAYS", 30))
 BOOKING_SUCCESS_TOKEN_SALT = "repairs.booking_success"
@@ -533,22 +533,9 @@ def get_available_slots(
 ) -> List[datetime]:
     """
     Возвращает список ДАТ/ВРЕМЕН (aware datetime) возможных стартов записи.
-    Сетка — с фиксированным шагом (по умолчанию 60 минут).
-
-    Учитывается:
-      • длительность конкретной услуги для модели (ModelRepairPrice) либо default у RepairType
-      • рабочие часы (WorkingHour) на каждый день недели
-      • существующие заявки (кроме отменённых)
-      • глобальная ёмкость (settings.REPAIRS_MAX_PARALLEL_APPOINTMENTS)
-      • текущее время: прошлое не показывается
-      • шаг сетки: settings.BOOKING_TIME_STEP_MIN (по умолчанию 60)
-      • опциональные буферы ДО и ПОСЛЕ (settings.BOOKING_PREP_BUFFER_MIN / BOOKING_CLEANUP_BUFFER_MIN)
-
-    Правило валидности слота:
-      интервал [slot_start, slot_start + duration] должен полностью
-      попадать в рабочее окно дня и при этом интервал
-      [slot_start - prep_buffer, slot_end + cleanup_buffer] не должен
-      превышать ёмкость по пересечениям с уже существующими заявками.
+    Короткий визит должен помещаться в WorkingHour; workload услуги
+    проверяется отдельно по единому прогнозу загрузки. Snapshot живёт
+    только в этом вызове, SQL внутри цикла слотов не выполняется.
     """
     # --- 1) Длительность услуги ---
     try:
@@ -571,13 +558,19 @@ def get_available_slots(
     if start_date is None:
         start_date = now.date()
 
-    # --- 4) Рабочие часы ---
-    working_hours = list(WorkingHour.objects.all())
+    # Clamp before querying/projecting: calendar padding is not bookable time.
+    end_date = min(start_date + timedelta(days=days - 1),
+                   now.date() + timedelta(days=MAX_BOOK_AHEAD_DAYS))
+    start_date = max(start_date, now.date())
+    if end_date < start_date:
+        return []
+    snapshot = CapacitySnapshot(now.date(), end_date)
+    working_hours = snapshot.working_hours
 
     slots: List[datetime] = []
 
     # --- 6) Проход по дням ---
-    for day_offset in range(days):
+    for day_offset in range((end_date - start_date).days + 1):
         current_date = start_date + timedelta(days=day_offset)
         weekday = current_date.weekday()
         day_hours = [wh for wh in working_hours if wh.weekday == weekday]
@@ -619,7 +612,7 @@ def get_available_slots(
                 if slot_end > day_end:
                     break  # дальше только позже — тоже выйдет за окно
 
-                if slot_is_available(slot_start, workload_minutes):
+                if snapshot.slot_is_available(slot_start, workload_minutes):
                     slots.append(slot_start)
 
                 # Следующий шаг по сетке
@@ -687,8 +680,6 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
     all_slots = get_available_slots(
         model, repair_type, days=days_span, start_date=grid_start, tz=tz
     )
-    # Обрезаем по лимитной дате
-    all_slots = [s for s in all_slots if s.date() <= limit_date]
 
     # Группируем по датам
     slots_by_date: dict[date, list[datetime]] = {}

@@ -177,3 +177,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
 });
 function escapeHtml(value){const div=document.createElement("div");div.textContent=value||"";return div.innerHTML;}
+
+// Native details remains keyboard-accessible even without JavaScript/storage.
+const initializedDashboardPanels = new WeakSet();
+function initDashboardPanels() {
+  document.querySelectorAll('[data-dashboard-panel]').forEach(panel => {
+    if (initializedDashboardPanels.has(panel)) return;
+    initializedDashboardPanels.add(panel);
+    const key = 'tehsfera.dashboard.panel.' + panel.dataset.dashboardPanel;
+    try { panel.open = localStorage.getItem(key) === 'open'; } catch (_) { panel.open = false; }
+    const sync = () => panel.querySelector('summary').setAttribute('aria-expanded', String(panel.open));
+    sync();
+    panel.addEventListener('toggle', () => {
+      sync();
+      try { localStorage.setItem(key, panel.open ? 'open' : 'closed'); } catch (_) { /* Storage is optional. */ }
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', initDashboardPanels);
+document.addEventListener('htmx:afterSwap', initDashboardPanels);
+document.addEventListener('htmx:historyRestore', initDashboardPanels);

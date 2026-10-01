@@ -1,7 +1,9 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, Client, skipUnlessDBFeature
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -151,3 +153,79 @@ class CRMOOnlineAppointmentTests(TestCase):
         self.assertEqual(order.condition_on_intake, "Царапины")
         appointment.refresh_from_db()
         self.assertEqual(appointment.status, "done")
+
+    def test_no_show_releases_capacity_and_repeated_post_is_safe(self):
+        self.client.force_login(self.admin)
+        for status in ("new", "confirmed"):
+            appointment = self.appointment(status=status)
+            url = reverse("crm:appointment_no_show", args=[appointment.pk])
+            day = timezone.localdate(appointment.start)
+            self.assertEqual(appointment_reserved_minutes(day), 90)
+            self.assertEqual(self.client.get(url).status_code, 405)
+            self.assertEqual(self.client.post(url).status_code, 302)
+            self.assertEqual(self.client.post(url).status_code, 404)
+            appointment.refresh_from_db()
+            self.assertEqual(appointment.status, "no_show")
+            self.assertEqual(appointment_reserved_minutes(day), 0)
+
+    def test_converted_appointment_cannot_be_marked_no_show(self):
+        appointment = self.appointment()
+        customer = CRMClient.objects.create(name="Test", phone="+375291234567")
+        device = CRMDevice.objects.create(client=customer, device_type="Телефон", model="Test")
+        order = CRMOrder.objects.create(client=customer, device=device, source_appointment=appointment,
+                                        issue_description="Test")
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.post(reverse("crm:appointment_no_show", args=[appointment.pk])).status_code, 404)
+        appointment.refresh_from_db(); order.refresh_from_db()
+        self.assertEqual(appointment.status, "new")
+        self.assertEqual(order.source_appointment_id, appointment.pk)
+        self.assertEqual(order.status, CRMOrder.Status.ACCEPTED)
+
+    def test_no_show_permissions_and_csrf(self):
+        appointment = self.appointment()
+        url = reverse("crm:appointment_no_show", args=[appointment.pk])
+        self.assertEqual(self.client.post(url).status_code, 302)
+        user = get_user_model().objects.create_user("no-show-master", password="pass")
+        profile = AccountProfile.objects.create(user=user, role="master", approval_status="pending")
+        self.client.force_login(user)
+        self.assertEqual(self.client.post(url).status_code, 403)
+        approve_master(profile)
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(user)
+        self.assertEqual(csrf_client.post(url).status_code, 403)
+        self.assertEqual(self.client.post(url).status_code, 302)
+
+    @skipUnlessDBFeature("has_select_for_update_of")
+    def test_postgresql_no_show_lock_excludes_nullable_crm_order(self):
+        appointment = self.appointment()
+        self.client.force_login(self.admin)
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.post(reverse("crm:appointment_no_show", args=[appointment.pk]))
+        self.assertEqual(response.status_code, 302)
+        locks = [row["sql"] for row in queries if "FOR UPDATE" in row["sql"]]
+        self.assertTrue(any('LEFT OUTER JOIN "crm_crmorder"' in sql and
+                            'FOR UPDATE OF "repairs_appointment"' in sql for sql in locks))
+
+    @skipUnlessDBFeature("has_select_for_update_of")
+    def test_postgresql_conversion_locks_appointment_and_profile_separately(self):
+        appointment = self.appointment()
+        user = get_user_model().objects.create_user("convert-client", password="pass")
+        profile = AccountProfile.objects.create(user=user, role="client", approval_status="active")
+        appointment.account = user
+        appointment.save(update_fields=["account"])
+        self.client.force_login(self.admin)
+        data = {"appointment": appointment.pk, "client_name": "Test", "phone": "+375291234567",
+                "device_type": "Телефон", "brand": "Samsung", "device_model": "S24",
+                "issue_description": "Display", "order_type": "paid", "agreed_price": "250",
+                "estimated_work_minutes_snapshot": "90", "warranty_days": "90"}
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.post(reverse("crm:order_create"), data)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(CRMOrder.objects.filter(source_appointment=appointment).count(), 1)
+        profile.refresh_from_db()
+        self.assertIsNotNone(profile.crm_client_id)
+        locks = [row["sql"] for row in queries if "FOR UPDATE" in row["sql"]]
+        self.assertTrue(any('FOR UPDATE OF "repairs_appointment"' in sql for sql in locks))
+        self.assertTrue(any('FROM "accounts_accountprofile"' in sql for sql in locks))
+        self.client.post(reverse("crm:order_create"), data)
+        self.assertEqual(CRMOrder.objects.filter(source_appointment=appointment).count(), 1)

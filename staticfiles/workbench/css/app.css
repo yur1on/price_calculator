@@ -30,3 +30,20 @@ body.intake-open{overflow:hidden}
 .intake-overlay{position:fixed;z-index:10000;inset:0;display:flex;align-items:center;justify-content:center;width:100vw;height:100dvh;padding:16px;box-sizing:border-box;background:rgba(15,23,42,.58);backdrop-filter:blur(3px)}
 .intake-dialog{position:relative;display:flex;width:min(1500px,calc(100vw - 32px));height:calc(100dvh - 32px);max-width:none;max-height:none;min-width:0;min-height:0;flex-direction:column;border:1px solid rgba(255,255,255,.45);border-radius:20px;background:#f7f9fc;box-shadow:0 28px 80px rgba(15,23,42,.3);overflow:hidden}
 @media(max-width:768px){.intake-overlay{padding:0}.intake-dialog{width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;border:0;border-radius:0}}
+/* Own salary: shared Workbench components, no financial layout dependencies. */
+.crm-salary { min-width:0; }
+.crm-salary .crm-salary-totals { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.crm-salary .wb-kpi > div { min-width:0; }
+.crm-salary .wb-kpi strong { font-size:clamp(16px,1.6vw,21px); line-height:1.35; overflow-wrap:anywhere; }
+.crm-salary .crm-salary-period { flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+.crm-salary .crm-salary-table { max-width:100%; }
+.crm-salary .crm-table td { white-space:nowrap; }
+.crm-salary .crm-table .crm-salary-description { min-width:180px; max-width:360px; white-space:normal; overflow-wrap:anywhere; }
+.crm-salary .crm-order-card h3 { overflow-wrap:anywhere; }
+.crm-salary .crm-order-card dl { grid-template-columns:minmax(0,1fr) minmax(0,1.4fr); }
+.crm-salary .crm-order-card dd { overflow-wrap:anywhere; }
+@media(max-width:700px) {
+  .crm-salary .crm-salary-totals { grid-template-columns:1fr; }
+  .crm-salary .wb-kpis:not(.crm-salary-totals) { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .crm-salary .crm-salary-period { align-items:flex-start; }
+}
