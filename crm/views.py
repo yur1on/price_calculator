@@ -44,6 +44,7 @@ from repairs.models import WorkshopDayCapacity
 from .services import add_event, change_status, install_part, issue_order, return_part, sync_finance_repair
 from .stale import decorate_stale_orders, with_status_changed_at
 from .analytics import build_analytics
+from .document_context import document_contact_context
 
 
 def analytics_admin_required(view):
@@ -901,7 +902,11 @@ def _document(request, pk, kind, template):
         "work_items", "part_usages__part_item__receipt__part",
     ), pk=pk)
     add_event(order, CRMEvent.Type.DOCUMENT, f"Открыт документ: {kind}.", request.user)
-    return render(request, template, {"order": order, "settings": CRMDocumentSettings.load(), "document_title": kind})
+    configuration = CRMDocumentSettings.load()
+    return render(request, template, {
+        "order": order, "settings": configuration, "document_title": kind,
+        **document_contact_context(configuration, request),
+    })
 
 
 @crm_permission_required("crm.manage_documents")

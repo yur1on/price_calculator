@@ -1,0 +1,1 @@
+{% if document_contacts %}<div class="document-contacts">{% for contact in document_contacts %}{{ contact }}{% if not forloop.last %} · {% endif %}{% endfor %}</div>{% endif %}

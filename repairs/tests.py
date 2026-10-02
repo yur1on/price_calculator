@@ -316,10 +316,65 @@ class ContactsPageTests(TestCase):
 
 
 class SeoPagesTests(TestCase):
+    def test_homepage_repair_status_card_uses_existing_route(self):
+        response = self.client.get(reverse("home"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'class="home-status"', count=1)
+        self.assertContains(response, 'Устройство уже в ремонте?')
+        self.assertContains(response, 'Проверьте текущий статус по номеру из квитанции.')
+        self.assertContains(response, 'Проверить статус')
+        # Header, hero and standalone status block share the existing endpoint.
+        self.assertContains(response, f'href="{reverse("repair_status")}"', count=3)
+
     def test_homepage_is_available(self):
         response = self.client.get(reverse("home"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Ремонт iPhone, Google Pixel и других телефонов в Гомеле")
+        self.assertTemplateUsed(response, "repairs/home.html")
+        self.assertContains(response, "Ремонт телефонов и техники в Гомеле — Tehsfera")
+
+    def test_home_structure_links_and_seo(self):
+        brand = PhoneBrand.objects.create(name="Example", slug="example", logo="brands/example.webp")
+        PhoneModel.objects.create(brand=brand, name="Phone", slug="example-phone", category="phone")
+        response = self.client.get(reverse("home"))
+        self.assertContains(response, '<h1', count=1)
+        self.assertContains(response, '<link rel="canonical" href="http://testserver/">')
+        self.assertContains(response, '"@type": "RepairService"')
+        self.assertContains(response, 'name="robots" content="index, follow"')
+        self.assertContains(response, 'href="/" aria-label="Tehsfera — на главную"')
+        for category in ("phone", "tablet", "watch"):
+            self.assertContains(response, f'href="/repairs/?cat={category}"')
+        self.assertContains(response, 'href="/repairs/example/?cat=phone"')
+        self.assertContains(response, 'alt="Ремонт Example в Гомеле"')
+        for value in ('кабинет 50', 'tel:+375445684493', 'Пн–Сб 10:00–18:00', 'repairs/css/home.css'):
+            self.assertContains(response, value)
+
+    def test_catalog_category_metadata_and_canonical(self):
+        for category, label in (("phone", "телефонов"), ("tablet", "планшетов"), ("watch", "смарт-часов")):
+            with self.subTest(category=category):
+                response = self.client.get(reverse("repairs:brand_list"), {"cat": category})
+                self.assertEqual(response.status_code, 200)
+                self.assertTemplateUsed(response, "repairs/brand_list.html")
+                self.assertContains(response, f'<h1>Ремонт {label} в Гомеле</h1>')
+                self.assertContains(response, '<h1', count=1)
+                self.assertContains(response, f'<link rel="canonical" href="http://testserver/repairs/?cat={category}">')
+                self.assertContains(response, f'Ремонт {label} в Гомеле. Выберите бренд и модель:')
+                self.assertNotContains(response, 'repairs/css/home.css')
+                self.assertNotContains(response, 'Ремонт телефонов<br>и техники')
+                if category != "phone":
+                    self.assertNotContains(response, '<h1>Ремонт телефонов')
+
+    def test_brand_category_and_model_urls_are_preserved(self):
+        brand = PhoneBrand.objects.create(name="Example", slug="example")
+        for category, label in (("phone", "телефонов"), ("tablet", "планшетов"), ("watch", "смарт-часов")):
+            model = PhoneModel.objects.create(brand=brand, name=category, slug=category, category=category)
+            response = self.client.get(reverse("repairs:model_list", args=[brand.slug]), {"cat": category})
+            self.assertContains(response, f'Ремонт {label} Example в Гомеле')
+            self.assertContains(response, f'href="{reverse("repairs:repair_list", args=[brand.slug, model.slug])}"')
+
+    def test_home_query_category_keeps_root_canonical(self):
+        response = self.client.get(reverse("home"), {"cat": "tablet"})
+        self.assertContains(response, '<link rel="canonical" href="http://testserver/">')
+        self.assertTemplateUsed(response, "repairs/home.html")
 
     def test_robots_txt_exposes_sitemap(self):
         response = self.client.get(reverse("robots_txt"))

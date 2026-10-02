@@ -25,7 +25,10 @@ class PublicRepairStatusForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["order_number"].widget.attrs.update({"autocomplete": "off", "placeholder": "Например, RHPZ32MM5"})
+        self.fields["order_number"].widget.attrs.update({
+            "autocomplete": "off", "placeholder": "Например, R7K2M9P4A",
+            "aria-describedby": "tracking-help", "spellcheck": "false", "autocapitalize": "characters",
+        })
 
     def clean_order_number(self):
         return self.cleaned_data["order_number"].strip().upper()
@@ -243,7 +246,7 @@ class DocumentSettingsForm(CompactModelForm):
     class Meta:
         model = CRMDocumentSettings
         fields = [
-            "workshop_name", "phone", "email", "address", "receipt_terms", "act_terms", "warranty_terms",
+            "workshop_name", "phone", "website", "email", "address", "receipt_terms", "act_terms", "warranty_terms",
             "diagnostic_warning_hours", "approval_warning_hours", "waiting_part_warning_days", "ready_warning_days",
         ]
         widgets = {

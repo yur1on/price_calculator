@@ -3,33 +3,43 @@
 {% block document_header %}{% endblock %}
 {% block document_style %}
 @page{size:A4 portrait;margin:8mm}
-body.warranty-page{box-sizing:border-box;max-width:210mm;margin:24px auto;padding:8mm;background:#eef1f5;font:11px/1.35 Arial,sans-serif;color:#18202b}
-.warranty-ticket{box-sizing:border-box;min-height:132mm;padding:6mm;background:white;border:1px solid #cbd3dc;box-shadow:0 6px 24px #18202b12;overflow-wrap:anywhere}
-.warranty-head{display:grid;grid-template-columns:1fr 1fr;gap:5mm;border-bottom:2px solid #26364a;padding-bottom:3mm}
-.warranty-brand{font-size:19px;font-weight:800}.warranty-contact{font-size:10px;color:#394553}.warranty-heading{text-align:right}
-.warranty-ticket h1{font-size:15px;line-height:1.2;margin:0 0 2mm}.warranty-ticket h2{font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 1.5mm;color:#465365}
-.warranty-info{display:grid;grid-template-columns:1.5fr 1fr;gap:5mm;margin:3mm 0}.warranty-info p{margin:1mm 0}.warranty-device{font-size:13px}.warranty-period{border-left:1px solid #cbd3dc;padding-left:4mm}.warranty-period strong{font-size:14px}
-.warranty-ticket table{font-size:11px;table-layout:fixed}.warranty-ticket th,.warranty-ticket td{padding:1.5mm 2mm;border-bottom:1px solid #d8dee5;vertical-align:top}.warranty-ticket th{font-size:9px;color:#465365}.warranty-ticket .warranty-quantity{width:17mm;text-align:right}.warranty-ticket .warranty-price{width:25mm;text-align:right;white-space:nowrap}
-.warranty-parts{margin:2mm 0}.warranty-part+.warranty-part:before{content:" · "}.warranty-total{margin:2mm 0;text-align:right;font-size:12px}.warranty-terms{margin-top:3mm;font-size:10px;line-height:1.35}.warranty-terms p{margin:0;orphans:3;widows:3}
-.warranty-footer{margin-top:4mm;font-size:9px}.warranty-signatures{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4mm;margin-top:5mm;font-size:10px}
-@media screen and (max-width:600px){body.warranty-page{margin:0;padding:12px;padding-top:60px}.warranty-ticket{padding:16px;min-height:0}.warranty-head,.warranty-info{grid-template-columns:1fr;gap:12px}.warranty-heading{text-align:left}.warranty-period{border-left:0;padding-left:0}.warranty-ticket .warranty-price{width:23mm}.warranty-ticket .warranty-quantity{width:12mm}}
-@media print{body.warranty-page{width:194mm;max-width:none;margin:0;padding:0;background:white}.warranty-ticket{width:194mm;min-height:132mm;box-shadow:none;border-color:#9aa5b1}.warranty-head,.warranty-info,.warranty-signatures,.warranty-total,.warranty-ticket tr{break-inside:avoid}.warranty-ticket h2{break-after:avoid}.warranty-ticket thead{display:table-header-group}}
+body.warranty-page{box-sizing:border-box;width:194mm;max-width:100%;margin:24px auto;padding:0;background:white;font:8.5pt/1.25 Arial,Helvetica,sans-serif;color:#111}
+/* A4 midpoint: 8mm page margin + 140.5mm sheet = 148.5mm. Grow naturally for exceptional content. */
+.warranty-sheet{position:relative;box-sizing:border-box;min-height:140.5mm;padding-bottom:4mm}
+.warranty-cut{position:absolute;top:100%;left:0;right:0;height:0;border-top:.75pt dashed #222}
+.warranty-ticket{box-sizing:border-box;min-height:136.5mm;padding:3mm 4mm;border:.75pt solid #222;overflow-wrap:anywhere}
+.warranty-head{display:grid;grid-template-columns:minmax(0,1fr) 65mm;gap:4mm;border-bottom:1pt solid #111;padding-bottom:2mm}
+.warranty-brand{font-size:14pt;font-weight:800}.warranty-subtitle{font-size:8pt;font-weight:700}.warranty-contact,.warranty-page .document-contacts{font-size:8.5pt;color:#111;line-height:1.3}.warranty-heading{text-align:right}
+.warranty-ticket h1{font-size:12pt;line-height:1.2;margin:0 0 1.5mm;font-weight:800}.warranty-heading>b{font-size:11pt}
+.warranty-ticket h2{font-size:8.5pt;line-height:1.2;text-transform:uppercase;margin:0 0 1mm;color:#111;font-weight:700}
+.warranty-info{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:4mm;margin:1.5mm 0;padding-bottom:1mm;border-bottom:.75pt solid #333}
+.warranty-info p{margin:1mm 0 0}.warranty-device{font-size:10pt}.warranty-period{border-left:.75pt solid #333;padding-left:3mm}.warranty-period strong{font-size:11pt}
+.warranty-ticket table{font-size:8.5pt;table-layout:fixed}.warranty-ticket th,.warranty-ticket td{padding:.75mm 1.5mm;border-bottom:.75pt solid #333;vertical-align:top}.warranty-ticket th{font-size:8pt;color:#111;font-weight:700}.warranty-ticket .warranty-quantity{width:17mm;text-align:right}.warranty-ticket .warranty-price{width:25mm;text-align:right}
+.warranty-parts{margin:1mm 0}.warranty-part{padding:.5mm 0;font-size:8.5pt}
+.warranty-total{margin:1mm 0;padding-top:1mm;border-top:1pt solid #222;text-align:right;font-size:9pt}
+.warranty-terms{margin-top:1mm;padding-top:1mm;border-top:.75pt solid #333;font-size:8pt;line-height:1.3}.warranty-terms p{margin:0;orphans:3;widows:3}
+.warranty-footer{margin-top:2mm;font-size:8pt}.warranty-signatures{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4mm;margin-top:2mm;padding-top:1mm;border-top:.75pt solid #333;font-size:8pt}
+@media screen and (max-width:600px){body.warranty-page{width:auto;margin:0;padding:60px 12px 12px}.warranty-sheet,.warranty-ticket{min-height:0}.warranty-ticket{padding:12px}.warranty-head,.warranty-info{grid-template-columns:1fr;gap:10px}.warranty-heading{text-align:left}.warranty-period{border-left:0;padding-left:0}.warranty-ticket .warranty-price{width:23mm}.warranty-ticket .warranty-quantity{width:12mm}}
+@media print{body.warranty-page{width:194mm;max-width:none;margin:0;padding:0}.warranty-head,.warranty-info,.warranty-signatures,.warranty-total,.warranty-ticket tr{break-inside:avoid}.warranty-ticket h2{break-after:avoid}.warranty-ticket thead{display:table-header-group}}
 {% endblock %}
 {% block document %}
+<div class="warranty-sheet">
 <article class="warranty-ticket">
   <header class="warranty-head">
-    <div><div class="warranty-brand">{{ settings.workshop_name }}</div><div class="warranty-contact">{{ settings.address }}<br>{{ settings.phone }}{% if settings.email %} · {{ settings.email }}{% endif %}</div></div>
+    <div><div class="warranty-brand">{{ settings.workshop_name }}</div><div class="warranty-subtitle">СЕРВИСНЫЙ ЦЕНТР</div>{% if settings.address %}<div class="warranty-contact">{{ settings.address }}</div>{% endif %}{% include 'crm/documents/contact_line.html' %}</div>
     <div class="warranty-heading"><h1>ГАРАНТИЙНЫЙ ТАЛОН</h1><b>№ {{ order.number }}</b><br>{% if order.issued_at %}Выдано {{ order.issued_at|date:"d.m.Y" }}{% else %}Заказ ещё не выдан{% endif %}</div>
   </header>
   <section class="warranty-info">
-    <div><h2>Устройство</h2><b class="warranty-device">{{ order.device.display_name }}</b>{% if order.device.imei %}<div>IMEI: {{ order.device.imei }}</div>{% endif %}{% if order.device.serial_number %}<div>S/N: {{ order.device.serial_number }}</div>{% endif %}<p>Клиент: {{ order.client.name }} · {{ order.client.phone }}</p></div>
+    <div><h2>Устройство</h2><b class="warranty-device">{{ order.device.display_name }}</b><div>{% if order.device.imei %}<span>IMEI: {{ order.device.imei }}</span>{% endif %}{% if order.device.serial_number %}{% if order.device.imei %} · {% endif %}<span>S/N: {{ order.device.serial_number }}</span>{% endif %}</div><p>Клиент: {{ order.client.name }} · {{ order.client.phone }}</p></div>
     <div class="warranty-period"><h2>Гарантия</h2><strong>{{ order.warranty_days }} дней</strong>{% if order.warranty_started_at %}<div>с {{ order.warranty_started_at|date:"d.m.Y" }}</div>{% else %}<div>Начнётся при выдаче устройства</div>{% endif %}{% if order.warranty_until %}<div>до <b>{{ order.warranty_until|date:"d.m.Y" }}</b></div>{% endif %}</div>
   </section>
   <h2>Выполненные работы</h2>
   <table><thead><tr><th>Наименование</th><th class="warranty-quantity">Кол-во</th><th class="warranty-price">Сумма, BYN</th></tr></thead><tbody>{% for work in order.work_items.all %}<tr><td>{{ work.name }}</td><td class="warranty-quantity">{{ work.quantity }}</td><td class="warranty-price">{{ work.total }}</td></tr>{% empty %}<tr><td colspan="3">Работы не указаны</td></tr>{% endfor %}</tbody></table>
-  <div class="warranty-parts">{% for usage in order.part_usages.all %}{% if usage.status == 'installed' %}<span class="warranty-part">Установлено: {{ usage.part_item.receipt.part }}</span>{% endif %}{% endfor %}</div>
+  <div class="warranty-parts">{% for usage in order.part_usages.all %}{% if usage.status == 'installed' %}<div class="warranty-part"><b>Установленная деталь:</b> {{ usage.part_item.receipt.part }}</div>{% endif %}{% endfor %}</div>
   <div class="warranty-total">Итоговая стоимость ремонта: <b>{% if order.final_price is not None %}{{ order.final_price }} BYN{% elif order.agreed_price %}{{ order.agreed_price }} BYN{% else %}Уточняется{% endif %}</b></div>
   {% if settings.warranty_terms %}<section class="warranty-terms"><h2>Условия гарантии</h2><p>{{ settings.warranty_terms|linebreaksbr }}</p></section>{% endif %}
-  <footer class="warranty-footer">Статус ремонта можно проверить по номеру <b>{{ order.number }}</b> на странице проверки ремонта сайта мастерской.<div class="warranty-signatures"><span>Устройство выдал: ______________</span><span>Устройство получил: ______________</span></div></footer>
+  <footer class="warranty-footer">Статус ремонта можно проверить по номеру <b>{{ order.number }}</b> на странице {{ document_status_url }}.<div class="warranty-signatures"><span>Устройство выдал: ______________</span><span>Устройство получил: ______________</span></div></footer>
 </article>
+<div class="warranty-cut" aria-hidden="true"></div>
+</div>
 {% endblock %}

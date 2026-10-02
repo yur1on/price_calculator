@@ -414,6 +414,9 @@ def _parse_date_or(default_date: date, value: str | None) -> date:
 
 # ---------- шаг 1: бренды ----------
 
+CATALOG_LABELS = {"phone": "телефонов", "tablet": "планшетов", "watch": "смарт-часов"}
+
+
 def brand_list(request):
     """Список брендов по выбранной категории ?cat=phone|tablet|watch."""
     choices = list(PhoneModel.CATEGORY_CHOICES)
@@ -434,6 +437,7 @@ def brand_list(request):
         "brands": brands,
         "categories": choices,
         "selected_cat": sel,
+        "device_label": CATALOG_LABELS[sel],
     })
 
 
@@ -451,7 +455,7 @@ def home(request):
         .order_by("name_lc", "name")
     )
 
-    return render(request, "repairs/brand_list.html", {
+    return render(request, "repairs/home.html", {
         "brands": brands,
         "categories": choices,
         "selected_cat": sel,
@@ -492,6 +496,7 @@ def model_list(request, brand_slug: str):
 
     return render(request, "repairs/model_list.html", {
         "brand": brand,
+        "device_label": CATALOG_LABELS[sel],
         "categories": choices,
         "selected_cat": sel,
         "view_mode": view_mode,

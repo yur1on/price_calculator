@@ -1,12 +1,10 @@
 {% extends "repairs/base.html" %}
 {% load static %}
 
-{% block title %}Ремонт iPhone, Google Pixel и телефонов в Гомеле | Tehsfera{% endblock %}
+{% block title %}{% if selected_cat == 'phone' %}Стоимость ремонта телефонов в Гомеле — Tehsfera{% else %}Ремонт {{ device_label }} в Гомеле: модели и цены — Tehsfera{% endif %}{% endblock %}
 
-{% block meta_description %}
-Ремонт iPhone, Google Pixel, Samsung, Xiaomi, Huawei, Honor, Realme, Infinix, Vivo и других телефонов в Гомеле. Выберите бренд и модель, узнайте цену ремонта и запишитесь онлайн в Tehsfera.
-{% endblock %}
-{% block canonical_href %}{% if is_homepage %}{{ request.scheme }}://{{ request.get_host }}{% url 'home' %}{% else %}{{ request.scheme }}://{{ request.get_host }}{% url 'repairs:brand_list' %}?cat={{ selected_cat }}{% endif %}{% endblock %}
+{% block meta_description %}Ремонт {{ device_label }} в Гомеле. Выберите бренд и модель: доступные услуги, цены в BYN и онлайн-запись в мастерскую Tehsfera.{% endblock %}
+{% block canonical_href %}{{ request.scheme }}://{{ request.get_host }}{% url 'repairs:brand_list' %}?cat={{ selected_cat }}{% endblock %}
 
 {% block content %}
 <style>
@@ -314,13 +312,8 @@
 </style>
 
 <section class="hero">
-  <h1>Ремонт iPhone, Google Pixel и других телефонов в Гомеле</h1>
-  <p>
-    Tehsfera — сервисный центр в Гомеле на ул. Гагарина, 55.
-    Ремонтируем iPhone, Google Pixel, Samsung, Xiaomi, Huawei,
-    Honor, Realme, Infinix, OnePlus и другие телефоны. Выберите устройство, бренд
-    и модель, чтобы узнать стоимость ремонта и записаться на удобное время.
-  </p>
+  <h1>Ремонт {{ device_label }} в Гомеле</h1>
+  <p>Выберите бренд и модель, чтобы посмотреть доступные услуги, стоимость и время для записи.</p>
 </section>
 
 <div class="toolbar">
@@ -387,38 +380,6 @@
   <p class="sub">Для выбранной категории брендов не найдено.</p>
 {% endif %}
 
-<section class="seo-text">
-  <h2>Ремонт техники в сервисном центре Tehsfera</h2>
-
-  <p>
-    В Tehsfera можно обратиться для ремонта смартфонов, планшетов и смарт-часов
-    популярных брендов: Apple iPhone, Google Pixel, Samsung, Xiaomi,
-    Huawei, Honor, Realme, Infinix, OnePlus и других. Мы выполняем замену стекла,
-    дисплея, аккумулятора, разъёма зарядки, микрофона, динамика, сложный аппаратный ремонт, программный ремонт и другие работы.
-  </p>
-
-  <p>
-    Если вам нужен ремонт Айфона в Гомеле, ремонт Google Pixel
-    или ремонт после падения, попадания влаги, проблем с зарядкой,
-    экраном или батареей — выберите бренд и модель устройства на сайте.
-  </p>
-
-  <h3>Популярные услуги ремонта</h3>
-  <ul>
-    <li>замена стекла iPhone, Samsung и Google Pixel;</li>
-    <li>замена дисплея iPhone, Samsung, Xiaomi, Huawei, Realme;</li>
-    <li>замена аккумулятора iPhone, Samsung, Huawei, Xiaomi;</li>
-    <li>ремонт разъёма зарядки телефона;</li>
-    <li>ремонт микрофона, динамика;</li>
-    <li>Ремонт Процессора</li>
-    <li>Снятие блокировок, смена программного обеспечения</li>
-  </ul>
-
-  <p>
-    Сервисный центр находится в Гомеле по адресу: ул. Гагарина, 55.
-    Выберите бренд и модель устройства, чтобы посмотреть доступные услуги,
-    стоимость ремонта и свободное время для записи.
-  </p>
-</section>
+<section class="seo-text"><h2>Услуги и стоимость ремонта {{ device_label }}</h2><p>На странице вашей модели указаны доступные работы, цены в BYN и сроки. Для услуг с онлайн-записью можно выбрать удобное время посещения.</p><p>Не нашли устройство или нужную работу? <a href="{% url 'repairs:contacts' %}">Свяжитесь с мастерской Tehsfera</a> на ул. Гагарина, 55 в Гомеле.</p></section>
 
 {% endblock %}

@@ -2,8 +2,8 @@
 {% load static %}
 {% load repairs_extras %}
 
-{% block title %}Ремонт {{ brand.name }} в Гомеле: модели и цены | Tehsfera{% endblock %}
-{% block meta_description %}Ремонт {{ brand.name }} в Гомеле: выберите модель, узнайте цены на замену экрана, аккумулятора, разъёма зарядки и другие услуги в Tehsfera.{% endblock %}
+{% block title %}Ремонт {{ device_label }} {{ brand.name }} в Гомеле: модели и цены — Tehsfera{% endblock %}
+{% block meta_description %}Выберите модель для ремонта {{ device_label }} {{ brand.name }} в Гомеле. Доступные услуги, стоимость и запись в мастерскую Tehsfera.{% endblock %}
 {% block canonical_href %}{{ request.scheme }}://{{ request.get_host }}{% url 'repairs:model_list' brand_slug=brand.slug %}?cat={{ selected_cat }}{% endblock %}
 
 {% block content %}
@@ -341,7 +341,7 @@
 <div class="brand-head">
   <h1 class="brand-title">
     <span class="brand-pill">{{ brand.name }}</span>
-    <span class="brand-path">/ Модели</span>
+    <span class="brand-path">— ремонт {{ device_label }} в Гомеле</span>
   </h1>
 </div>
 

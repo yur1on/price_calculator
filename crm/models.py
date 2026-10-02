@@ -423,6 +423,7 @@ class CRMDocumentSettings(models.Model):
     workshop_name = models.CharField("Название", max_length=160, default="Техсфера")
     phone = models.CharField("Телефон", max_length=80, blank=True)
     email = models.EmailField("Email", blank=True)
+    website = models.CharField("Сайт", max_length=255, blank=True, default="")
     address = models.CharField("Адрес", max_length=255, blank=True)
     receipt_terms = models.TextField("Условия приёма", blank=True)
     act_terms = models.TextField("Текст акта", blank=True)

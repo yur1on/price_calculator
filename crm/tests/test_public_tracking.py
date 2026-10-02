@@ -12,7 +12,8 @@ from accounts.models import AccountProfile
 from accounts.services import approve_master
 from crm.client_status import CLIENT_STATUS
 from crm.models import CRMAttachment, CRMClient, CRMDevice, CRMEvent, CRMOrder, CRMWorkItem
-from finance.models import Employee
+from finance.models import Employee, PartCatalog, StockReceipt, Supplier
+from crm.services import install_part
 
 
 class PublicOrderNumberModelTests(TestCase):
@@ -54,7 +55,7 @@ class PublicRepairStatusTests(TestCase):
         )
         self.device = CRMDevice.objects.create(
             client=self.customer, device_type="Телефон", brand="Samsung", model="Galaxy S24",
-            serial_number="359999999999999",
+            serial_number="359999999999999", imei="PRIVATE-IMEI", unlock_code="PRIVATE-UNLOCK",
         )
         self.order = CRMOrder.objects.create(
             client=self.customer, device=self.device, employee=self.employee,
@@ -89,7 +90,7 @@ class PublicRepairStatusTests(TestCase):
         response = self.client.get(self.url)
         self.assertContains(
             response,
-            'href="/static/crm/css/public-repair-status.css?v=20260927"',
+            'href="/static/crm/css/public-repair-status.css?v=20261002"',
         )
         self.assertContains(response, 'class="repair-tracking-page"')
         self.assertContains(response, 'class="repair-tracking-search"')
@@ -126,6 +127,7 @@ class PublicRepairStatusTests(TestCase):
         for secret in (
             self.customer.name, self.customer.phone, self.customer.email,
             self.device.serial_number, self.employee.name, "INTERNAL-SECRET",
+            self.device.imei, self.device.unlock_code,
             "INTERNAL-DIAGNOSTIC", "PRIVATE-EVENT", "PRIVATE-WORK-COMMENT",
         ):
             self.assertNotContains(response, secret)
@@ -140,7 +142,7 @@ class PublicRepairStatusTests(TestCase):
             self.assertContains(response, CLIENT_STATUS[status][1])
         self.order.status = CRMOrder.Status.READY
         self.order.save(update_fields=["status", "updated_at"])
-        self.assertContains(self.post(), "Ремонт готов к выдаче")
+        self.assertContains(self.post(), "Готов к выдаче")
 
     def test_timeline_uses_only_safe_status_events(self):
         CRMEvent.objects.create(
@@ -174,6 +176,61 @@ class PublicRepairStatusTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, "Ремонт с указанным номером не найден")
         self.assertNotContains(response, self.order.device.display_name)
+
+    def test_search_card_has_one_heading_and_accessible_input(self):
+        response = self.client.get(self.url)
+        self.assertContains(response, '<h1 id="tracking-title">Статус ремонта</h1>', count=1)
+        self.assertContains(response, 'Узнайте, на каком этапе ваше устройство', count=1)
+        self.assertContains(response, 'aria-describedby="tracking-help"')
+        self.assertContains(response, 'Например, R7K2M9P4A')
+        self.assertNotContains(response, 'Следите за ремонтом устройства онлайн')
+        self.assertNotContains(response, 'Введите номер ремонта, указанный')
+
+    def test_progress_has_one_current_stage_for_each_non_canceled_status(self):
+        for status in CRMOrder.Status.values:
+            with self.subTest(status=status):
+                self.order.status = status
+                self.order.save(update_fields=['status'])
+                response = self.post()
+                self.assertContains(response, f'repair-tracking-current--{status}')
+                if status == CRMOrder.Status.CANCELED:
+                    self.assertNotContains(response, 'aria-label="Этапы ремонта"')
+                    self.assertNotContains(response, 'aria-current="step"')
+                else:
+                    self.assertContains(response, 'aria-current="step"', count=1)
+                    self.assertContains(response, 'aria-label="Этапы ремонта"')
+                if status in (CRMOrder.Status.APPROVAL, CRMOrder.Status.WAITING_PART):
+                    self.assertContains(response, 'is-current is-paused')
+                    self.assertNotContains(response, 'is-current is-complete')
+
+    def test_empty_or_invalid_submission_has_generic_error(self):
+        for number in ('', 'X' * 21):
+            response = self.post(number)
+            self.assertContains(response, 'Ремонт с указанным номером не найден.')
+            self.assertNotContains(response, self.order.device.display_name)
+            self.assertNotContains(response, 'repair-tracking-result__header')
+
+    def test_form_stays_available_without_echoing_identifier(self):
+        response = self.post()
+        self.assertContains(response, 'repair-tracking-page--found')
+        self.assertContains(response, 'name="order_number"')
+        self.assertNotContains(response, f'value="{self.order.number}"')
+        self.assertNotContains(response, 'Узнайте, на каком этапе ваше устройство')
+
+    def test_stock_finance_and_attachment_details_remain_private(self):
+        supplier = Supplier.objects.create(name='PRIVATE-SUPPLIER')
+        part = PartCatalog.objects.create(name='PRIVATE-PART', brand='Samsung', device_model='S24')
+        receipt = StockReceipt.objects.create(date=timezone.localdate(), supplier=supplier,
+            part=part, quantity=1, unit_cost='917.37')
+        staff = get_user_model().objects.create_user('private-installer')
+        usage = install_part(self.order, receipt.items.first().pk, staff)
+        CRMAttachment.objects.create(order=self.order, file='crm/private-file.jpg',
+            original_name='PRIVATE-FILE', uploaded_by=staff)
+        response = self.post()
+        for secret in ('PRIVATE-SUPPLIER', 'PRIVATE-PART', '917.37', '917,37',
+                       usage.part_item.inventory_code, 'PRIVATE-FILE', 'href="/crm/',
+                       'private-file.jpg', 'Зарплата', 'Прибыль', 'Маржа'):
+            self.assertNotContains(response, secret)
 
 
 class PublicOrderNumberStaffTests(TestCase):

@@ -4,30 +4,28 @@
 {% block meta_description %}Проверка текущего статуса ремонта в мастерской Tehsfera по номеру из квитанции.{% endblock %}
 {% block robots %}noindex, nofollow{% endblock %}
 {% block structured_data %}{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'crm/css/public-repair-status.css' %}?v=20260927">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'crm/css/public-repair-status.css' %}?v=20261002">{% endblock %}
 {% block content %}
-<div class="repair-tracking-page">
-  <section class="repair-tracking-hero" aria-labelledby="tracking-title">
+<div class="repair-tracking-page{% if order %} repair-tracking-page--found{% endif %}">
+  <section class="repair-tracking-search" aria-labelledby="tracking-title">
+    <div class="repair-tracking-hero">
     <span class="repair-tracking-hero__icon" aria-hidden="true"><i class="fa-solid fa-screwdriver-wrench"></i></span>
     <div>
-      <h1 id="tracking-title">Проверить статус ремонта</h1>
-      <p class="repair-tracking-hero__lead">Следите за ремонтом устройства онлайн</p>
-      <p>Введите номер ремонта, указанный в вашей квитанции.</p>
+      <h1 id="tracking-title">Статус ремонта</h1>
+      {% if not order %}<p>Узнайте, на каком этапе ваше устройство</p>{% endif %}
     </div>
-  </section>
-
-  <section class="repair-tracking-search" aria-label="Поиск ремонта">
+    </div>
     <form method="post" class="repair-tracking-form" novalidate>
       {% csrf_token %}
       <div class="repair-tracking-field">
-        <label for="{{ form.order_number.id_for_label }}">{{ form.order_number.label }}</label>
+        <label class="repair-tracking-sr-only" for="{{ form.order_number.id_for_label }}">{{ form.order_number.label }}</label>
         {{ form.order_number }}
       </div>
-      <button class="btn repair-tracking-submit" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Проверить статус</button>
+      <button class="btn repair-tracking-submit" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Проверить</button>
     </form>
-    <p class="repair-tracking-help"><i class="fa-regular fa-file-lines" aria-hidden="true"></i> Номер указан в квитанции о приёме.</p>
-    {% if not_found or form.errors %}
-      <div class="repair-tracking-alert" role="alert">
+    <p id="tracking-help" class="repair-tracking-help"><i class="fa-regular fa-file-lines" aria-hidden="true"></i> Номер ремонта указан в квитанции о приёме</p>
+    {% if not_found or form.errors or request.method == 'POST' and not order %}
+      <div id="tracking-error" class="repair-tracking-alert" role="alert">
         <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
         <div><strong>Ремонт с указанным номером не найден.</strong><span>Проверьте номер в квитанции и попробуйте ещё раз.</span></div>
       </div>
@@ -41,23 +39,12 @@
           <span class="repair-tracking-order">Ремонт № <b>{{ order.number }}</b></span>
           <h2>{{ order.device.display_name }}</h2>
         </div>
-        <div class="repair-tracking-status">
-          <span class="repair-tracking-badge repair-tracking-badge--{{ public_status.code }}"><i aria-hidden="true"></i>{{ public_status.label }}</span>
-          <p>{{ public_status.description }}</p>
-        </div>
       </header>
-
-      {% if public_status.code == 'ready' %}
-        <section class="repair-tracking-highlight repair-tracking-highlight--ready" aria-label="Ремонт готов">
-          <span class="repair-tracking-highlight__icon" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
-          <div><strong>Ремонт готов к выдаче</strong><p>{{ public_status.description }}</p></div>
-        </section>
-      {% elif public_status.code == 'issued' %}
-        <section class="repair-tracking-highlight repair-tracking-highlight--complete" aria-label="Ремонт завершён">
-          <span class="repair-tracking-highlight__icon" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
-          <div><strong>Ремонт завершён</strong><p>{{ public_status.description }}</p></div>
-        </section>
-      {% endif %}
+      <section class="repair-tracking-current repair-tracking-current--{{ public_status.code }}" aria-label="Текущий статус">
+        <span class="repair-tracking-current__icon" aria-hidden="true"><i class="fa-solid {% if public_status.code == 'ready' or public_status.code == 'issued' %}fa-check{% elif public_status.code == 'approval' or public_status.code == 'waiting_part' %}fa-pause{% elif public_status.code == 'canceled' %}fa-minus{% else %}fa-screwdriver-wrench{% endif %}"></i></span>
+        <div><span class="repair-tracking-current__label">Текущий статус</span><h3>{{ public_status.label }}</h3><p>{{ public_status.description }}</p></div>
+      </section>
+      {% if public_status.code != 'canceled' %}{% include 'crm/partials/public_repair_progress.html' with code=public_status.code %}{% endif %}
 
       <dl class="repair-tracking-summary">
         <div><dt>Дата приёма</dt><dd>{{ order.accepted_at|date:"d.m.Y H:i" }}</dd></div>
