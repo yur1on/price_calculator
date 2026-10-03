@@ -2,9 +2,9 @@
 {% block crm_title %}Моя зарплата{% endblock %}
 {% block crm_content %}
 <div class="crm-salary">
-  <header class="crm-page-head"><div><span class="crm-eyebrow">Личные данные</span><h1>Моя зарплата</h1><p class="crm-muted">{{ employee.name }} · Закрытые начисления, выплаты и предварительный расчёт</p></div></header>
+  <header class="crm-page-head"><div><span class="crm-eyebrow">Личные данные</span><h1>Моя зарплата</h1><p class="crm-muted">{{ employee.name }} · Заработано, выплаты и предварительный расчёт текущего периода</p></div></header>
   <section class="wb-kpis crm-salary-totals" aria-label="Итоги зарплаты">
-    <div class="wb-kpi wb-kpi--blue"><i class="wb-kpi__icon fa-solid fa-wallet" aria-hidden="true"></i><div><span>Начислено · закрытые периоды</span><strong>{{ accrued|money_byn }}</strong></div></div>
+    <div class="wb-kpi wb-kpi--blue"><i class="wb-kpi__icon fa-solid fa-wallet" aria-hidden="true"></i><div><span>Заработано{% if open_period %} · включая предварительно{% endif %}</span><strong>{{ earned|money_byn }}</strong>{% if open_period %}<small class="crm-muted">Закрыто: {{ accrued|money_byn }} · предварительно: {{ preliminary|money_byn }}</small>{% endif %}</div></div>
     <div class="wb-kpi wb-kpi--green"><i class="wb-kpi__icon fa-solid fa-circle-check" aria-hidden="true"></i><div><span>Выплачено</span><strong>{{ paid|money_byn }}</strong></div></div>
     <div class="wb-kpi wb-kpi--violet"><i class="wb-kpi__icon fa-solid fa-coins" aria-hidden="true"></i><div><span>К выплате</span><strong>{{ remaining|money_byn }}</strong></div></div>
   </section>
@@ -12,13 +12,14 @@
   {% if open_period %}
   <section class="wb-card crm-salary-section">
     <div class="wb-section-head crm-salary-period"><div><span class="crm-eyebrow">Текущий период</span><h2>{{ open_period }}</h2></div><span class="wb-status wb-status--warning">Предварительный расчёт</span></div>
-    <p class="crm-muted crm-salary-note">Эта сумма не входит в баланс, пока период не будет закрыт.</p>
+    <p class="crm-muted crm-salary-note">Сумма уже учитывается в «Заработано» и «К выплате», но предварительна: распределяемые расходы могут изменить её при закрытии периода.</p>
     <div class="wb-kpis crm-salary-preview-kpis">
       <div class="wb-kpi"><div><span>Ремонтов</span><strong>{{ current.repairs_count }}</strong></div></div>
       <div class="wb-kpi"><div><span>Маржа ремонтов</span><strong>{{ current.repair_margin|money_byn }}</strong></div></div>
       <div class="wb-kpi wb-kpi--amber"><div><span>Расходы периода</span><strong>−{{ current.distributed_costs|money_byn }}</strong></div></div>
       <div class="wb-kpi wb-kpi--green"><div><span>Предварительно к начислению</span><strong>{{ current.salary_amount|money_byn }}</strong></div></div>
     </div>
+    {% if current.repairs %}<div class="crm-table-wrap crm-salary-table crm-salary-preview-table"><table class="crm-table"><thead><tr><th>Дата</th><th>Ремонт</th><th>База</th><th>Исходное начисление</th></tr></thead><tbody>{% for repair in current.repairs %}<tr><td>{{ repair.repair_date|date:'d.m.Y' }}</td><td class="crm-salary-description">{{ repair.description }}</td><td>{{ repair.salary_base|money_byn }}</td><td>{{ repair.salary_amount|money_byn }}</td></tr>{% endfor %}</tbody></table></div><div class="crm-order-cards crm-salary-mobile">{% for repair in current.repairs %}<article class="crm-order-card"><small class="crm-muted">{{ repair.repair_date|date:'d.m.Y' }}</small><h3>{{ repair.description }}</h3><dl><dt>База</dt><dd>{{ repair.salary_base|money_byn }}</dd><dt>Исходное начисление</dt><dd>{{ repair.salary_amount|money_byn }}</dd></dl></article>{% endfor %}</div>{% endif %}
   </section>
   {% else %}
   <section class="wb-card crm-salary-section"><div class="wb-empty"><i class="fa-regular fa-calendar" aria-hidden="true"></i><b>Открытого расчётного периода пока нет</b><p>Предварительный расчёт появится после открытия периода.</p></div></section>

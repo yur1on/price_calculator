@@ -217,6 +217,8 @@ def my_salary(request):
     )
     payments = list(SalaryPayment.objects.filter(employee=employee).order_by("date", "created_at", "pk"))
     accrued = sum((item.salary_amount for item in history), ZERO)
+    preliminary = current["salary_amount"] if current else ZERO
+    earned = accrued + preliminary
     paid = sum((item.amount for item in payments), ZERO)
     ledger = []
     for calculation in history:
@@ -240,7 +242,8 @@ def my_salary(request):
     return render(request, "accounts/my_salary.html", {
         "employee": employee, "open_period": open_period, "current": current,
         "history": history, "payments": payments[:30], "ledger": ledger,
-        "accrued": accrued, "paid": paid, "remaining": accrued - paid,
+        "accrued": accrued, "preliminary": preliminary, "earned": earned,
+        "paid": paid, "remaining": earned - paid,
     })
 
 

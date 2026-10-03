@@ -3,6 +3,7 @@ from operator import attrgetter
 from decimal import Decimal
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from functools import wraps
 from django.core.paginator import Paginator
 from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum
@@ -690,13 +691,21 @@ def payroll_period_detail(request, pk):
         rows = [{"employee": employee, **payroll_preview(period, employee)} for employee in employees]
     if employee_id and period.status == PayrollPeriod.Status.CLOSED:
         rows = rows.filter(employee_id=employee_id)
-    return render(request, "finance/payroll_period_detail.html", {"period": period, "rows": rows})
+    return render(request, "finance/payroll_period_detail.html", {
+        "period": period,
+        "rows": rows,
+        "can_close": period.status == PayrollPeriod.Status.OPEN and timezone.localdate() >= period.end_date,
+    })
 
 
 @finance_staff_required
 def payroll_period_close(request, pk):
     period = get_object_or_404(PayrollPeriod, pk=pk)
     if request.method == "POST":
-        close_payroll_period(period)
-        messages.success(request, "Расчётный период закрыт. Все суммы зафиксированы.")
+        try:
+            close_payroll_period(period)
+        except ValidationError as exc:
+            messages.error(request, exc.messages[0])
+        else:
+            messages.success(request, "Расчётный период закрыт. Все суммы зафиксированы.")
     return redirect("finance:payroll_period_detail", pk=pk)

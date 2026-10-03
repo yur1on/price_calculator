@@ -3,8 +3,9 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
-from django.db.models.functions import Coalesce
+from django.core.exceptions import ValidationError
+from django.db.models import Case, Count, DateField, DecimalField, ExpressionWrapper, F, Q, Sum, When
+from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
 
 from .models import (
@@ -136,8 +137,35 @@ def supplier_summary(supplier, start, end):
     }
 
 
+def payroll_repairs_for_period(period, employee):
+    """Return payroll-eligible repairs with their effective payroll date.
+
+    Standalone finance repairs keep the historical date-based behaviour.  A
+    CRM-linked repair becomes eligible only after the device is actually
+    issued, and belongs to the period of that immutable issue timestamp.
+    """
+    return (
+        employee.repairs.select_related("crm_order")
+        .annotate(
+            payroll_date=Case(
+                When(crm_order__isnull=False, then=TruncDate("crm_order__issued_at")),
+                default=F("date"),
+                output_field=DateField(),
+            )
+        )
+        .filter(
+            Q(crm_order__isnull=True, date__range=(period.start_date, period.end_date))
+            | Q(
+                crm_order__status="issued",
+                crm_order__issued_at__date__range=(period.start_date, period.end_date),
+            )
+        )
+        .order_by("payroll_date", "created_at", "pk")
+    )
+
+
 def payroll_preview(period, employee):
-    repairs = employee.repairs.filter(date__range=(period.start_date, period.end_date)).order_by("date", "created_at")
+    repairs = payroll_repairs_for_period(period, employee)
     totals = repairs.aggregate(
         repairs_count=Count("id"), revenue=Coalesce(Sum("revenue"), ZERO),
         direct_costs=Coalesce(Sum("part_cost"), ZERO), repair_margin=Coalesce(Sum("repair_margin"), ZERO),
@@ -166,7 +194,7 @@ def payroll_preview(period, employee):
     repair_rows = []
     for repair in repairs:
         repair_rows.append({
-            "repair": repair, "repair_date": repair.date, "description": repair.description,
+            "repair": repair, "repair_date": repair.payroll_date, "description": repair.description,
             "revenue": repair.revenue, "parts_cost": repair.part_cost,
             "other_direct_costs": ZERO, "direct_costs": repair.part_cost,
             "salary_base": repair.repair_margin, "percent": repair.master_percent,
@@ -228,6 +256,8 @@ def close_payroll_period(period):
     period = PayrollPeriod.objects.select_for_update().get(pk=period.pk)
     if period.status == PayrollPeriod.Status.CLOSED:
         return list(period.calculations.all())
+    if timezone.localdate() < period.end_date:
+        raise ValidationError("Расчётный период можно закрыть только после даты его окончания.")
     calculations = []
     previews = [(employee, payroll_preview(period, employee)) for employee in Employee.objects.filter(is_active=True, is_owner=False)]
     for employee, data in previews:

@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -235,19 +236,25 @@ class RoleAccessTests(TestCase):
             part_cost="0", employee=employee, master_percent="35",
         )
         other = Employee.objects.create(name="Другой мастер", default_percent="35")
-        foreign_period = PayrollPeriod.objects.create(start_date=date(2026, 9, 15), end_date=date(2026, 9, 28))
-        close_payroll_period(foreign_period)
-        foreign_calculation = PayrollCalculation.objects.get(period=foreign_period, employee=other)
+        foreign_period = PayrollPeriod.objects.create(
+            start_date=date(2026, 9, 15), end_date=date(2026, 9, 28), status=PayrollPeriod.Status.CLOSED,
+        )
+        foreign_calculation = PayrollCalculation.objects.create(
+            period=foreign_period, employee=other, repairs_count=0, revenue=0, direct_costs=0,
+            repair_margin=0, distributed_costs=0, salary_base=0, percent=35, salary_amount=0,
+        )
 
         self.client.force_login(get_user_model().objects.get(pk=self.master_user.pk))
         response = self.client.get(reverse("accounts:my_salary"), {"employee_id": other.pk})
-        self.assertContains(response, "Зафиксированный ремонт")
         self.assertContains(response, "Аванс")
         self.assertContains(response, "Доплата")
         self.assertContains(response, "87.50")
-        self.assertContains(response, "57.50")
+        self.assertContains(response, "92.50")
         self.assertContains(response, str(open_period))
         self.assertEqual(response.context["accrued"], calculation.salary_amount)
+        self.assertEqual(response.context["preliminary"], Decimal("35.00"))
+        self.assertEqual(response.context["earned"], calculation.salary_amount + Decimal("35.00"))
+        self.assertEqual(response.context["remaining"], calculation.salary_amount + Decimal("35.00") - Decimal("30.00"))
         ledger = response.context["ledger"]
         self.assertEqual([item["kind"] for item in ledger], ["payment", "accrual", "payment"])
         self.assertEqual(ledger[0]["balance"], -20)
@@ -256,7 +263,7 @@ class RoleAccessTests(TestCase):
 
         detail = self.client.get(reverse("accounts:salary_calculation_detail", args=[calculation.pk]))
         self.assertEqual(detail.status_code, 200)
-        self.assertContains(detail, "Итоговое начисление".replace("Итоговое ", "Итог"))
+        self.assertContains(detail, "Итог")
         self.assertContains(detail, "Зафиксированный ремонт")
         self.assertContains(detail, "Распределяемые расходы периода")
         self.assertEqual(self.client.get(reverse("accounts:salary_calculation_detail", args=[foreign_calculation.pk])).status_code, 404)

@@ -1,6 +1,7 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
+from unittest.mock import patch
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
@@ -8,6 +9,9 @@ from django.core.exceptions import ValidationError
 from django.db.models import Sum
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
+
+from crm.models import CRMClient, CRMDevice, CRMOrder
 
 from .models import (
     Employee, Expense, ExpenseCategory, OtherIncome, PartCatalog, PartItem,
@@ -374,6 +378,11 @@ class DistributedPayrollTests(TestCase):
         )
         self.distributed.employees.add(self.master)
 
+    def close_period(self, period):
+        """Keep historical fixture periods deterministic after early-close protection."""
+        with patch("finance.services.timezone.localdate", return_value=date(2027, 1, 1)):
+            return close_payroll_period(period)
+
     def test_per_period_amount_and_payroll_formula(self):
         self.assertEqual(self.distributed.per_period_amount, Decimal("30.00"))
         data = payroll_preview(self.period, self.master)
@@ -397,7 +406,7 @@ class DistributedPayrollTests(TestCase):
         self.assertEqual(summary["net_profit"], expected)
 
     def test_close_creates_immutable_snapshot_and_cannot_allocate_twice(self):
-        close_payroll_period(self.period)
+        self.close_period(self.period)
         calc = PayrollCalculation.objects.get(period=self.period, employee=self.master)
         self.assertEqual(calc.salary_amount, Decimal("759.50"))
         self.assertEqual(DistributedExpenseAllocation.objects.filter(calculation=calc).count(), 1)
@@ -405,7 +414,7 @@ class DistributedPayrollTests(TestCase):
         self.distributed.save()
         calc.refresh_from_db()
         self.assertEqual(calc.salary_amount, Decimal("759.50"))
-        close_payroll_period(self.period)
+        self.close_period(self.period)
         self.assertEqual(PayrollCalculation.objects.filter(period=self.period, employee=self.master).count(), 1)
 
     def test_closed_snapshot_records_exact_repair_level_allocation(self):
@@ -413,7 +422,7 @@ class DistributedPayrollTests(TestCase):
             date=date(2026, 9, 6), description="Второй ремонт", revenue="200.00",
             part_cost="100.00", employee=self.master, master_percent="35.00",
         )
-        close_payroll_period(self.period)
+        self.close_period(self.period)
         calc = PayrollCalculation.objects.get(period=self.period, employee=self.master)
         snapshots = list(calc.repair_snapshots.order_by("repair_date", "id"))
         self.assertEqual(sum((item.distributed_cost_share for item in snapshots), Decimal("0.00")), calc.distributed_costs)
@@ -431,7 +440,7 @@ class DistributedPayrollTests(TestCase):
                 date=date(2026, 9, 5), description=f"Ремонт {number}", revenue="100.00",
                 part_cost="0.00", employee=self.master, master_percent="35.00",
             )
-        close_payroll_period(self.period)
+        self.close_period(self.period)
         calc = PayrollCalculation.objects.get(period=self.period, employee=self.master)
         snapshots = list(calc.repair_snapshots.order_by("repair_date", "id"))
         self.assertEqual([item.distributed_cost_share for item in snapshots], [
@@ -441,7 +450,7 @@ class DistributedPayrollTests(TestCase):
 
     def test_multiple_masters_split_one_period_share(self):
         self.distributed.employees.add(self.other)
-        close_payroll_period(self.period)
+        self.close_period(self.period)
         allocations = self.distributed.allocations.filter(calculation__period=self.period)
         self.assertEqual(allocations.count(), 2)
         self.assertEqual(sum((row.amount for row in allocations), Decimal("0.00")), Decimal("30.00"))
@@ -470,7 +479,7 @@ class DistributedPayrollTests(TestCase):
 
     def test_closed_period_keeps_historical_repair_rows(self):
         repair = RepairFinance.objects.get(description="Ремонты периода")
-        close_payroll_period(self.period)
+        self.close_period(self.period)
         snapshot = PayrollRepairSnapshot.objects.get(repair=repair)
         self.assertEqual(snapshot.revenue, Decimal("3000.00"))
         self.assertEqual(snapshot.parts_cost, Decimal("800.00"))
@@ -497,7 +506,7 @@ class DistributedPayrollTests(TestCase):
         payroll_preview(self.period, self.master)
         self.assertEqual(self.distributed.used_periods, 0)
 
-        close_payroll_period(self.period)
+        self.close_period(self.period)
         first = self.distributed.allocations.get(calculation__period=self.period)
         self.assertEqual((first.part_number, first.parts_count), (1, 6))
         self.assertEqual(first.accounted_after, Decimal("30.00"))
@@ -507,7 +516,7 @@ class DistributedPayrollTests(TestCase):
         second_preview = payroll_preview(second_period, self.master)["distributions"][0]
         self.assertEqual(second_preview["part_number"], 2)
         self.assertEqual(self.distributed.used_periods, 1)
-        close_payroll_period(second_period)
+        self.close_period(second_period)
         second = self.distributed.allocations.get(calculation__period=second_period)
         self.assertEqual(second.part_number, 2)
         self.assertEqual(second.accounted_after, Decimal("60.00"))
@@ -515,11 +524,11 @@ class DistributedPayrollTests(TestCase):
         self.assertEqual(first.part_number, 1)
 
     def test_distribution_finishes_after_six_parts(self):
-        close_payroll_period(self.period)
+        self.close_period(self.period)
         for number in range(2, 7):
             start = date(2026, 9, 1) + timedelta(days=(number - 1) * 14)
             period = PayrollPeriod.objects.create(start_date=start, end_date=start + timedelta(days=13))
-            close_payroll_period(period)
+            self.close_period(period)
         self.distributed.refresh_from_db()
         self.assertFalse(self.distributed.is_active)
         allocations = self.distributed.allocations.order_by("part_number")
@@ -535,16 +544,78 @@ class DistributedPayrollTests(TestCase):
             total_cost="100.00", periods_count=3,
         )
         rounded.employees.add(self.master)
-        close_payroll_period(self.period)
+        self.close_period(self.period)
         for offset in (14, 28):
             start = date(2026, 9, 1) + timedelta(days=offset)
-            close_payroll_period(PayrollPeriod.objects.create(start_date=start, end_date=start + timedelta(days=13)))
+            self.close_period(PayrollPeriod.objects.create(start_date=start, end_date=start + timedelta(days=13)))
         amounts = list(rounded.allocations.order_by("part_number").values_list("amount", flat=True))
         self.assertEqual(amounts, [Decimal("33.33"), Decimal("33.33"), Decimal("33.34")])
         self.assertEqual(sum(amounts, Decimal("0.00")), Decimal("100.00"))
         self.assertEqual(rounded.allocations.last().remaining_after, Decimal("0.00"))
         self.assertEqual(self.distributed.used_periods, 3)
         self.assertEqual(rounded.used_periods, 3)
+
+
+class PayrollEligibilityTests(TestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_superuser(username="payroll-eligibility", password="test")
+        self.client.force_login(self.admin)
+        self.master = Employee.objects.create(name="Мастер", default_percent="35.00")
+        self.period = PayrollPeriod.objects.create(start_date=date(2026, 10, 4), end_date=date(2026, 10, 17))
+        self.client_record = CRMClient.objects.create(name="Клиент", phone="+375291112233")
+        self.device = CRMDevice.objects.create(client=self.client_record, device_type="Телефон", brand="Apple", model="iPhone")
+
+    def crm_repair(self, *, description, repair_date, status, issued_at=None):
+        repair = RepairFinance.objects.create(
+            date=repair_date, description=description, revenue="120.00", part_cost="0.00",
+            employee=self.master, master_percent="35.00",
+        )
+        CRMOrder.objects.create(
+            client=self.client_record, device=self.device, employee=self.master,
+            status=status, issued_at=issued_at, issue_description=description,
+            finance_repair=repair,
+        )
+        return repair
+
+    def test_preview_includes_only_issued_crm_repairs_and_keeps_standalone_repairs(self):
+        issued = self.crm_repair(
+            description="Выданный CRM", repair_date=date(2026, 9, 30), status=CRMOrder.Status.ISSUED,
+            issued_at=timezone.make_aware(datetime(2026, 10, 5, 12, 0)),
+        )
+        self.crm_repair(
+            description="Не выданный CRM", repair_date=date(2026, 10, 5), status=CRMOrder.Status.READY,
+        )
+        standalone = RepairFinance.objects.create(
+            date=date(2026, 10, 6), description="Самостоятельный финремонт", revenue="100.00",
+            part_cost="0.00", employee=self.master, master_percent="35.00",
+        )
+
+        preview = payroll_preview(self.period, self.master)
+
+        self.assertEqual([row["repair"] for row in preview["repairs"]], [issued, standalone])
+        self.assertEqual(preview["repairs"][0]["repair_date"], date(2026, 10, 5))
+        self.assertEqual(preview["salary_amount"], Decimal("77.00"))
+
+    def test_repair_created_in_previous_period_belongs_to_issue_period(self):
+        previous = PayrollPeriod.objects.create(start_date=date(2026, 9, 19), end_date=date(2026, 10, 3))
+        repair = self.crm_repair(
+            description="Выдан после прошлого периода", repair_date=date(2026, 10, 2), status=CRMOrder.Status.ISSUED,
+            issued_at=timezone.make_aware(datetime(2026, 10, 4, 9, 30)),
+        )
+
+        self.assertEqual(payroll_preview(previous, self.master)["repairs"], [])
+        preview = payroll_preview(self.period, self.master)
+        self.assertEqual([row["repair"] for row in preview["repairs"]], [repair])
+        self.assertEqual(preview["repairs"][0]["repair_date"], date(2026, 10, 4))
+
+    def test_early_close_is_rejected_by_the_server(self):
+        with patch("finance.services.timezone.localdate", return_value=date(2026, 10, 10)):
+            response = self.client.post(reverse("finance:payroll_period_close", args=[self.period.pk]), follow=True)
+
+        self.period.refresh_from_db()
+        self.assertEqual(self.period.status, PayrollPeriod.Status.OPEN)
+        self.assertContains(response, "можно закрыть только после даты его окончания")
+        self.assertFalse(PayrollCalculation.objects.filter(period=self.period).exists())
 
 
 class MasterPortalTests(TestCase):

@@ -2,7 +2,7 @@
 {% load finance_extras %}
 {% block finance_title %}Зарплата: {{ period }}{% endblock %}
 {% block finance_content %}
-<div class="fin-actions"><a class="fin-btn" href="{% url 'finance:payroll_period_list' %}">← Все периоды</a>{% if period.status == 'open' %}<form method="post" action="{% url 'finance:payroll_period_close' period.pk %}">{% csrf_token %}<button class="fin-btn primary">Закрыть расчётный период</button></form>{% endif %}</div>
+<div class="fin-actions"><a class="fin-btn" href="{% url 'finance:payroll_period_list' %}">← Все периоды</a>{% if period.status == 'open' %}{% if can_close %}<form method="post" action="{% url 'finance:payroll_period_close' period.pk %}">{% csrf_token %}<button class="fin-btn primary">Закрыть расчётный период</button></form>{% else %}<span class="fin-muted">Закрытие доступно после {{ period.end_date|date:'d.m.Y' }}</span>{% endif %}{% endif %}</div>
 {% if period.status == 'closed' %}<p class="fin-badge">Расчёт закрыт и зафиксирован. Суммы и список ремонтов сохранены в истории.</p>{% endif %}
 {% for row in rows %}
 <article class="fin-card payroll-master" id="master-{{ row.employee.pk }}">
