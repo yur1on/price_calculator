@@ -1,0 +1,18 @@
+{% load finance_extras %}
+<section class="wb-card crm-salary-section crm-salary-distributions">
+  <div class="wb-section-head"><h2><i class="fa-solid fa-chart-pie" aria-hidden="true"></i> Распределяемые расходы периода</h2></div>
+  <p class="crm-muted crm-salary-note">Распределяемые расходы — общие расходы мастерской, которые учитываются частями в расчётных периодах. Они уменьшают базу, от которой рассчитывается процент мастера.</p>
+  <div class="crm-table-wrap crm-salary-table" tabindex="0" role="region" aria-label="Распределяемые расходы периода">
+    <table class="crm-table"><thead><tr><th>Расход</th><th>Полная стоимость</th><th>В этом периоде</th><th>Прогресс</th><th>Учтено</th><th>Осталось</th></tr></thead><tbody>
+    {% for item in items %}<tr>
+      <td class="crm-salary-description"><strong>{% if is_preview %}{{ item.expense.name }}{% else %}{{ item.name_snapshot }}{% endif %}</strong><div class="crm-salary-expense-bar" aria-hidden="true"><span style="width:{{ item.progress_percent }}%"></span></div></td>
+      <td>{{ item.total_cost_snapshot|money_byn }}</td><td><strong class="crm-salary-negative">−{{ item.amount|money_byn }}</strong></td>
+      <td><strong>{% if is_preview %}Будет: {% endif %}{{ item.part_number }} / {{ item.parts_count }}</strong>{% if not is_preview and item.part_number >= item.parts_count %}<small>Завершено</small>{% endif %}</td>
+      <td>{{ item.accounted_after|money_byn }}</td><td>{{ item.remaining_after|money_byn }}</td>
+    </tr>{% empty %}<tr><td colspan="6"><div class="wb-empty"><b>Распределяемых расходов в этом периоде нет</b></div></td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  <div class="crm-order-cards crm-salary-mobile">
+    {% for item in items %}<article class="crm-order-card"><h3>{% if is_preview %}{{ item.expense.name }}{% else %}{{ item.name_snapshot }}{% endif %}</h3><div class="crm-salary-expense-bar" aria-hidden="true"><span style="width:{{ item.progress_percent }}%"></span></div><dl><dt>Полная стоимость</dt><dd>{{ item.total_cost_snapshot|money_byn }}</dd><dt>В этом периоде</dt><dd class="crm-salary-negative">−{{ item.amount|money_byn }}</dd><dt>Прогресс</dt><dd>{% if is_preview %}Будет: {% endif %}{{ item.part_number }} / {{ item.parts_count }}</dd><dt>Учтено</dt><dd>{{ item.accounted_after|money_byn }}</dd><dt>Осталось</dt><dd>{{ item.remaining_after|money_byn }}</dd></dl></article>{% empty %}<div class="wb-empty"><b>Распределяемых расходов в этом периоде нет</b></div>{% endfor %}
+  </div>
+</section>

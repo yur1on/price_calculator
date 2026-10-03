@@ -6,7 +6,10 @@ from django.test import TestCase
 from django.urls import reverse
 
 from crm.models import CRMClient, CRMDevice, CRMEvent, CRMOrder, CRMWorkItem
-from finance.models import Employee, PayrollCalculation, PayrollPeriod, RepairFinance, SalaryPayment, Supplier
+from finance.models import (
+    DistributedExpense, Employee, Expense, ExpenseCategory, PayrollCalculation,
+    PayrollPeriod, RepairFinance, SalaryPayment, Supplier,
+)
 from finance.services import close_payroll_period
 from django.utils import timezone
 from repairs.models import Appointment, PhoneBrand, PhoneModel, RepairType
@@ -204,12 +207,68 @@ class RoleAccessTests(TestCase):
         self.assertContains(response, "Работа мастера")
         self.assertTemplateUsed(response, "crm/base.html")
         self.assertContains(response, "87.50")
+        self.assertContains(response, "Распределяемых расходов в этом периоде нет")
         other = Employee.objects.create(name="Другой мастер", default_percent="35")
         RepairFinance.objects.create(date=date(2026, 9, 5), description="ЧУЖОЙ-РЕМОНТ", revenue="999", employee=other, master_percent="35")
         response = self.client.get(reverse("accounts:my_salary"), {"employee": other.pk, "master": other.pk})
         self.assertNotContains(response, "ЧУЖОЙ-РЕМОНТ")
         self.assertContains(response, "Работа мастера")
         self.assertNotContains(response, 'href="/finance/"')
+
+    def test_master_salary_shows_only_own_preview_distributions_and_calculation(self):
+        employee = approve_master(self.profile)
+        period = PayrollPeriod.objects.create(start_date=date(2026, 9, 1), end_date=date(2026, 9, 14))
+        RepairFinance.objects.create(
+            date=date(2026, 9, 5), description="Ремонт с расходами", revenue="300",
+            part_cost="50", employee=employee, master_percent="35",
+        )
+        category = ExpenseCategory.objects.create(name="Расходники кабинета")
+        source = Expense.objects.create(date=date(2026, 9, 1), amount="60", category=category, description="Флюс")
+        own_expense = DistributedExpense.objects.create(
+            name="Флюс мастера", category=category, source_expense=source,
+            start_date=date(2026, 9, 1), total_cost="60", periods_count=6,
+        )
+        own_expense.employees.add(employee)
+        second_expense = DistributedExpense.objects.create(
+            name="Оплётка мастера", category=category, start_date=date(2026, 9, 1),
+            total_cost="30", periods_count=6,
+        )
+        second_expense.employees.add(employee)
+        other = Employee.objects.create(name="Другой мастер", default_percent="35")
+        other_expense = DistributedExpense.objects.create(
+            name="Чужой расход", category=category, start_date=date(2026, 9, 1),
+            total_cost="30", periods_count=3,
+        )
+        other_expense.employees.add(other)
+
+        self.client.force_login(self.master_user)
+        response = self.client.get(reverse("accounts:my_salary"))
+
+        self.assertContains(response, "Флюс мастера")
+        self.assertContains(response, "Оплётка мастера")
+        self.assertNotContains(response, "Чужой расход")
+        self.assertContains(response, "Полная стоимость")
+        self.assertContains(response, "Будет: 1 / 6")
+        self.assertContains(response, "Распределяемые расходы — общие расходы мастерской")
+        self.assertEqual(response.context["current"]["distributed_costs"], Decimal("15.00"))
+        self.assertEqual(response.context["current"]["salary_base"], Decimal("235.00"))
+        self.assertEqual(response.context["current"]["salary_amount"], Decimal("82.25"))
+        self.assertNotContains(response, reverse("finance:distributed_expense_list"))
+
+        close_payroll_period(period)
+        detail = self.client.get(reverse("accounts:salary_calculation_detail", args=[
+            PayrollCalculation.objects.get(period=period, employee=employee).pk
+        ]))
+        own_expense.name = "Изменённый источник"
+        own_expense.total_cost = Decimal("600")
+        own_expense.save()
+        detail = self.client.get(reverse("accounts:salary_calculation_detail", args=[
+            PayrollCalculation.objects.get(period=period, employee=employee).pk
+        ]))
+        self.assertContains(detail, "Флюс мастера")
+        self.assertNotContains(detail, "Изменённый источник")
+        self.assertContains(detail, "Полная стоимость")
+        self.assertContains(detail, "crm-salary-mobile")
 
     def test_salary_anonymous_redirect_and_empty_state(self):
         self.client.logout()
