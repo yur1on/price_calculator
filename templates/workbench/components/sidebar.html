@@ -8,6 +8,7 @@
       <a href="{% url 'accounts:client_repairs' %}" class="{% if 'client_repair' in request.resolver_match.url_name %}is-active{% endif %}"><i class="fa-solid fa-screwdriver-wrench"></i><span>Мои ремонты</span></a>
       <a href="{% url 'accounts:client_devices' %}" class="{% if request.resolver_match.url_name == 'client_devices' %}is-active{% endif %}"><i class="fa-solid fa-mobile-screen"></i><span>Мои устройства</span></a>
       <a href="{% url 'accounts:client_warranties' %}" class="{% if request.resolver_match.url_name == 'client_warranties' %}is-active{% endif %}"><i class="fa-solid fa-shield-halved"></i><span>Гарантии</span></a>
+      {% if not request.user.is_staff and not request.user.is_superuser %}<a href="{% url 'accounts:client_referrals' %}" class="{% if request.resolver_match.url_name == 'client_referrals' %}is-active{% endif %}"><i class="fa-solid fa-gift" aria-hidden="true"></i><span>Реферальная программа</span></a>{% endif %}
       <a href="{% url 'accounts:client_profile' %}" class="{% if request.resolver_match.url_name == 'client_profile' or request.resolver_match.url_name == 'phone_verify' or request.resolver_match.url_name == 'password_change' %}is-active{% endif %}"><i class="fa-solid fa-user"></i><span>Профиль</span></a>
       <span class="wb-nav__label">Сервис</span><a href="{% url 'repairs:brand_list' %}"><i class="fa-solid fa-calendar-plus"></i><span>Записаться на ремонт</span></a>
     {% else %}

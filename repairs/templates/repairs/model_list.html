@@ -2,8 +2,8 @@
 {% load static %}
 {% load repairs_extras %}
 
-{% block title %}Ремонт {{ device_label }} {{ brand.name }} в Гомеле: модели и цены — Tehsfera{% endblock %}
-{% block meta_description %}Выберите модель для ремонта {{ device_label }} {{ brand.name }} в Гомеле. Доступные услуги, стоимость и запись в мастерскую Tehsfera.{% endblock %}
+{% block title %}{% if selected_cat == "phone" and brand.slug == "apple" %}Ремонт iPhone в Гомеле — модели и цены | Tehsfera{% elif selected_cat == "phone" and brand.slug == "google" %}Ремонт Google Pixel в Гомеле — модели и цены | Tehsfera{% else %}Ремонт {{ device_label }} {{ brand.name }} в Гомеле: модели и цены — Tehsfera{% endif %}{% endblock %}
+{% block meta_description %}{% if selected_cat == "phone" and brand.slug == "apple" %}Ремонт Apple iPhone в Гомеле. Выберите модель, посмотрите доступные услуги, цены и запишитесь на ремонт в Tehsfera.{% elif selected_cat == "phone" and brand.slug == "google" %}Ремонт Google Pixel в Гомеле. Выберите модель, посмотрите доступные услуги, цены и запишитесь на ремонт в Tehsfera.{% else %}Выберите модель для ремонта {{ device_label }} {{ brand.name }} в Гомеле. Доступные услуги, стоимость и запись в мастерскую Tehsfera.{% endif %}{% endblock %}
 {% block canonical_href %}{{ request.scheme }}://{{ request.get_host }}{% url 'repairs:model_list' brand_slug=brand.slug %}?cat={{ selected_cat }}{% endblock %}
 
 {% block content %}
@@ -340,10 +340,12 @@
 <!-- Выделенный бренд -->
 <div class="brand-head">
   <h1 class="brand-title">
-    <span class="brand-pill">{{ brand.name }}</span>
-    <span class="brand-path">— ремонт {{ device_label }} в Гомеле</span>
+    {% if selected_cat == "phone" and brand.slug == "apple" %}Ремонт iPhone в Гомеле{% elif selected_cat == "phone" and brand.slug == "google" %}Ремонт Google Pixel в Гомеле{% else %}<span class="brand-pill">{{ brand.name }}</span>
+    <span class="brand-path">— ремонт {{ device_label }} в Гомеле</span>{% endif %}
   </h1>
 </div>
+
+{% if selected_cat == "phone" and brand.slug == "apple" %}<p class="muted">Ремонтируем смартфоны Apple iPhone в Гомеле. Выберите свою модель, чтобы посмотреть доступные услуги, стоимость и записаться на ремонт.</p>{% elif selected_cat == "phone" and brand.slug == "google" %}<p class="muted">Поможем с ремонтом смартфона Google Pixel. Выберите модель, чтобы посмотреть доступные работы, стоимость и варианты записи в мастерскую.</p>{% endif %}
 
 {% if models %}
   <div class="{% if view_mode == 'list' %}as-list{% endif %}">
@@ -352,15 +354,15 @@
         <a class="card" href="{% url 'repairs:repair_list' brand_slug=brand.slug model_slug=m.slug %}">
           <div class="thumb">
             {% if m.image %}
-              <img src="{{ m.image.url }}" alt="{{ brand.name }} {{ m.name|striptags }}" loading="lazy" decoding="async">
+              <img src="{{ m.image.url }}" alt="{{ brand.name }} {{ m.name|display_model_name|striptags }}" loading="lazy" decoding="async">
             {% elif brand.logo %}
               <img src="{{ brand.logo.url }}" alt="{{ brand.name }}" loading="lazy" decoding="async">
             {% else %}
-              <span class="letter">{{ m.name|first|upper }}</span>
+              <span class="letter">{{ m.name|display_model_name|first|upper }}</span>
             {% endif %}
           </div>
           <div class="info">
-            <div class="name">{{ m.name|shrink_parens }}</div>
+            <div class="name">{{ m.name|display_model_name|shrink_parens }}</div>
             <div class="meta">
               <span class="muted">{{ brand.name }}</span>
               <span class="badge">

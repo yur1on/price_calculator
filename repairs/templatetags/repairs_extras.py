@@ -5,6 +5,17 @@ from django.utils.html import conditional_escape
 from django.utils.safestring import mark_safe
 
 register = template.Library()
+
+@register.filter
+def display_model_name(value):
+    """Normalize iPhone typography for display only; never alter catalog data or URLs."""
+    name = str(value or "")
+    if re.match(r"^iphone\b", name, re.I):
+        name = re.sub(r"^iphone\b", "iPhone", name, flags=re.I)
+        name = re.sub(r"\b(xr|xs|x)\b", lambda m: m.group().upper(), name, flags=re.I)
+        name = re.sub(r"\b(max|plus)\b", lambda m: m.group().title(), name, flags=re.I)
+    return name
+
 _PARENS = re.compile(r"\(([^)]+)\)")
 
 @register.filter

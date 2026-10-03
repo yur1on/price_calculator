@@ -354,7 +354,8 @@ class SeoPagesTests(TestCase):
                 response = self.client.get(reverse("repairs:brand_list"), {"cat": category})
                 self.assertEqual(response.status_code, 200)
                 self.assertTemplateUsed(response, "repairs/brand_list.html")
-                self.assertContains(response, f'<h1>Ремонт {label} в Гомеле</h1>')
+                heading = 'Стоимость ремонта телефонов' if category == 'phone' else f'Ремонт {label}'
+                self.assertContains(response, f'<h1>{heading} в Гомеле</h1>')
                 self.assertContains(response, '<h1', count=1)
                 self.assertContains(response, f'<link rel="canonical" href="http://testserver/repairs/?cat={category}">')
                 self.assertContains(response, f'Ремонт {label} в Гомеле. Выберите бренд и модель:')

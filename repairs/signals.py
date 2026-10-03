@@ -5,13 +5,13 @@ import logging
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Sum
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 
 from .models import Appointment, ReferralPartner, ReferralRedemption
 from .services import calc_discount_and_commission
+from .referrals import referral_balance
 from notify_tg.utils import notify_partner
 
 logger = logging.getLogger(__name__)
@@ -64,22 +64,7 @@ def _available_credit(partner: ReferralPartner) -> Decimal:
       accrued (commission > 0)  -  abs(списания: commission < 0)
     Списания мы храним как отрицательные commission_amount в ReferralRedemption.
     """
-    earned_accrued = (
-        ReferralRedemption.objects
-        .filter(partner=partner, status="accrued", commission_amount__gt=0)
-        .aggregate(s=Sum("commission_amount"))["s"]
-        or Decimal("0.00")
-    )
-
-    spent = (
-        ReferralRedemption.objects
-        .filter(partner=partner, commission_amount__lt=0)  # статус можно не проверять, но обычно будет paid
-        .aggregate(s=Sum("commission_amount"))["s"]
-        or Decimal("0.00")
-    )  # spent отрицательное
-
-    available = (Decimal(earned_accrued) + Decimal(spent)).quantize(Decimal("0.01"))
-    return available
+    return referral_balance(partner.pk)["available_balance"]
 
 
 @receiver(pre_save, sender=Appointment)
@@ -95,7 +80,10 @@ def _track_prev_status(sender, instance: Appointment, **kwargs):
 
 
 @receiver(post_save, sender=Appointment)
+@transaction.atomic
 def sync_referral_on_appointment_save(sender, instance: Appointment, created: bool, **kwargs):
+    if kwargs.get("raw"):
+        return
     # --- уведомление админам о ЛЮБОЙ новой заявке ---
     if created:
         def _notify_admins_after_commit(appointment_id: int) -> None:
@@ -136,11 +124,20 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
     # 1) РЕФЕРАЛКИ (как у вас) + анти-самореферал (комиссия 0)
     # ==========================================================
     code = (instance.referral_code or "").strip()
-    if code:
+    if code and created:
         try:
             partner = ReferralPartner.objects.get(code__iexact=code)
         except ReferralPartner.DoesNotExist:
             partner = None
+
+        if partner:
+            # The receiver's outer transaction retains this lock through row creation.
+            with transaction.atomic():
+                partner = ReferralPartner.objects.select_for_update().get(pk=partner.pk)
+                existing = ReferralRedemption.objects.filter(appointment=instance, commission_amount__gte=0).exists()
+                eligible = partner.is_active()
+            if existing or not eligible:
+                partner = None
 
         if partner:
             subtotal_for_referral = (Decimal(instance.price_original) - Decimal(instance.combo_discount_amount or 0)).quantize(Decimal("0.01"))
@@ -173,25 +170,6 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
                     },
                 )
 
-                changed = False
-                if redemption.discount_amount != discount:
-                    redemption.discount_amount = discount
-                    changed = True
-                if redemption.commission_amount != commission:
-                    redemption.commission_amount = commission
-                    changed = True
-
-                if instance.status == "done" and redemption.status not in ("accrued", "paid"):
-                    redemption.status = "accrued"
-                    changed = True
-                elif instance.status == "cancelled" and redemption.status != "pending":
-                    redemption.status = "pending"
-                    redemption.paid_at = None
-                    changed = True
-
-                if changed:
-                    redemption.save(update_fields=["discount_amount", "commission_amount", "status", "paid_at"])
-
                 if was_created:
                     def _notify_partner_after_commit(appointment_id: int, partner_id: int) -> None:
                         try:
@@ -207,11 +185,6 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
                                 fresh_partner,
                                 (
                                     "Новая заявка с вашим кодом\n"
-                                    f"Заявка #{appointment.id}\n"
-                                    f"Клиент: {appointment.customer_name} ({_short_phone(appointment.customer_phone)})\n"
-                                    f"Услуги: {appointment.services_display}\n"
-                                    f"Устройство: {appointment.phone_model}\n"
-                                    f"Дата/время: {appointment.start:%d.%m.%Y %H:%M}\n"
                                     f"Скидка клиенту: {fresh_redemption.discount_amount} BYN\n"
                                     f"Накопления владельцу кода: {fresh_redemption.commission_amount} BYN\n"
                                     f"Статус: {fresh_redemption.get_status_display()}"
@@ -221,6 +194,8 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
                             pass
 
                     transaction.on_commit(lambda: _notify_partner_after_commit(instance.id, partner.id))
+
+    sync_referral_lifecycle(instance.pk)
 
     # ==========================================================
     # 2) ОТКАТ СПИСАНИЯ, если заявку отменили
@@ -305,7 +280,6 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
                 owner,
                 (
                     "✅ Накопления применены к вашему ремонту\n"
-                    f"Заявка #{instance.id}\n"
                     f"Списано накоплений: {to_spend} BYN\n"
                     f"Итог к оплате: {new_price_final} BYN"
                 ),
@@ -345,13 +319,11 @@ def _detect_status_transitions(sender, instance: ReferralRedemption, **kwargs):
 def _notify_on_redemption_change(sender, instance: ReferralRedemption, created: bool, **kwargs):
     # начисление (earned)
     if getattr(instance, "_notify_to_accrued", False):
-        a = instance.appointment
         try:
             notify_partner(
                 instance.partner,
                 (
                     "Начисление выполнено (добавлено в накопления)\n"
-                    f"Заявка #{a.id} от {a.start:%d.%m.%Y}\n"
                     f"Сумма в накопления: {instance.commission_amount} BYN"
                 ),
             )
@@ -368,7 +340,6 @@ def _notify_on_redemption_change(sender, instance: ReferralRedemption, created: 
                     instance.partner,
                     (
                         "Списание накоплений\n"
-                        f"Заявка #{instance.appointment_id}\n"
                         f"Списано: {(-instance.commission_amount).quantize(Decimal('0.01'))} BYN\n"
                         f"Дата: {instance.paid_at:%d.%m.%Y %H:%M}"
                     ),
@@ -382,7 +353,6 @@ def _notify_on_redemption_change(sender, instance: ReferralRedemption, created: 
                     instance.partner,
                     (
                         "Статус начисления изменён\n"
-                        f"Заявка #{instance.appointment_id}\n"
                         f"Сумма: {instance.commission_amount} BYN\n"
                         f"Дата: {instance.paid_at:%d.%m.%Y %H:%M}"
                     ),
@@ -390,3 +360,26 @@ def _notify_on_redemption_change(sender, instance: ReferralRedemption, created: 
             except Exception:
                 pass
         instance._notify_to_paid = False
+
+
+@transaction.atomic
+def sync_referral_lifecycle(appointment_id):
+    from crm.models import CRMOrder
+    appointment = Appointment.objects.get(pk=appointment_id)
+    order = CRMOrder.objects.filter(source_appointment_id=appointment_id).first()
+    cancelled = appointment.status == "cancelled" or (order and order.status == CRMOrder.Status.CANCELED)
+    completed = order and order.status == CRMOrder.Status.ISSUED and order.issued_at is not None
+    if not cancelled and not completed:
+        return
+    for row in ReferralRedemption.objects.select_for_update().filter(
+        appointment_id=appointment_id, commission_amount__gte=0,
+        status__in=["pending", "accrued"] if cancelled else ["pending"],
+    ):
+        row.status = "cancelled" if cancelled else "accrued"
+        row.save(update_fields=["status"])
+
+
+@receiver(post_save, sender="crm.CRMOrder")
+def sync_referral_on_order_save(sender, instance, **kwargs):
+    if not kwargs.get("raw") and instance.source_appointment_id:
+        sync_referral_lifecycle(instance.source_appointment_id)

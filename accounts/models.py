@@ -19,6 +19,10 @@ class AccountProfile(models.Model):
     approval_status = models.CharField("Статус", max_length=16, choices=Approval.choices, default=Approval.ACTIVE, db_index=True)
     phone = models.CharField("Телефон", max_length=40, blank=True)
     phone_verified_at = models.DateTimeField("Телефон подтверждён", null=True, blank=True)
+    referral_partner = models.OneToOneField(
+        "repairs.ReferralPartner", on_delete=models.SET_NULL, related_name="account_profile",
+        null=True, blank=True, verbose_name="Участник реферальной программы",
+    )
     crm_client = models.OneToOneField(
         "crm.CRMClient", verbose_name="Подтверждённый клиент CRM", on_delete=models.SET_NULL,
         related_name="account_profile", null=True, blank=True,

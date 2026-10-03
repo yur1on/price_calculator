@@ -5,7 +5,8 @@ from django.test import TestCase
 from django.urls import reverse
 
 from crm.models import CRMClient, CRMDevice, CRMEvent, CRMOrder, CRMWorkItem
-from finance.models import Employee, PayrollPeriod, RepairFinance, Supplier
+from finance.models import Employee, PayrollCalculation, PayrollPeriod, RepairFinance, SalaryPayment, Supplier
+from finance.services import close_payroll_period
 from django.utils import timezone
 from repairs.models import Appointment, PhoneBrand, PhoneModel, RepairType
 
@@ -216,6 +217,56 @@ class RoleAccessTests(TestCase):
         self.client.force_login(get_user_model().objects.get(pk=self.master_user.pk))
         response = self.client.get(reverse("accounts:my_salary"))
         self.assertContains(response, "Открытого расчётного периода пока нет")
+
+    def test_salary_journal_uses_closed_snapshots_and_only_own_employee(self):
+        employee = approve_master(self.profile)
+        period = PayrollPeriod.objects.create(start_date=date(2026, 9, 1), end_date=date(2026, 9, 14))
+        repair = RepairFinance.objects.create(
+            date=date(2026, 9, 5), description="Зафиксированный ремонт", revenue="300",
+            part_cost="50", employee=employee, master_percent="35",
+        )
+        SalaryPayment.objects.create(employee=employee, date=timezone.localdate() - timedelta(days=1), amount="20", comment="Аванс")
+        close_payroll_period(period)
+        calculation = PayrollCalculation.objects.get(period=period, employee=employee)
+        SalaryPayment.objects.create(employee=employee, date=timezone.localdate() + timedelta(days=1), amount="10", comment="Доплата")
+        open_period = PayrollPeriod.objects.create(start_date=date(2026, 10, 1), end_date=date(2026, 10, 14))
+        RepairFinance.objects.create(
+            date=date(2026, 10, 2), description="Только прогноз", revenue="100",
+            part_cost="0", employee=employee, master_percent="35",
+        )
+        other = Employee.objects.create(name="Другой мастер", default_percent="35")
+        foreign_period = PayrollPeriod.objects.create(start_date=date(2026, 9, 15), end_date=date(2026, 9, 28))
+        close_payroll_period(foreign_period)
+        foreign_calculation = PayrollCalculation.objects.get(period=foreign_period, employee=other)
+
+        self.client.force_login(get_user_model().objects.get(pk=self.master_user.pk))
+        response = self.client.get(reverse("accounts:my_salary"), {"employee_id": other.pk})
+        self.assertContains(response, "Зафиксированный ремонт")
+        self.assertContains(response, "Аванс")
+        self.assertContains(response, "Доплата")
+        self.assertContains(response, "87.50")
+        self.assertContains(response, "57.50")
+        self.assertContains(response, str(open_period))
+        self.assertEqual(response.context["accrued"], calculation.salary_amount)
+        ledger = response.context["ledger"]
+        self.assertEqual([item["kind"] for item in ledger], ["payment", "accrual", "payment"])
+        self.assertEqual(ledger[0]["balance"], -20)
+        self.assertEqual(ledger[-1]["balance"], calculation.salary_amount - 30)
+        self.assertContains(response, "crm-salary-mobile")
+
+        detail = self.client.get(reverse("accounts:salary_calculation_detail", args=[calculation.pk]))
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "Итоговое начисление".replace("Итоговое ", "Итог"))
+        self.assertContains(detail, "Зафиксированный ремонт")
+        self.assertContains(detail, "Распределяемые расходы периода")
+        self.assertEqual(self.client.get(reverse("accounts:salary_calculation_detail", args=[foreign_calculation.pk])).status_code, 404)
+
+        repair.description = "Изменённый после закрытия"
+        repair.revenue = "1"
+        repair.save()
+        detail = self.client.get(reverse("accounts:salary_calculation_detail", args=[calculation.pk]))
+        self.assertContains(detail, "Зафиксированный ремонт")
+        self.assertNotContains(detail, "Изменённый после закрытия")
 
     def test_client_cannot_access_internal_system(self):
         client_user = get_user_model().objects.create_user("client@example.com", password="Secure-4826!")

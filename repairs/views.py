@@ -4,6 +4,9 @@
 
 from __future__ import annotations
 import logging
+from functools import wraps
+from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 import re
 from datetime import date, datetime, timedelta
@@ -925,6 +928,22 @@ def booking_success(request, appointment_id: int):
 
 # ---------- отчёты по партнёрам ----------
 
+def referral_report_required(view):
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        if not (request.user.is_active and request.user.is_staff
+                and request.user.has_perm("repairs.view_referralredemption")):
+            raise PermissionDenied
+        from accounts.access import is_client
+        if is_client(request.user):
+            raise PermissionDenied
+        return view(request, *args, **kwargs)
+    return wrapped
+
+
+@referral_report_required
 def referrals_report(request):
     """Итоги по всем партнёрам за период (?from=YYYY-MM-DD&to=YYYY-MM-DD&status=...)."""
     today = timezone.localdate()
@@ -981,6 +1000,7 @@ def referrals_report(request):
         "has_status": has_status,
     })
 
+@referral_report_required
 def referrals_partner_report(request, code: str):
     """Деталка по одному партнёру (?from=YYYY-MM-DD&to=YYYY-MM-DD&status=...)."""
     partner = get_object_or_404(ReferralPartner, code__iexact=code)

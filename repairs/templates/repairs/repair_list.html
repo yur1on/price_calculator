@@ -1,8 +1,8 @@
 {% extends "repairs/base.html" %}
 {% load repairs_extras %}  {# подключаем фильтры (human_minutes и shrink_parens) #}
 
-{% block title %}Ремонт {{ model.brand.name }} {{ model.name }} в Гомеле | Цены Tehsfera{% endblock %}
-{% block meta_description %}Ремонт {{ model.brand.name }} {{ model.name }} в Гомеле: актуальные цены, сроки выполнения и онлайн-запись в мастерской Tehsfera.{% endblock %}
+{% block title %}Ремонт {{ model.brand.name }} {{ model.name|display_model_name }} в Гомеле | {% if prices %}Цены Tehsfera{% else %}Tehsfera{% endif %}{% endblock %}
+{% block meta_description %}Ремонт {{ model.brand.name }} {{ model.name|display_model_name }} в Гомеле: {% if prices %}актуальные цены, сроки выполнения и онлайн-запись в мастерской Tehsfera.{% else %}стоимость уточняется. Свяжитесь с мастерской Tehsfera для уточнения доступных работ и цены.{% endif %}{% endblock %}
 
 {% block content %}
   <style>
@@ -126,7 +126,7 @@
   </style>
 
   <div class="back-wrap">
-    <a class="btn-back" href="{% url 'repairs:model_list' brand_slug=model.brand.slug %}">
+    <a class="btn-back" href="{% url 'repairs:model_list' brand_slug=model.brand.slug %}?cat={{ model.category }}">
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M15 19l-7-7 7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
@@ -134,7 +134,7 @@
     </a>
   </div>
 
-  <h1>{{ model.brand.name }} {{ model.name }} — ремонт</h1>
+  <h1>{{ model.brand.name }} {{ model.name|display_model_name }} — ремонт</h1>
 
   <table class="table">
     <thead>
@@ -228,19 +228,19 @@
         </tr>
         {% endwith %}
       {% empty %}
-        <tr><td colspan="4" class="muted">Для этой модели нет активных услуг.</td></tr>
+        <tr><td colspan="4" class="muted">Для этой модели стоимость ремонта уточняется. <a href="{% url 'repairs:contacts' %}">Свяжитесь с мастерской</a> для уточнения доступных работ и цены.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <section class="seo-copy">
-    <h2>Цены на ремонт {{ model.brand.name }} {{ model.name }} в Гомеле</h2>
+  {% if prices %}<section class="seo-copy">
+    <h2>Цены на ремонт {{ model.brand.name }} {{ model.name|display_model_name }} в Гомеле</h2>
     <p>
-      На этой странице собраны актуальные цены на ремонт {{ model.brand.name }} {{ model.name }} в сервисном центре Tehsfera.
+      На этой странице собраны актуальные цены на ремонт {{ model.brand.name }} {{ model.name|display_model_name }} в сервисном центре Tehsfera.
       Здесь можно посмотреть стоимость работ, сроки выполнения и доступность онлайн-записи по каждой услуге.
     </p>
     <p>
-      Чаще всего для {{ model.brand.name }} {{ model.name }} заказывают такие услуги:
+      Чаще всего для {{ model.brand.name }} {{ model.name|display_model_name }} заказывают такие услуги:
     </p>
     <ul>
       <li>замена стекла, экрана или дисплея;</li>
@@ -253,7 +253,7 @@
       Также выполняем замену стекла на совместимых моделях, когда это возможно без полной замены дисплея.
     </p>
     <p>
-      Если вам нужен ремонт {{ model.brand.name }} {{ model.name }} в Гомеле, выберите подходящую услугу выше и переходите к записи на удобное время.
+      Если вам нужен ремонт {{ model.brand.name }} {{ model.name|display_model_name }} в Гомеле, выберите подходящую услугу выше и переходите к записи на удобное время.
     </p>
-  </section>
+  </section>{% endif %}
 {% endblock %}

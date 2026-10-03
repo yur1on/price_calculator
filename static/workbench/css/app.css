@@ -42,8 +42,10 @@ body.intake-open{overflow:hidden}
 .crm-salary .crm-order-card h3 { overflow-wrap:anywhere; }
 .crm-salary .crm-order-card dl { grid-template-columns:minmax(0,1fr) minmax(0,1.4fr); }
 .crm-salary .crm-order-card dd { overflow-wrap:anywhere; }
+.crm-salary-section{margin-top:13px}.crm-salary-note{margin:-8px 0 14px;font-size:11px}.crm-salary-preview-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.crm-salary-detail-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.crm-salary-positive{color:#07845c}.crm-salary-negative{color:#b45309}.crm-salary .crm-table a{color:var(--wb-primary);font-weight:800;text-decoration:none}.crm-salary .crm-table a:hover{text-decoration:underline}.crm-salary .crm-table small{display:block;margin-top:3px;color:var(--wb-muted);font-size:9px}.crm-salary-mobile{display:none}
 @media(max-width:700px) {
   .crm-salary .crm-salary-totals { grid-template-columns:1fr; }
   .crm-salary .wb-kpis:not(.crm-salary-totals) { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .crm-salary .crm-salary-period { align-items:flex-start; }
+  .crm-salary .crm-salary-table{display:none}.crm-salary .crm-salary-mobile{display:grid;gap:9px}.crm-salary .crm-salary-mobile .crm-order-card{padding:13px}.crm-salary .crm-salary-mobile .crm-order-card p{margin:4px 0 9px}.crm-salary .crm-salary-mobile .crm-order-card dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px 12px;margin:0}.crm-salary .crm-salary-mobile .crm-order-card dt,.crm-salary .crm-salary-mobile .crm-order-card dd{margin:0;font-size:10px}.crm-salary .crm-salary-mobile .crm-order-card dd{text-align:right}
 }

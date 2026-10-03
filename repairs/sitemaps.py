@@ -40,7 +40,7 @@ class RepairBrandSitemap(Sitemap):
     def items(self):
         categories = dict(PhoneModel.CATEGORY_CHOICES).keys()
         existing_pairs = (
-            PhoneModel.objects.values_list("brand__slug", "category")
+            PhoneModel.objects.order_by().values_list("brand__slug", "category")
             .distinct()
         )
         return [(brand_slug, category) for brand_slug, category in existing_pairs if category in categories]

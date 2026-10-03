@@ -29,7 +29,7 @@ class AccountProfileAdmin(ModelAdmin):
     list_filter = ("role", "approval_status", "user__is_active")
     search_fields = ("user__username", "user__first_name", "user__last_name", "user__email", "phone")
     autocomplete_fields = ("user",)
-    raw_id_fields = ("crm_client",)
+    raw_id_fields = ("crm_client", "referral_partner")
     readonly_fields = ("phone_verified_at", "created_at", "updated_at")
     actions = (approve_masters, reject_masters)
 

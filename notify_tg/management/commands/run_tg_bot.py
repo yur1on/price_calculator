@@ -2,58 +2,29 @@
 from __future__ import annotations
 
 import logging
-import random
-import string
 from decimal import Decimal
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.db import IntegrityError, transaction
-from django.db.models import Sum
+from django.core.exceptions import ValidationError
+from repairs.referrals import full_phone, referral_balance, referral_operations
+from notify_tg.referrals import verified_partner, confirm_owner
 
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 )
 
-from repairs.models import ReferralPartner, ReferralRedemption
-from notify_tg.models import PartnerTelegram
+from repairs.models import ReferralPartner
 
 logger = logging.getLogger(__name__)
 
 # =========================
 # Utils
 # =========================
-def gen_ref_code(length: int = 8) -> str:
-    alphabet = string.ascii_uppercase + string.digits
-    return "".join(random.choice(alphabet) for _ in range(length))
-
-
-def gen_pending_code() -> str:
-    """
-    Временный код (никогда не показываем пользователю).
-
-    ВАЖНО: в проде Postgres строго валидирует длину поля code.
-    Судя по ошибке у тебя code = varchar(16), поэтому делаем <= 16 символов.
-    """
-    alphabet = string.ascii_uppercase + string.digits
-    # 4 ("PEND") + 12 = 16
-    return "PEND" + "".join(random.choice(alphabet) for _ in range(12))
-
-
-def norm_phone(s: str) -> str:
-    digits = "".join(ch for ch in (s or "") if ch.isdigit())
-    return digits[-9:] if len(digits) >= 9 else digits
-
-
 def partner_has_phone(partner: ReferralPartner) -> bool:
-    return len(norm_phone(partner.contact or "")) >= 9
-
-
-def partner_has_real_code(partner: ReferralPartner) -> bool:
-    # временные коды начинаются с PEND
-    return bool(partner.code) and not partner.code.startswith("PEND")
+    return bool(full_phone(partner.contact))
 
 
 def fmt_money(x: Decimal | int | None) -> str:
@@ -130,22 +101,17 @@ async def _reply(update: Update, text: str, full_keyboard: bool, parse_mode: str
 # =========================
 # Text blocks
 # =========================
-def rules_text(with_code: str | None = None) -> str:
+def rules_text(with_code=None, partner=None):
+    discount = partner.client_discount_pct if partner else ReferralPartner._meta.get_field("client_discount_pct").get_default()
+    commission = partner.partner_commission_pct if partner else ReferralPartner._meta.get_field("partner_commission_pct").get_default()
     code_line = f"\n\n🎟 Ваш код: <b>{with_code}</b>" if with_code else ""
     return (
         "📌 <b>Реферальная программа</b>\n\n"
-        "Как это работает:\n"
-        "1) Подтвердите номер телефона в боте\n"
-        "2) Получите личный реферальный код\n"
-        "3) Делитесь кодом с друзьями/знакомыми\n\n"
-        "🛠 <b>Где оформляют ремонт</b>\n"
-        "• На сайте <code>tehsfera.by</code>\n"
-        "• При оформлении заявки на ремонт клиент вводит ваш код в поле «Промокод / Реферальный код»\n\n"
-        "✅ <b>Что получает клиент</b>\n"
-        "• <b>-5%</b> скидка от суммы ремонта при вводе кода\n\n"
-        "✅ <b>Что получаете вы</b>\n"
-        "• <b>+5%</b> в накопления после выполненного ремонта (статус <b>done</b>)\n"
-        "• Накопления можно использовать на ваш будущий ремонт — хоть до <b>0 BYN</b>"
+        "Подтвердите свой номер, получите код и поделитесь им с друзьями.\n"
+        f"Друг получает скидку {discount}%, вам начисляется {commission}% "
+        "от стоимости услуг после скидки за несколько услуг.\n"
+        "Начисление доступно после выдачи отремонтированного устройства.\n"
+        "При создании вашей онлайн-записи накопления применяются автоматически — вплоть до 0 BYN."
         f"{code_line}"
     )
 
@@ -154,212 +120,37 @@ def rules_text(with_code: str | None = None) -> str:
 # DB helpers
 # =========================
 @sync_to_async
-def db_get_partner_by_code(code: str) -> ReferralPartner | None:
-    return ReferralPartner.objects.filter(code__iexact=code).first()
+def db_get_partner_by_chat(chat_id):
+    return verified_partner(chat_id)
 
 
 @sync_to_async
-def db_get_partner_by_chat(chat_id: int) -> ReferralPartner | None:
-    pt = PartnerTelegram.objects.select_related("partner").filter(
-        chat_id=chat_id, is_active=True
-    ).first()
-    return pt.partner if pt else None
+def db_confirm_owner(**kwargs):
+    return confirm_owner(**kwargs)
 
 
 @sync_to_async
-def db_link_partner_chat(partner_id: int, chat_id: int):
-    partner = ReferralPartner.objects.get(id=partner_id)
-    PartnerTelegram.objects.filter(chat_id=chat_id).exclude(partner_id=partner_id).delete()
-    obj, created = PartnerTelegram.objects.update_or_create(
-        partner=partner,
-        defaults={"chat_id": chat_id, "is_active": True},
-    )
-    return created, obj
+def db_calc_balance(partner_id):
+    b = referral_balance(partner_id)
+    return dict(b, available=b["available_balance"], earned_pending=b["pending_balance"],
+                earned_accrued=b["accrued_balance"], spent=b["used_balance"])
 
 
 @sync_to_async
-def db_get_or_create_partner_for_chat(
-    chat_id: int,
-    tg_username: str | None,
-    full_name: str | None,
-) -> tuple[ReferralPartner, bool]:
-    """
-    Создаём партнёра и привязку Telegram.
-    ВАЖНО: создаём временный code=PEND..., настоящий код выдаём только после подтверждения телефона.
-    """
-    pt = (PartnerTelegram.objects
-          .select_related("partner")
-          .filter(chat_id=chat_id, is_active=True)
-          .first())
-    if pt:
-        return pt.partner, False
-
-    name = (full_name or "").strip() or f"TG user {chat_id}"
-    contact = f"@{tg_username}" if tg_username else ""
-
-    for _ in range(50):
-        pending_code = gen_pending_code()
-        try:
-            with transaction.atomic():
-                partner = ReferralPartner.objects.create(
-                    name=name,
-                    contact=contact,
-                    code=pending_code,  # временный, до подтверждения телефона
-                )
-                PartnerTelegram.objects.create(
-                    partner=partner,
-                    chat_id=chat_id,
-                    is_active=True,
-                )
-            return partner, True
-        except IntegrityError:
-            continue
-
-    raise RuntimeError("Не удалось создать временный код")
-
-
-@sync_to_async
-def db_set_partner_phone(partner_id: int, phone: str):
-    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
-    ReferralPartner.objects.filter(id=partner_id).update(contact=digits)
-
-
-@sync_to_async
-def db_assign_real_code_if_needed(partner_id: int) -> str:
-    """
-    Если у партнёра временный PEND-код — генерируем настоящий реф-код.
-    """
-    partner = ReferralPartner.objects.get(id=partner_id)
-    if partner_has_real_code(partner):
-        return partner.code
-
-    for _ in range(50):
-        code = gen_ref_code(8)
-        try:
-            with transaction.atomic():
-                p = ReferralPartner.objects.select_for_update().get(id=partner_id)
-                if partner_has_real_code(p):
-                    return p.code
-                p.code = code
-                p.save(update_fields=["code"])
-            return code
-        except IntegrityError:
-            continue
-
-    raise RuntimeError("Не удалось сгенерировать уникальный реферальный код")
-
-
-@sync_to_async
-def db_calc_balance(partner_id: int) -> dict:
-    qs = ReferralRedemption.objects.filter(partner_id=partner_id)
-
-    earned_pending = qs.filter(status="pending", commission_amount__gt=0).aggregate(s=Sum("commission_amount"))["s"] or Decimal("0.00")
-    earned_accrued = qs.filter(status="accrued", commission_amount__gt=0).aggregate(s=Sum("commission_amount"))["s"] or Decimal("0.00")
-
-    spent = qs.filter(commission_amount__lt=0).aggregate(s=Sum("commission_amount"))["s"] or Decimal("0.00")  # отрицательное
-    spent_abs = -Decimal(spent)
-
-    uses = qs.filter(commission_amount__gt=0).count()
-    total_discount = qs.filter(commission_amount__gt=0).aggregate(s=Sum("discount_amount"))["s"] or Decimal("0.00")
-
-    earned_pending = Decimal(earned_pending).quantize(Decimal("0.01"))
-    earned_accrued = Decimal(earned_accrued).quantize(Decimal("0.01"))
-    spent_abs = Decimal(spent_abs).quantize(Decimal("0.01"))
-    available = (earned_accrued - spent_abs).quantize(Decimal("0.01"))
-    total_discount = Decimal(total_discount).quantize(Decimal("0.01"))
-
-    potential = (earned_accrued + earned_pending - spent_abs).quantize(Decimal("0.01"))
-
-    return {
-        "uses": uses,
-        "earned_pending": earned_pending,
-        "earned_accrued": earned_accrued,
-        "spent": spent_abs,
-        "available": available,
-        "potential": potential,
-        "total_discount": total_discount,
-    }
-
-
-@sync_to_async
-def db_last_ops(partner_id: int, limit: int = 12) -> list[dict]:
-    qs = (ReferralRedemption.objects
-          .select_related("appointment")
-          .filter(partner_id=partner_id)
-          .order_by("-created_at")[:limit])
-    res = []
-    for r in qs:
-        is_spend = r.commission_amount < 0
-        res.append({
-            "created_at": r.created_at,
-            "appointment_id": r.appointment_id,
-            "kind": "🔻 Списание" if is_spend else "➕ Начисление",
-            "amount": (-r.commission_amount if is_spend else r.commission_amount),
-            "status": r.get_status_display(),
-        })
-    return res
+def db_last_ops(partner_id, limit=12):
+    return referral_operations(partner_id, limit)
 
 
 # =========================
 # Handlers
 # =========================
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    user = update.effective_user
-
-    tg_username = (user.username or "").strip() if user else ""
-    full_name = " ".join([x for x in [(user.first_name if user else ""), (user.last_name if user else "")] if x]).strip()
-
-    code_arg = (context.args[0].strip() if context.args else "")
-    if code_arg:
-        partner = await db_get_partner_by_code(code_arg)
-        if partner:
-            await db_link_partner_chat(partner.id, chat_id)
-            if not partner_has_phone(partner):
-                await _reply(
-                    update,
-                    "✅ Вам будет присвоен реферальный код, но сначала подтвердите номер телефона.\n"
-                    "Нажмите кнопку «Подтвердить номер».",
-                    full_keyboard=False,
-                )
-                return
-
-            await _reply(
-                update,
-                "✅ Кабинет активен.\n"
-                f"🎟 Ваш код: <b>{partner.code}</b>\n\n"
-                "Ремонт оформляют на сайте <code>tehsfera.by</code> — при оформлении заявки вводят код.",
-                full_keyboard=True,
-                parse_mode="HTML",
-            )
-            return
-
-    partner, _ = await db_get_or_create_partner_for_chat(
-        chat_id=chat_id,
-        tg_username=tg_username or None,
-        full_name=full_name or None,
-    )
-
-    if not partner_has_phone(partner):
-        await _reply(
-            update,
-            "✅ Вам будет присвоен реферальный код, но сначала подтвердите номер телефона.\n"
-            "Нажмите кнопку «Подтвердить номер».",
-            full_keyboard=False,
-        )
+    # Public recommendation codes are never ownership credentials.
+    partner = await db_get_partner_by_chat(update.effective_chat.id)
+    if not partner:
+        await _reply(update, "Подтвердите свой номер кнопкой «Подтвердить номер» в личном чате. Знание реферального кода не даёт доступ к его владельцу.", full_keyboard=False)
         return
-
-    code = await db_assign_real_code_if_needed(partner.id) if not partner_has_real_code(partner) else partner.code
-
-    await _reply(
-        update,
-        "✅ Готово!\n"
-        f"🎟 Ваш реферальный код: <b>{code}</b>\n\n"
-        "Ремонт оформляют на сайте <code>tehsfera.by</code> — при оформлении заявки вводят код.\n"
-        "Нажмите «Как работает?», чтобы посмотреть правила.",
-        full_keyboard=True,
-        parse_mode="HTML",
-    )
+    await _reply(update, f"🎟 Ваш код: <b>{partner.code}</b>", full_keyboard=True, parse_mode="HTML")
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -389,69 +180,28 @@ async def cmd_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _reply(update, rules_text(None), full_keyboard=False, parse_mode="HTML")
         return
 
-    code = await db_assign_real_code_if_needed(partner.id) if not partner_has_real_code(partner) else partner.code
-    await _reply(update, rules_text(code), full_keyboard=True, parse_mode="HTML")
+    code = partner.code
+    await _reply(update, rules_text(code, partner), full_keyboard=True, parse_mode="HTML")
 
 
 async def cmd_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = (update.message.text or "").strip()
-    code = context.args[0].strip() if context.args else (text[len("/link"):].strip() if text.startswith("/link") else "")
-
-    if not code:
-        await _reply(update, "Не указан код. Пример: /link ABC123", full_keyboard=False)
-        return
-
-    partner = await db_get_partner_by_code(code)
-    if not partner:
-        await _reply(update, "Код не найден. Проверьте и попробуйте снова.", full_keyboard=False)
-        return
-
-    await db_link_partner_chat(partner.id, update.effective_chat.id)
-
-    if not partner_has_phone(partner):
-        await _reply(
-            update,
-            "✅ Вам будет присвоен реферальный код, но сначала подтвердите номер телефона.\n"
-            "Нажмите кнопку «Подтвердить номер».",
-            full_keyboard=False,
-        )
-        return
-
-    await _reply(update, f"✅ Чат привязан. Ваш код: <b>{partner.code}</b>", full_keyboard=True, parse_mode="HTML")
+    await _reply(update, "Для доступа к своим накоплениям подтвердите свой номер кнопкой «Подтвердить номер». Публичный код не используется для входа.", full_keyboard=False)
 
 
 async def on_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
+    contact = update.message.contact
     user = update.effective_user
-    c = update.message.contact
-
-    if c.user_id and user and c.user_id != user.id:
-        await _reply(update, "Можно подтвердить только свой номер (через кнопку).", full_keyboard=False)
+    if not contact or not user:
         return
-
-    phone = (c.phone_number or "").strip()
-    if not phone:
-        await _reply(update, "Не удалось прочитать номер. Попробуйте ещё раз.", full_keyboard=False)
+    try:
+        partner = await db_confirm_owner(
+            chat_id=update.effective_chat.id, user_id=user.id, contact_user_id=contact.user_id,
+            phone=contact.phone_number, name=user.full_name,
+        )
+    except ValidationError as exc:
+        await _reply(update, exc.messages[0], full_keyboard=False)
         return
-
-    partner = await db_get_partner_by_chat(chat_id)
-    if not partner:
-        tg_username = (user.username or "").strip() if user else ""
-        full_name = " ".join([x for x in [(user.first_name if user else ""), (user.last_name if user else "")] if x]).strip()
-        partner, _ = await db_get_or_create_partner_for_chat(chat_id, tg_username or None, full_name or None)
-
-    await db_set_partner_phone(partner.id, phone)
-    real_code = await db_assign_real_code_if_needed(partner.id)
-
-    await _reply(
-        update,
-        "✅ Номер подтверждён!\n\n"
-        f"🎟 Ваш реферальный код: <b>{real_code}</b>\n\n"
-        "Ремонт оформляют на сайте <code>tehsfera.by</code> — при оформлении заявки вводят код.\n"
-        "Нажмите «Как работает?», чтобы посмотреть правила.",
-        full_keyboard=True,
-        parse_mode="HTML",
-    )
+    await _reply(update, f"✅ Номер подтверждён!\n🎟 Ваш код: <b>{partner.code}</b>", full_keyboard=True, parse_mode="HTML")
 
 
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -474,9 +224,6 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _reply(update, "Сначала подтвердите номер кнопкой «Подтвердить номер».", full_keyboard=False)
         return
 
-    if not partner_has_real_code(partner):
-        await db_assign_real_code_if_needed(partner.id)
-        partner = await db_get_partner_by_chat(chat_id)
 
     if text_l == BTN_MY_CODE.lower():
         await _reply(
@@ -524,7 +271,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for o in ops:
             status_short = shorten_status_ru(o["status"])
             lines.append(
-                f"• <b>#{o['appointment_id']}</b>  {o['kind']}  <b>{fmt_money(o['amount'])}</b> BYN\n"
+                f"• {o['kind']}  <b>{fmt_money(o['amount'])}</b> BYN\n"
                 f"  {fmt_date(o['created_at'])} • {status_short}"
             )
 

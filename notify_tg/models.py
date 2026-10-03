@@ -11,6 +11,8 @@ class PartnerTelegram(models.Model):
     )
     chat_id = models.BigIntegerField("Telegram chat_id", unique=True)
     is_active = models.BooleanField("Активен", default=True)
+    verified_phone = models.CharField("Подтверждённый телефон", max_length=20, blank=True, default="")
+    phone_verified_at = models.DateTimeField("Владение подтверждено", null=True, blank=True)
     created_at = models.DateTimeField("Создано", auto_now_add=True)
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 

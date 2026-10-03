@@ -135,6 +135,8 @@ class ReferralPartner(models.Model):
         return f"{self.name} ({self.code})"
 
     def is_active(self) -> bool:
+        if self.code.startswith("PEND"):
+            return False
         if self.expires_at and self.expires_at < timezone.now():
             return False
         if self.max_uses is not None and self.redemptions.count() >= self.max_uses:
@@ -147,6 +149,7 @@ class ReferralRedemption(models.Model):
         ("pending", "Ожидает выполнения"),
         ("accrued", "Начислено (запись выполнена)"),
         ("paid", "Выплачено партнёру"),
+        ("cancelled", "Отменено"),
     ]
 
     partner = models.ForeignKey(

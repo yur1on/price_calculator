@@ -408,6 +408,37 @@ class DistributedPayrollTests(TestCase):
         close_payroll_period(self.period)
         self.assertEqual(PayrollCalculation.objects.filter(period=self.period, employee=self.master).count(), 1)
 
+    def test_closed_snapshot_records_exact_repair_level_allocation(self):
+        RepairFinance.objects.create(
+            date=date(2026, 9, 6), description="Второй ремонт", revenue="200.00",
+            part_cost="100.00", employee=self.master, master_percent="35.00",
+        )
+        close_payroll_period(self.period)
+        calc = PayrollCalculation.objects.get(period=self.period, employee=self.master)
+        snapshots = list(calc.repair_snapshots.order_by("repair_date", "id"))
+        self.assertEqual(sum((item.distributed_cost_share for item in snapshots), Decimal("0.00")), calc.distributed_costs)
+        self.assertEqual(sum((item.final_salary_amount for item in snapshots), Decimal("0.00")), calc.salary_amount)
+        self.assertEqual(snapshots[0].salary_amount, Decimal("770.00"))
+        self.assertNotEqual(snapshots[0].final_salary_amount, snapshots[0].salary_amount)
+
+    def test_snapshot_allocation_rounding_remainder_goes_to_last_stable_row(self):
+        RepairFinance.objects.all().delete()
+        self.distributed.total_cost = Decimal("6.00")
+        self.distributed.periods_count = 6
+        self.distributed.save()
+        for number in range(3):
+            RepairFinance.objects.create(
+                date=date(2026, 9, 5), description=f"Ремонт {number}", revenue="100.00",
+                part_cost="0.00", employee=self.master, master_percent="35.00",
+            )
+        close_payroll_period(self.period)
+        calc = PayrollCalculation.objects.get(period=self.period, employee=self.master)
+        snapshots = list(calc.repair_snapshots.order_by("repair_date", "id"))
+        self.assertEqual([item.distributed_cost_share for item in snapshots], [
+            Decimal("0.33"), Decimal("0.33"), Decimal("0.34"),
+        ])
+        self.assertEqual(sum((item.final_salary_amount for item in snapshots), Decimal("0.00")), calc.salary_amount)
+
     def test_multiple_masters_split_one_period_share(self):
         self.distributed.employees.add(self.other)
         close_payroll_period(self.period)

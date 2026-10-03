@@ -629,6 +629,14 @@ class PayrollRepairSnapshot(models.Model):
     salary_base = models.DecimalField("База", max_digits=12, decimal_places=2)
     percent = models.DecimalField("Процент мастера", max_digits=5, decimal_places=2)
     salary_amount = models.DecimalField("Начислено", max_digits=12, decimal_places=2)
+    distributed_cost_share = models.DecimalField(
+        "Доля распределяемых расходов", max_digits=12, decimal_places=2,
+        default=Decimal("0.00"),
+    )
+    final_salary_amount = models.DecimalField(
+        "Итоговое начисление", max_digits=12, decimal_places=2,
+        default=Decimal("0.00"),
+    )
 
     class Meta:
         verbose_name = "Ремонт в закрытом расчёте зарплаты"

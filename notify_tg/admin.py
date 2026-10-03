@@ -12,4 +12,4 @@ class PartnerTelegramAdmin(ModelAdmin):
     list_filter = ("is_active",)
     list_select_related = ("partner",)
     ordering = ("-created_at",)
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = ("verified_phone", "phone_verified_at", "created_at", "updated_at")

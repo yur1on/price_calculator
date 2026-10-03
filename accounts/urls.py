@@ -17,6 +17,7 @@ urlpatterns = [
     path("reset/done/", auth_views.PasswordResetCompleteView.as_view(template_name="accounts/password_reset_complete.html"), name="password_reset_complete"),
     path("workspace/", views.workspace, name="workspace"),
     path("client/", views.client_dashboard, name="client_dashboard"),
+    path("client/referrals/", views.client_referrals, name="client_referrals"),
     path("client/repairs/", views.client_repairs, name="client_repairs"),
     path("client/appointments/", views.client_appointments, name="client_appointments"),
     path("client/appointments/<int:pk>/", views.client_appointment_detail, name="client_appointment_detail"),
@@ -28,6 +29,7 @@ urlpatterns = [
     path("client/verify-phone/", views.phone_verify, name="phone_verify"),
     path("master/", views.master_dashboard, name="master_dashboard"),
     path("master/salary/", views.my_salary, name="my_salary"),
+    path("master/salary/calculations/<int:pk>/", views.salary_calculation_detail, name="salary_calculation_detail"),
     path("master/stock/", views.master_stock, name="master_stock"),
     path("master/suppliers/", views.master_suppliers, name="master_suppliers"),
 ]

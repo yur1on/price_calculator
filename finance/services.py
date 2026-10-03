@@ -176,6 +176,53 @@ def payroll_preview(period, employee):
             "salary_base": base, "percent": percent, "salary_amount": money(base * percent / Decimal("100"))}
 
 
+def _proportional_snapshot_amounts(total, rows, weight_key):
+    """Split a closed-period amount into immutable, cent-accurate repair rows."""
+    total = money(total)
+    weights = [max(Decimal(row[weight_key] or 0), ZERO) for row in rows]
+    total_weight = sum(weights, ZERO)
+    if not rows or not total_weight:
+        return [ZERO for _ in rows]
+
+    amounts, assigned = [], ZERO
+    for index, weight in enumerate(weights):
+        if index == len(rows) - 1:
+            amount = money(total - assigned)
+        else:
+            amount = money(total * weight / total_weight)
+            assigned += amount
+        amounts.append(amount)
+    return amounts
+
+
+def _closed_snapshot_rows(data):
+    """Return snapshot payloads without changing the authoritative payroll formula.
+
+    ``PayrollCalculation.salary_amount`` remains the period's source of truth.
+    The extra amounts make its repair-level explanation stable after closing.
+    """
+    rows = sorted(data["repairs"], key=lambda row: (row["repair_date"], row["repair"].pk))
+    expense_shares = _proportional_snapshot_amounts(data["distributed_costs"], rows, "salary_base")
+    net_weights = [max(Decimal(row["salary_base"] or 0) - expense_share, ZERO)
+                   for row, expense_share in zip(rows, expense_shares)]
+    final_weights = net_weights if sum(net_weights, ZERO) else [
+        max(Decimal(row["salary_base"] or 0), ZERO) for row in rows
+    ]
+    final_rows = [dict(row, allocation_weight=weight) for row, weight in zip(rows, final_weights)]
+    final_amounts = _proportional_snapshot_amounts(data["salary_amount"], final_rows, "allocation_weight")
+
+    return [
+        PayrollRepairSnapshot(
+            calculation=None, repair=row["repair"], repair_date=row["repair_date"],
+            description=row["description"], revenue=row["revenue"], parts_cost=row["parts_cost"],
+            other_direct_costs=row["other_direct_costs"], salary_base=row["salary_base"],
+            percent=row["percent"], salary_amount=row["salary_amount"],
+            distributed_cost_share=expense_share, final_salary_amount=final_amount,
+        )
+        for row, expense_share, final_amount in zip(rows, expense_shares, final_amounts)
+    ]
+
+
 @transaction.atomic
 def close_payroll_period(period):
     period = PayrollPeriod.objects.select_for_update().get(pk=period.pk)
@@ -198,14 +245,10 @@ def close_payroll_period(period):
                 parts_count=row["parts_count"], accounted_after=row["accounted_after"],
                 remaining_after=row["remaining_after"],
             )
-        PayrollRepairSnapshot.objects.bulk_create([
-            PayrollRepairSnapshot(
-                calculation=calc, repair=row["repair"], repair_date=row["repair_date"],
-                description=row["description"], revenue=row["revenue"], parts_cost=row["parts_cost"],
-                other_direct_costs=row["other_direct_costs"], salary_base=row["salary_base"],
-                percent=row["percent"], salary_amount=row["salary_amount"],
-            ) for row in data["repairs"]
-        ])
+        snapshots = _closed_snapshot_rows(data)
+        for snapshot in snapshots:
+            snapshot.calculation = calc
+        PayrollRepairSnapshot.objects.bulk_create(snapshots)
         calculations.append(calc)
     period.status = PayrollPeriod.Status.CLOSED
     period.calculated_at = timezone.now()

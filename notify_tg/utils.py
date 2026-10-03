@@ -17,8 +17,12 @@ def send_telegram_message(chat_id: int, text: str) -> bool:
         return False
 
 def notify_partner(partner, text: str) -> bool:
+    from .referrals import verified_partner
     tg = getattr(partner, "telegram", None)
     if not tg or not tg.is_active:
+        return False
+    owner = verified_partner(tg.chat_id)
+    if owner is None or owner.pk != partner.pk:
         return False
     return send_telegram_message(tg.chat_id, text)
 

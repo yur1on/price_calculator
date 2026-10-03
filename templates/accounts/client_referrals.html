@@ -1,0 +1,33 @@
+{% extends "accounts/client_base.html" %}{% load static %}
+{% block client_title %}Реферальная программа{% endblock %}
+{% block workbench_head %}{{ block.super }}<link rel="stylesheet" href="{% static 'accounts/css/referrals.css' %}?v=2">{% endblock %}
+{% block client_content %}
+<div class="referrals">
+  <div class="client-title"><div><h1>Реферальная программа</h1><p class="client-subtitle">Приглашайте друзей — накапливайте на свой ремонт</p></div></div>
+  {% if not partner %}
+  <section class="client-panel ref-onboarding" aria-labelledby="ref-join-title"><span class="ref-icon"><i class="fa-solid fa-gift" aria-hidden="true"></i></span><h2 id="ref-join-title">Участвуйте в реферальной программе</h2><p>Получите персональный код, делитесь им с друзьями и накапливайте средства на свой ремонт.</p>
+    {% if can_enroll %}<form method="post">{% csrf_token %}<button class="wb-button wb-button--primary" type="submit">Стать участником <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button></form><p class="ref-note">Если вы уже участвуете через Telegram, подключим существующий код после безопасной проверки. Новый кошелёк вместо него не создаётся.</p>
+    {% else %}<div class="ref-notice">Для участия необходимо подтвердить полный номер телефона.</div>{% if phone_verification_available %}<a class="wb-button wb-button--primary" href="{% url 'accounts:phone_verify' %}">Подтвердить номер телефона</a>{% else %}<p>Для подтверждения номера обратитесь в мастерскую. Отправка SMS через сайт пока недоступна.</p><a class="wb-button" href="{% url 'repairs:contacts' %}">Связаться с мастерской</a>{% endif %}{% endif %}
+  </section>
+  {% else %}
+  <div class="ref-overview">
+    <section class="client-panel ref-balance" aria-label="Баланс накоплений"><div class="ref-eyebrow">Ваши накопления · BYN</div><h2>Доступно</h2><div class="ref-amount">{{ balance.available_balance|floatformat:2 }} <small>BYN</small></div><p>Можно использовать для оплаты подходящей онлайн-записи.</p><div class="ref-pending"><div><strong>Ожидает</strong><p>Начисления, ещё не переведённые в доступные.</p></div><b>{{ balance.pending_balance|floatformat:2 }} BYN</b></div></section>
+    <section class="client-panel ref-code-card" aria-labelledby="ref-code-title"><h2 id="ref-code-title">Ваш реферальный код</h2><code id="ref-code" tabindex="0">{{ partner.code }}</code><p>Друг указывает его при оформлении ремонта.</p>
+      {% if not code_active %}<div class="ref-notice">Код сейчас недоступен для новых приглашений. Накопления и история сохранены. Уточните условия в мастерской.</div>{% endif %}
+      <div class="ref-actions" data-ref-actions hidden><button class="wb-button wb-button--primary" type="button" data-ref-copy><i class="fa-regular fa-copy" aria-hidden="true"></i> Скопировать код</button><button class="wb-button" type="button" data-ref-share><i class="fa-solid fa-arrow-up-from-bracket" aria-hidden="true"></i> Поделиться</button></div>
+      <p class="ref-note" data-ref-manual>Код можно выделить и скопировать вручную.</p><p class="ref-feedback" role="status" aria-live="polite" data-ref-feedback></p>
+    </section>
+  </div>
+  <section class="client-section" aria-labelledby="ref-how"><h2 id="ref-how">Как это работает</h2><ol class="ref-steps"><li class="client-panel"><span>01</span><h3>Поделитесь кодом</h3><p>Отправьте свой персональный код другу любым удобным способом.</p></li><li class="client-panel"><span>02</span><h3>Друг получает скидку</h3><p>При оформлении ремонта друг указывает код в поле «Реферальный код» и получает скидку {{ partner.client_discount_pct|floatformat:"-2" }}%.</p></li><li class="client-panel"><span>03</span><h3>Получите накопления</h3><p>После завершения и выдачи ремонта вам начисляется {{ partner.partner_commission_pct|floatformat:"-2" }}%. База учитывает скидку за несколько услуг.</p></li></ol></section>
+  <div class="ref-explain"><section class="client-panel"><h2>Как это выглядит на примере</h2><dl class="ref-example"><div><dt>Стоимость ремонта</dt><dd>{{ example.base|floatformat:2 }} BYN</dd></div><div><dt>Скидка другу</dt><dd>−{{ example.discount|floatformat:2 }} BYN</dd></div><div><dt>Друг оплачивает</dt><dd>{{ example.payable|floatformat:2 }} BYN</dd></div><div class="ref-example-total"><dt>Вам в накопления</dt><dd>+{{ example.commission|floatformat:2 }} BYN</dd></div></dl><p class="ref-note">Упрощённый пример без учёта других скидок и использования накоплений.</p></section>
+  <section class="client-panel"><span class="ref-icon"><i class="fa-solid fa-wallet" aria-hidden="true"></i></span><h2>Как использовать накопления</h2><p>При создании подходящей онлайн-записи система находит ваши накопления по телефону, автоматически использует доступную сумму и уменьшает стоимость — вплоть до 0 BYN.</p><p>Это не автоматическая оплата любого заказа, оформленного отдельно в CRM. Используйте свой номер телефона при онлайн-записи.</p><a class="wb-button" href="{% url 'repairs:brand_list' %}">Записаться на ремонт <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></section></div>
+  <section class="client-panel ref-history" aria-labelledby="ref-history-title"><h2 id="ref-history-title">История операций</h2><p class="ref-note">Указана дата создания операции. «Выплачено» — ранее закрытое положительное начисление, не доступное для использования.</p>
+    <div class="ref-history-head" aria-hidden="true"><span>Дата</span><span>Операция</span><span>Статус</span><span>Сумма</span></div>
+    <ul class="ref-operations">{% for operation in history %}<li><time datetime="{{ operation.date|date:'c' }}">{{ operation.date|date:"d.m.Y" }}</time><strong>{{ operation.kind }}</strong><span class="client-status">{{ operation.status }}</span><b class="ref-operation-amount">{{ operation.sign }}{{ operation.amount|floatformat:2 }} BYN</b></li>{% empty %}<li class="ref-empty">Операций пока нет. Поделитесь кодом, чтобы начать накапливать.</li>{% endfor %}</ul>
+    {% if history.has_other_pages %}<nav class="ref-pagination" aria-label="Страницы истории">{% if history.has_previous %}<a class="wb-button" href="?page={{ history.previous_page_number }}#ref-history-title">← Назад</a>{% endif %}<span>Страница {{ history.number }} из {{ history.paginator.num_pages }}</span>{% if history.has_next %}<a class="wb-button" href="?page={{ history.next_page_number }}#ref-history-title">Далее →</a>{% endif %}</nav>{% endif %}
+  </section>
+  {{ partner.code|json_script:"ref-code-data" }}{{ share_text|json_script:"ref-share-data" }}
+  {% endif %}
+</div>
+{% endblock %}
+{% block workbench_scripts %}<script src="{% static 'accounts/js/referrals.js' %}?v=1" defer></script>{% endblock %}
