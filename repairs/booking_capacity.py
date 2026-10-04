@@ -94,8 +94,21 @@ class CapacitySnapshot:
         if (not projected or projected["closed"] or day.weekday() not in self.weekdays
                 or workload_minutes > projected["available"]):
             return False
+        local_start = timezone.localtime(slot_start)
+        service_end = timezone.localtime(
+            slot_start + timedelta(minutes=workload_minutes),
+            local_start.tzinfo,
+        )
+        if not any(
+            row.weekday == day.weekday()
+            and local_start.time() >= row.start
+            and service_end.date() == day
+            and service_end.time() <= row.end
+            for row in self.working_hours
+        ):
+            return False
         slot_end = slot_start + timedelta(minutes=appointment_duration_minutes or settings.BOOKING_INTAKE_SLOT_MINUTES)
-        local_start, local_end = timezone.localtime(slot_start), timezone.localtime(slot_end)
+        local_end = timezone.localtime(slot_end)
         if any(b.start_time < local_end.time() and b.end_time > local_start.time()
                for b in self.blocks.get(day, ())):
             return False

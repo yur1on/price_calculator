@@ -88,6 +88,7 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
     if created:
         def _notify_admins_after_commit(appointment_id: int) -> None:
             try:
+                from notify_tg.services import format_local_datetime
                 a = (
                     Appointment.objects
                     .select_related("phone_model", "repair_type")
@@ -100,7 +101,7 @@ def sync_referral_on_appointment_save(sender, instance: Appointment, created: bo
                     f"Клиент: {a.customer_name} ({_short_phone(a.customer_phone)})\n"
                     f"Устройство: {a.phone_model}\n"
                     f"Услуги: {a.services_display}\n"
-                    f"Дата/время: {a.start:%d.%m.%Y %H:%M}\n"
+                    f"Дата/время: {format_local_datetime(a.start)}\n"
                     f"Итоговая цена: {a.price_final} BYN"
                     + (f"\nПартнёрский код: {a.referral_code}" if a.referral_code else "")
                     + f"\nАдминка: {admin_appointment_link(a.id)}"

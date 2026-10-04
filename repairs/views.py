@@ -541,8 +541,8 @@ def get_available_slots(
 ) -> List[datetime]:
     """
     Возвращает список ДАТ/ВРЕМЕН (aware datetime) возможных стартов записи.
-    Короткий визит должен помещаться в WorkingHour; workload услуги
-    проверяется отдельно по единому прогнозу загрузки. Snapshot живёт
+    Полная длительность услуги должна помещаться в WorkingHour; workload
+    проверяется также по единому прогнозу загрузки. Snapshot живёт
     только в этом вызове, SQL внутри цикла слотов не выполняется.
     """
     # --- 1) Длительность услуги ---
@@ -554,7 +554,7 @@ def get_available_slots(
     except ModelRepairPrice.DoesNotExist:
         duration_min = repair_type.default_duration_min or 60  # безопасный дефолт
     workload_minutes = int(duration_min)
-    duration = timedelta(minutes=int(settings.BOOKING_INTAKE_SLOT_MINUTES))
+    service_duration = timedelta(minutes=workload_minutes)
 
     # --- 2) Сетка коротких окон приёма ---
     step_min = int(settings.BOOKING_INTAKE_SLOT_MINUTES)
@@ -614,7 +614,7 @@ def get_available_slots(
                         break
                     continue
 
-                slot_end = slot_start + duration
+                slot_end = slot_start + service_duration
 
                 # Слот должен полностью влезать в рабочее окно
                 if slot_end > day_end:

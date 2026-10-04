@@ -14,13 +14,22 @@
   </section>
 
   <section class="wb-card crm-salary-section"><div class="wb-section-head"><h2><i class="fa-solid fa-screwdriver-wrench"></i> Ремонты периода</h2></div>
-    <div class="crm-table-wrap crm-salary-table" tabindex="0" role="region" aria-label="Исторические ремонты расчёта"><table class="crm-table"><thead><tr><th>Дата</th><th>Ремонт</th><th>Сумма</th><th>Запчасти</th><th>База</th><th>Исходно</th><th>Расходы периода</th><th>Итог</th></tr></thead><tbody>
-    {% for repair in calculation.repair_snapshots.all %}<tr><td>{{ repair.repair_date|date:'d.m.Y' }}</td><td class="crm-salary-description">{{ repair.description }}<small>{{ repair.percent }}%</small></td><td>{{ repair.revenue|money_byn }}</td><td>−{{ repair.parts_cost|money_byn }}</td><td>{{ repair.salary_base|money_byn }}</td><td>{{ repair.salary_amount|money_byn }}</td><td>−{{ repair.distributed_cost_share|money_byn }}</td><td><strong>{{ repair.final_salary_amount|money_byn }}</strong></td></tr>{% empty %}<tr><td colspan="8">Ремонтов в закрытом периоде нет.</td></tr>{% endfor %}
-    </tbody></table></div>
-    <div class="crm-order-cards crm-salary-mobile">{% for repair in calculation.repair_snapshots.all %}<article class="crm-order-card"><small class="crm-muted">{{ repair.repair_date|date:'d.m.Y' }} · {{ repair.percent }}%</small><h3>{{ repair.description }}</h3><dl><dt>Сумма</dt><dd>{{ repair.revenue|money_byn }}</dd><dt>Запчасти</dt><dd>−{{ repair.parts_cost|money_byn }}</dd><dt>База</dt><dd>{{ repair.salary_base|money_byn }}</dd><dt>Исходно</dt><dd>{{ repair.salary_amount|money_byn }}</dd><dt>Расходы периода</dt><dd>−{{ repair.distributed_cost_share|money_byn }}</dd><dt>Итог</dt><dd><strong>{{ repair.final_salary_amount|money_byn }}</strong></dd></dl></article>{% endfor %}</div>
+    <div class="crm-table-wrap crm-salary-table" tabindex="0" role="region" aria-label="Исторические ремонты расчёта"><table class="crm-table"><thead><tr><th>Дата</th><th>Ремонт</th><th>Сумма</th><th>Запчасти</th><th>Другие прямые затраты</th><th>База</th><th>% мастера</th><th>Зарплата</th></tr></thead><tbody>
+    {% for repair in calculation.repair_snapshots.all %}<tr><td>{{ repair.repair_date|date:'d.m.Y' }}</td><td class="crm-salary-description">{{ repair.description }}</td><td>{{ repair.revenue|money_byn }}</td><td>−{{ repair.parts_cost|money_byn }}</td><td>−{{ repair.other_direct_costs|money_byn }}</td><td>{{ repair.salary_base|money_byn }}</td><td>{{ repair.percent }}%</td><td><strong>{{ repair.salary_amount|money_byn }}</strong></td></tr>{% empty %}<tr><td colspan="8">Ремонтов в закрытом периоде нет.</td></tr>{% endfor %}
+    </tbody><tfoot><tr><th colspan="2">Итого · {{ calculation.repairs_count }} ремонт(ов)</th><th>{{ calculation.revenue|money_byn }}</th><th colspan="2">−{{ calculation.direct_costs|money_byn }}</th><th>{{ calculation.repair_margin|money_byn }}</th><th></th><th></th></tr></tfoot></table></div>
+    <div class="crm-order-cards crm-salary-mobile">{% for repair in calculation.repair_snapshots.all %}<article class="crm-order-card"><small class="crm-muted">{{ repair.repair_date|date:'d.m.Y' }} · {{ repair.percent }}%</small><h3>{{ repair.description }}</h3><dl><dt>Сумма</dt><dd>{{ repair.revenue|money_byn }}</dd><dt>Запчасти</dt><dd>−{{ repair.parts_cost|money_byn }}</dd><dt>Другие затраты</dt><dd>−{{ repair.other_direct_costs|money_byn }}</dd><dt>База</dt><dd>{{ repair.salary_base|money_byn }}</dd><dt>Зарплата</dt><dd><strong>{{ repair.salary_amount|money_byn }}</strong></dd></dl></article>{% endfor %}</div>
   </section>
 
-  {% include "accounts/partials/salary_distributions.html" with items=calculation.allocations.all %}
-  <section class="crm-salary-calculation" aria-label="Итог закрытого расчёта"><div><span>Маржа всех ремонтов</span><strong>{{ calculation.repair_margin|money_byn }}</strong></div><div><span>Распределяемые расходы</span><strong class="crm-salary-negative">−{{ calculation.distributed_costs|money_byn }}</strong></div><div class="crm-salary-calculation__total"><span>База зарплаты</span><strong>{{ calculation.salary_base|money_byn }}</strong></div><div><span>Процент мастера</span><strong>{{ calculation.percent }}%</strong></div><div class="crm-salary-calculation__pay"><span>К выплате</span><strong>{{ calculation.salary_amount|money_byn }}</strong></div></section>
+  <div class="crm-salary-breakdown">
+    {% include "accounts/partials/salary_distributions.html" with items=calculation.allocations.all total=calculation.distributed_costs %}
+    <section class="crm-salary-calculation" aria-label="Итог закрытого расчёта">
+      <p class="crm-salary-calculation__heading">Итог расчёта</p>
+      <div><span>Маржа всех ремонтов</span><strong>{{ calculation.repair_margin|money_byn }}</strong></div>
+      <div><span>Распределяемые расходы</span><strong class="crm-salary-negative">−{{ calculation.distributed_costs|money_byn }}</strong></div>
+      <div class="crm-salary-calculation__total"><span>База зарплаты</span><strong>{{ calculation.salary_base|money_byn }}</strong></div>
+      <div><span>Процент мастера</span><strong>{{ calculation.percent }}%</strong></div>
+      <div class="crm-salary-calculation__pay"><span>К выплате</span><strong>{{ calculation.salary_amount|money_byn }}</strong></div>
+    </section>
+  </div>
 </div>
 {% endblock %}

@@ -5,6 +5,7 @@ from decimal import Decimal
 from html import escape
 
 from django.conf import settings
+from django.utils import timezone
 from asgiref.sync import async_to_sync
 from telegram import Bot
 from telegram.request import HTTPXRequest
@@ -22,6 +23,10 @@ class _TelegramURLFilter(logging.Filter):
 
 
 logging.getLogger("httpx").addFilter(_TelegramURLFilter())
+
+
+def format_local_datetime(value) -> str:
+    return timezone.localtime(value).strftime("%d.%m.%Y %H:%M")
 
 def get_bot(*, request=None, get_updates_request=None) -> Bot | None:
     token = getattr(settings, "TELEGRAM_BOT_TOKEN", "") or ""
@@ -111,7 +116,7 @@ def appointment_created_message(appointment) -> str:
         pass
     lines = [
         "Запись подтверждена",
-        f"Дата и время: {appointment.start:%d.%m.%Y %H:%M}",
+        f"Дата и время: {format_local_datetime(appointment.start)}",
         f"Устройство: {escape(str(appointment.phone_model))}",
         f"Услуга: {escape(appointment.services_display)}",
     ]

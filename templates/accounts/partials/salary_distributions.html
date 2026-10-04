@@ -1,5 +1,5 @@
 {% load finance_extras %}
-<section class="wb-card crm-salary-section crm-salary-distributions">
+<section class="crm-salary-distributions crm-salary-breakdown__panel">
   <div class="wb-section-head"><h2><i class="fa-solid fa-chart-pie" aria-hidden="true"></i> Распределяемые расходы периода</h2></div>
   <p class="crm-muted crm-salary-note">Распределяемые расходы — общие расходы мастерской, которые учитываются частями в расчётных периодах. Они уменьшают базу, от которой рассчитывается процент мастера.</p>
   <div class="crm-table-wrap crm-salary-table" tabindex="0" role="region" aria-label="Распределяемые расходы периода">
@@ -10,9 +10,10 @@
       <td><strong>{% if is_preview %}Будет: {% endif %}{{ item.part_number }} / {{ item.parts_count }}</strong>{% if not is_preview and item.part_number >= item.parts_count %}<small>Завершено</small>{% endif %}</td>
       <td>{{ item.accounted_after|money_byn }}</td><td>{{ item.remaining_after|money_byn }}</td>
     </tr>{% empty %}<tr><td colspan="6"><div class="wb-empty"><b>Распределяемых расходов в этом периоде нет</b></div></td></tr>{% endfor %}
-    </tbody></table>
+    </tbody><tfoot><tr><th colspan="2">Всего за период</th><th class="crm-salary-negative">−{{ total|money_byn }}</th><th colspan="3"></th></tr></tfoot></table>
   </div>
   <div class="crm-order-cards crm-salary-mobile">
     {% for item in items %}<article class="crm-order-card"><h3>{% if is_preview %}{{ item.expense.name }}{% else %}{{ item.name_snapshot }}{% endif %}</h3><div class="crm-salary-expense-bar" aria-hidden="true"><span style="width:{{ item.progress_percent }}%"></span></div><dl><dt>Полная стоимость</dt><dd>{{ item.total_cost_snapshot|money_byn }}</dd><dt>В этом периоде</dt><dd class="crm-salary-negative">−{{ item.amount|money_byn }}</dd><dt>Прогресс</dt><dd>{% if is_preview %}Будет: {% endif %}{{ item.part_number }} / {{ item.parts_count }}</dd><dt>Учтено</dt><dd>{{ item.accounted_after|money_byn }}</dd><dt>Осталось</dt><dd>{{ item.remaining_after|money_byn }}</dd></dl></article>{% empty %}<div class="wb-empty"><b>Распределяемых расходов в этом периоде нет</b></div>{% endfor %}
   </div>
+  <p class="crm-salary-distributions__total">Всего распределяемых расходов: <strong>−{{ total|money_byn }}</strong></p>
 </section>

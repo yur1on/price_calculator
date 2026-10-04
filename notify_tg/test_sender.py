@@ -1,6 +1,6 @@
 import asyncio
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from django.db import transaction
@@ -12,7 +12,10 @@ from telegram.request import HTTPXRequest
 
 from crm.models import CRMOrder, CRMWorkItem
 from crm.services import change_status, issue_order
-from notify_tg.services import _TelegramURLFilter, notify_order_status, notify_partner_by_chat
+from notify_tg.services import (
+    _TelegramURLFilter, appointment_created_message, notify_order_status,
+    notify_partner_by_chat,
+)
 from notify_tg import tests as existing_tests
 from repairs.models import Appointment, PhoneBrand, PhoneModel, RepairType
 
@@ -76,6 +79,21 @@ class SenderRegressionTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             appointment.save()
         self.bot.send_message.assert_awaited_once()
+
+    @override_settings(TIME_ZONE="Europe/Minsk", USE_TZ=True)
+    def test_appointment_message_formats_database_utc_as_local_time(self):
+        brand = PhoneBrand.objects.create(name="Timezone", slug="timezone-test")
+        model = PhoneModel.objects.create(brand=brand, name="Phone", slug="timezone-phone")
+        repair = RepairType.objects.create(name="Display", slug="timezone-display")
+        start = datetime(2026, 1, 15, 14, 0, tzinfo=dt_timezone.utc)
+        appointment = Appointment.objects.create(
+            phone_model=model, repair_type=repair, start=start,
+            end=start + timedelta(minutes=30), customer_name="Test",
+            customer_phone=self.customer.phone, price_original="100", price_final="100",
+        )
+        appointment.refresh_from_db()
+        self.assertIn("15.01.2026 17:00", appointment_created_message(appointment))
+        self.assertNotIn("15.01.2026 14:00", appointment_created_message(appointment))
 
     def test_transport_exceptions_preserve_ready_and_do_not_log_secrets(self):
         for error in (TimeoutError, TimedOut, NetworkError, BadRequest):

@@ -113,8 +113,23 @@ class WorkshopCapacityTests(TestCase):
         tomorrow = self.today + timedelta(days=1)
         WorkingHour.objects.create(weekday=tomorrow.weekday(), start=time(10), end=time(12))
         slots = get_available_slots(self.phone, self.repair_type, days=1, start_date=tomorrow)
-        self.assertGreaterEqual(len(slots), 4)
-        self.assertEqual(slots[1] - slots[0], timedelta(minutes=30))
+        self.assertEqual([timezone.localtime(slot).time() for slot in slots], [time(10)])
+
+    def test_slots_require_full_service_duration_before_working_day_end(self):
+        day = self.today + timedelta(days=1)
+        WorkingHour.objects.create(weekday=day.weekday(), start=time(10), end=time(18))
+        slots = get_available_slots(self.phone, self.repair_type, days=1, start_date=day)
+        times = [timezone.localtime(slot).time() for slot in slots]
+        self.assertIn(time(15, 30), times)
+        self.assertIn(time(16), times)
+        self.assertNotIn(time(16, 30), times)
+        self.assertNotIn(time(17), times)
+        self.assertNotIn(time(17, 30), times)
+
+        self.repair_type.default_duration_min = 30
+        self.repair_type.save(update_fields=["default_duration_min"])
+        short_slots = get_available_slots(self.phone, self.repair_type, days=1, start_date=day)
+        self.assertIn(time(17, 30), [timezone.localtime(slot).time() for slot in short_slots])
 
     @override_settings(REPAIRS_MAX_PARALLEL_APPOINTMENTS=1)
     def test_historical_long_appointment_still_blocks_overlapping_intake(self):
@@ -233,9 +248,9 @@ class CapacitySnapshotTests(TestCase):
 
     def test_fresh_check_sees_new_reservation(self):
         snapshot = CapacitySnapshot(self.today, self.today)
-        self.assertTrue(snapshot.slot_is_available(self.aware(), 600))
+        self.assertTrue(snapshot.slot_is_available(self.aware(9), 540))
         self.appointment(minutes=120)
-        self.assertFalse(slot_is_available(self.aware(), 600))
+        self.assertFalse(slot_is_available(self.aware(9), 540))
 
     @override_settings(REPAIRS_MAX_PARALLEL_APPOINTMENTS=1)
     def test_timezone_and_legacy_visit_crossing_midnight(self):
@@ -254,11 +269,11 @@ class CapacitySnapshotTests(TestCase):
 
     def test_multiple_work_intervals_and_blocks(self):
         tomorrow = self.today + timedelta(days=1)
-        WorkingHour.objects.create(weekday=tomorrow.weekday(), start=time(9), end=time(10))
-        WorkingHour.objects.create(weekday=tomorrow.weekday(), start=time(11), end=time(12))
+        WorkingHour.objects.create(weekday=tomorrow.weekday(), start=time(9), end=time(11))
+        WorkingHour.objects.create(weekday=tomorrow.weekday(), start=time(12), end=time(14))
         BookingBlock.objects.create(date=tomorrow, start_time=time(9, 30), end_time=time(10))
         slots = get_available_slots(self.phone, self.repair_type, days=1, start_date=tomorrow)
-        self.assertEqual([timezone.localtime(slot).time() for slot in slots], [time(9), time(11), time(11, 30)])
+        self.assertEqual([timezone.localtime(slot).time() for slot in slots], [time(9), time(12)])
 
     def test_horizon_clamped_before_forecast_and_last_day_included(self):
         from repairs.views import MAX_BOOK_AHEAD_DAYS
@@ -329,7 +344,8 @@ class CapacitySnapshotTests(TestCase):
                 blocked = any(b.start_time < timezone.localtime(end).time() and b.end_time > timezone.localtime(start).time()
                               for b in BookingBlock.objects.filter(date=day, is_active=True))
                 overlaps = Appointment.objects.filter(status__in=("new", "confirmed"), start__lt=end, end__gt=start).count()
-                if working and available >= 120 and not blocked and overlaps < 2:
+                service_end = timezone.localtime(start + timedelta(minutes=120)).time()
+                if working and available >= 120 and service_end <= time(18) and not blocked and overlaps < 2:
                     old_slots.append(start)
                 if snapshot.slot_is_available(start, 120):
                     new_slots.append(start)

@@ -10,18 +10,24 @@
   </section>
 
   {% if open_period %}
-  <section class="wb-card crm-salary-section">
+  <section class="wb-card crm-salary-section crm-salary-current-card">
     <div class="wb-section-head crm-salary-period"><div><span class="crm-eyebrow">Текущий период</span><h2>{{ open_period }}</h2></div><span class="wb-status wb-status--warning">Предварительный расчёт</span></div>
     <p class="crm-muted crm-salary-note">Сумма уже учитывается в «Заработано» и «К выплате», но предварительна: распределяемые расходы могут изменить её при закрытии периода.</p>
     <div class="wb-kpis crm-salary-preview-kpis">
-      <div class="wb-kpi"><div><span>Ремонтов</span><strong>{{ current.repairs_count }}</strong></div></div>
-      <div class="wb-kpi"><div><span>Маржа ремонтов</span><strong>{{ current.repair_margin|money_byn }}</strong></div></div>
-      <div class="wb-kpi wb-kpi--amber"><div><span>Расходы периода</span><strong>−{{ current.distributed_costs|money_byn }}</strong></div></div>
-      <div class="wb-kpi wb-kpi--green"><div><span>Предварительно к начислению</span><strong>{{ current.salary_amount|money_byn }}</strong></div></div>
+      <div class="wb-kpi"><div><span>Ремонтов</span><strong>{{ current.repairs_count }}</strong></div></div><div class="wb-kpi"><div><span>Выручка</span><strong>{{ current.revenue|money_byn }}</strong></div></div><div class="wb-kpi wb-kpi--amber"><div><span>Прямые затраты</span><strong>−{{ current.direct_costs|money_byn }}</strong></div></div><div class="wb-kpi wb-kpi--green"><div><span>Маржа ремонтов</span><strong>{{ current.repair_margin|money_byn }}</strong></div></div>
     </div>
-    {% if current.repairs %}<div class="crm-table-wrap crm-salary-table crm-salary-preview-table"><table class="crm-table"><thead><tr><th>Дата</th><th>Ремонт</th><th>База</th><th>Исходное начисление</th></tr></thead><tbody>{% for repair in current.repairs %}<tr><td>{{ repair.repair_date|date:'d.m.Y' }}</td><td class="crm-salary-description">{{ repair.description }}</td><td>{{ repair.salary_base|money_byn }}</td><td>{{ repair.salary_amount|money_byn }}</td></tr>{% endfor %}</tbody></table></div><div class="crm-order-cards crm-salary-mobile">{% for repair in current.repairs %}<article class="crm-order-card"><small class="crm-muted">{{ repair.repair_date|date:'d.m.Y' }}</small><h3>{{ repair.description }}</h3><dl><dt>База</dt><dd>{{ repair.salary_base|money_byn }}</dd><dt>Исходное начисление</dt><dd>{{ repair.salary_amount|money_byn }}</dd></dl></article>{% endfor %}</div>{% endif %}
-    {% include "accounts/partials/salary_distributions.html" with items=current.distributions is_preview=True %}
-    <section class="crm-salary-calculation" aria-label="Итог предварительного расчёта"><div><span>Маржа всех ремонтов</span><strong>{{ current.repair_margin|money_byn }}</strong></div><div><span>Распределяемые расходы</span><strong class="crm-salary-negative">−{{ current.distributed_costs|money_byn }}</strong></div><div class="crm-salary-calculation__total"><span>База зарплаты</span><strong>{{ current.salary_base|money_byn }}</strong></div><div><span>Процент мастера</span><strong>{{ current.percent }}%</strong></div><div class="crm-salary-calculation__pay"><span>К выплате</span><strong>{{ current.salary_amount|money_byn }}</strong></div></section>
+    <section class="crm-salary-repairs"><div class="wb-section-head"><h2><i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i> Ремонты мастера</h2></div>{% if current.repairs %}<div class="crm-table-wrap crm-salary-table crm-salary-preview-table"><table class="crm-table"><thead><tr><th>Дата</th><th>Ремонт</th><th>Сумма</th><th>Запчасти</th><th>Другие прямые затраты</th><th>База</th><th>% мастера</th><th>Зарплата</th></tr></thead><tbody>{% for repair in current.repairs %}<tr><td>{{ repair.repair_date|date:'d.m.Y' }}</td><td class="crm-salary-description">{{ repair.description }}</td><td>{{ repair.revenue|money_byn }}</td><td>−{{ repair.parts_cost|money_byn }}</td><td>−{{ repair.other_direct_costs|money_byn }}</td><td>{{ repair.salary_base|money_byn }}</td><td>{{ repair.percent }}%</td><td><strong>{{ repair.salary_amount|money_byn }}</strong></td></tr>{% endfor %}</tbody><tfoot><tr><th colspan="2">Итого · {{ current.repairs_count }} ремонт(ов)</th><th>{{ current.revenue|money_byn }}</th><th colspan="2">−{{ current.direct_costs|money_byn }}</th><th>{{ current.repair_margin|money_byn }}</th><th></th><th></th></tr></tfoot></table></div><div class="crm-order-cards crm-salary-mobile">{% for repair in current.repairs %}<article class="crm-order-card"><small class="crm-muted">{{ repair.repair_date|date:'d.m.Y' }} · {{ repair.percent }}%</small><h3>{{ repair.description }}</h3><dl><dt>Сумма</dt><dd>{{ repair.revenue|money_byn }}</dd><dt>Запчасти</dt><dd>−{{ repair.parts_cost|money_byn }}</dd><dt>Другие затраты</dt><dd>−{{ repair.other_direct_costs|money_byn }}</dd><dt>База</dt><dd>{{ repair.salary_base|money_byn }}</dd><dt>Зарплата</dt><dd><strong>{{ repair.salary_amount|money_byn }}</strong></dd></dl></article>{% endfor %}</div>{% else %}<div class="wb-empty"><b>В этом периоде пока нет ремонтов</b></div>{% endif %}</section>
+    <div class="crm-salary-breakdown">
+      {% include "accounts/partials/salary_distributions.html" with items=current.distributions is_preview=True total=current.distributed_costs %}
+      <section class="crm-salary-calculation" aria-label="Итог предварительного расчёта">
+        <p class="crm-salary-calculation__heading">Итог расчёта</p>
+        <div><span>Маржа всех ремонтов</span><strong>{{ current.repair_margin|money_byn }}</strong></div>
+        <div><span>Распределяемые расходы</span><strong class="crm-salary-negative">−{{ current.distributed_costs|money_byn }}</strong></div>
+        <div class="crm-salary-calculation__total"><span>База зарплаты</span><strong>{{ current.salary_base|money_byn }}</strong></div>
+        <div><span>Процент мастера</span><strong>{{ current.percent }}%</strong></div>
+        <div class="crm-salary-calculation__pay"><span>К выплате</span><strong>{{ current.salary_amount|money_byn }}</strong></div>
+      </section>
+    </div>
   </section>
   {% else %}
   <section class="wb-card crm-salary-section"><div class="wb-empty"><i class="fa-regular fa-calendar" aria-hidden="true"></i><b>Открытого расчётного периода пока нет</b><p>Предварительный расчёт появится после открытия периода.</p></div></section>

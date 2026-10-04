@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from io import BytesIO
 from unittest.mock import patch
 
@@ -285,6 +285,38 @@ class BookingFormViewTests(TestCase):
             list(appointment.items.order_by("position").values_list("repair_type__slug", flat=True)),
             [self.repair_type.slug, self.extra_repair_type.slug, self.cheap_repair_type.slug],
         )
+
+    def test_post_rejects_service_that_ends_after_closing(self):
+        price = ModelRepairPrice.objects.get(phone_model=self.model, repair_type=self.repair_type)
+        price.duration_min = 120
+        price.save(update_fields=["duration_min"])
+        slot = datetime.fromisoformat(self._monday_slot()).replace(hour=17).isoformat()
+        response = self.client.post(
+            reverse("repairs:book", kwargs={
+                "brand_slug": self.brand.slug,
+                "model_slug": self.model.slug,
+                "repair_slug": self.repair_type.slug,
+            }) + f"?slot={slot}",
+            data={"customer_name": "Поздно", "customer_phone": "+375291234567", "consent": "on"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Appointment.objects.filter(customer_name="Поздно").exists())
+
+    def test_post_allows_service_ending_exactly_at_closing(self):
+        price = ModelRepairPrice.objects.get(phone_model=self.model, repair_type=self.repair_type)
+        price.duration_min = 120
+        price.save(update_fields=["duration_min"])
+        slot = datetime.fromisoformat(self._monday_slot()).replace(hour=16).isoformat()
+        response = self.client.post(
+            reverse("repairs:book", kwargs={
+                "brand_slug": self.brand.slug,
+                "model_slug": self.model.slug,
+                "repair_slug": self.repair_type.slug,
+            }) + f"?slot={slot}",
+            data={"customer_name": "Граница", "customer_phone": "+375291234568", "consent": "on"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Appointment.objects.filter(customer_name="Граница").exists())
 
     @patch("repairs.views.lock_day")
     @patch("repairs.views.slot_is_available", side_effect=[True, False])
