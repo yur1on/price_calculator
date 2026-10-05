@@ -21,14 +21,15 @@ from .forms import (
     RepairFinanceForm, SalaryPaymentForm, StockReceiptForm, SupplierForm,
     SupplierPaymentForm, WarrantyClaimForm, SupplierReturnForm,
     DistributedExpenseForm, PayrollPeriodForm, MasterAccessCreateForm, MasterPasswordForm,
+    WarehouseIssueForm,
     WorkshopWarrantyClaimForm,
 )
 from .models import (
     Employee, Expense, ExpenseCategory, OtherIncome, PartCatalog, PartItem,
     RepairFinance, SalaryPayment, StockReceipt, Supplier, SupplierPayment, SupplierReturn, WarrantyClaim,
-    DistributedExpense, PayrollPeriod,
+    DistributedExpense, PayrollPeriod, WarehouseIssue,
 )
-from .services import close_payroll_period, employee_rows, financial_summary, monthly_chart, payroll_preview, resolve_period, stock_summary, supplier_summary
+from .services import close_payroll_period, employee_rows, financial_summary, issue_stock_to_employee, monthly_chart, payroll_preview, resolve_period, stock_summary, supplier_summary
 from .supplier_ledger import supplier_ledger
 from accounts.access import is_approved_master, is_tehsfera_admin, profile_for
 
@@ -379,6 +380,39 @@ def part_item_detail(request, pk):
     return render(request, template, {"item": item, "usage": usage})
 
 
+@finance_staff_required
+def warehouse_issue_create(request, pk):
+    item = get_object_or_404(
+        PartItem.objects.select_related("receipt__part", "receipt__supplier"), pk=pk,
+    )
+    if item.status != PartItem.Status.IN_STOCK:
+        messages.error(request, "Выдать можно только материал со статусом «На складе».")
+        return redirect("finance:part_item_detail", pk=item.pk)
+    form = WarehouseIssueForm(request.POST or None, part_item=item)
+    if request.method == "POST" and form.is_valid():
+        try:
+            issue = issue_stock_to_employee(
+                part_item=item,
+                employee=form.cleaned_data["employee"],
+                quantity=form.cleaned_data["quantity"],
+                issue_date=form.cleaned_data["issue_date"],
+                periods_count=form.cleaned_data["periods_count"],
+                comment=form.cleaned_data["comment"],
+                actor=request.user,
+            )
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(
+                request,
+                f"{issue.part_name_snapshot} — {issue.quantity} шт. выдан мастеру "
+                f"{issue.employee.name}. Стоимость {issue.total_cost_snapshot:.2f} BYN "
+                f"распределена на {issue.distributed_expense.periods_count} расчётных периодов.",
+            )
+            return redirect("finance:part_item_detail", pk=item.pk)
+    return render(request, "finance/warehouse_issue_form.html", {"form": form, "item": item})
+
+
 @workshop_staff_required
 def receipt_list(request):
     start, end, context = _period_context(request)
@@ -634,7 +668,9 @@ def warranty_edit(request, pk):
 
 @finance_staff_required
 def distributed_expense_list(request):
-    items = DistributedExpense.objects.select_related("category", "source_expense").prefetch_related("employees")
+    items = DistributedExpense.objects.select_related(
+        "category", "source_expense", "warehouse_issue__employee",
+    ).prefetch_related("employees")
     return render(request, "finance/distributed_expense_list.html", {"items": items})
 
 
@@ -646,6 +682,12 @@ def distributed_expense_create(request):
 @finance_staff_required
 def distributed_expense_edit(request, pk):
     item = get_object_or_404(DistributedExpense, pk=pk)
+    if hasattr(item, "warehouse_issue"):
+        messages.info(
+            request,
+            "Складская выдача хранит неизменяемый snapshot стоимости и источника.",
+        )
+        return redirect("finance:distributed_expense_detail", pk=item.pk)
     if item.allocations.exists():
         messages.info(request, "Изменение не затронет уже закрытые расчёты: они хранят snapshot.")
     return _form_view(request, DistributedExpenseForm, "Изменить распределение", "Распределение обновлено.", "finance:distributed_expense_list", item)
@@ -653,7 +695,13 @@ def distributed_expense_edit(request, pk):
 
 @finance_staff_required
 def distributed_expense_detail(request, pk):
-    item = get_object_or_404(DistributedExpense.objects.prefetch_related("employees", "allocations__calculation__period", "allocations__calculation__employee"), pk=pk)
+    item = get_object_or_404(
+        DistributedExpense.objects.select_related(
+            "warehouse_issue__employee", "warehouse_issue__source_receipt__supplier",
+        ).prefetch_related(
+            "employees", "allocations__calculation__period", "allocations__calculation__employee",
+        ), pk=pk,
+    )
     return render(request, "finance/distributed_expense_detail.html", {"item": item})
 
 

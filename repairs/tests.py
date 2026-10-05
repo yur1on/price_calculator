@@ -191,12 +191,52 @@ class BookingFormViewTests(TestCase):
         )
         WorkingHour.objects.create(weekday=0, start="10:00", end="18:00")
 
-    def _monday_slot(self):
+    def _monday_slot(self, hour=10):
         local_now = timezone.localtime()
         days_until_monday = (7 - local_now.weekday()) % 7 or 7
         return (local_now + timedelta(days=days_until_monday)).replace(
-            hour=10, minute=0, second=0, microsecond=0,
+            hour=hour, minute=0, second=0, microsecond=0,
         ).isoformat()
+
+    def _booking_data(self, name):
+        return {
+            "customer_name": name,
+            "customer_phone": "+375291234567",
+            "referral_code": "",
+            "consent": "on",
+        }
+
+    def test_direct_post_rejects_service_that_ends_after_working_hours(self):
+        ModelRepairPrice.objects.filter(
+            phone_model=self.model, repair_type=self.repair_type
+        ).update(duration_min=120)
+        response = self.client.post(
+            reverse("repairs:book", kwargs={
+                "brand_slug": self.brand.slug,
+                "model_slug": self.model.slug,
+                "repair_slug": self.repair_type.slug,
+            }) + f"?slot={self._monday_slot(17)}",
+            data=self._booking_data("Поздний POST"),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Appointment.objects.filter(customer_name="Поздний POST").exists())
+
+    def test_boundary_post_allows_service_ending_at_working_hours(self):
+        ModelRepairPrice.objects.filter(
+            phone_model=self.model, repair_type=self.repair_type
+        ).update(duration_min=120)
+        response = self.client.post(
+            reverse("repairs:book", kwargs={
+                "brand_slug": self.brand.slug,
+                "model_slug": self.model.slug,
+                "repair_slug": self.repair_type.slug,
+            }) + f"?slot={self._monday_slot(16)}",
+            data=self._booking_data("Граничный POST"),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Appointment.objects.filter(customer_name="Граничный POST").exists())
 
     def test_booking_form_shows_extra_repairs_with_discounted_price(self):
         slot = self._monday_slot()

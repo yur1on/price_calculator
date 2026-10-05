@@ -340,6 +340,35 @@ class DistributedExpenseForm(StyledModelForm):
             self.fields["start_date"].initial = timezone.localdate()
 
 
+class WarehouseIssueForm(forms.Form):
+    employee = forms.ModelChoiceField(label="Мастер", queryset=Employee.objects.none())
+    quantity = forms.IntegerField(label="Количество", min_value=1, initial=1)
+    unit_cost = forms.DecimalField(
+        label="Стоимость за единицу", max_digits=12, decimal_places=2, disabled=True,
+    )
+    issue_date = forms.DateField(
+        label="Дата выдачи", widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+    )
+    periods_count = forms.IntegerField(label="Распределить на расчётных периодов", min_value=1, initial=6)
+    comment = forms.CharField(
+        label="Комментарий", required=False, widget=forms.Textarea(attrs={"rows": 3}),
+    )
+
+    def __init__(self, *args, part_item, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.part_item = part_item
+        self.fields["employee"].queryset = Employee.objects.filter(is_active=True, is_owner=False)
+        self.fields["unit_cost"].initial = part_item.unit_cost
+        self.fields["issue_date"].initial = timezone.localdate()
+        available = PartItem.objects.filter(
+            receipt_id=part_item.receipt_id, status=PartItem.Status.IN_STOCK,
+        ).count()
+        self.fields["quantity"].widget.attrs["max"] = available
+        self.fields["quantity"].help_text = f"Доступно в этой партии: {available} шт."
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "finance-input")
+
+
 class PayrollPeriodForm(StyledModelForm):
     class Meta:
         model = PayrollPeriod

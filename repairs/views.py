@@ -620,7 +620,11 @@ def get_available_slots(
                 if slot_end > day_end:
                     break  # дальше только позже — тоже выйдет за окно
 
-                if snapshot.slot_is_available(slot_start, workload_minutes):
+                if snapshot.slot_is_available(
+                    slot_start,
+                    workload_minutes,
+                    service_duration_minutes=workload_minutes,
+                ):
                     slots.append(slot_start)
 
                 # Следующий шаг по сетке
@@ -823,7 +827,9 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
     end_dt = slot_dt + timedelta(minutes=settings.BOOKING_INTAKE_SLOT_MINUTES)
 
     # первичная проверка занятости (глобально по всем активным заявкам)
-    if not slot_is_available(slot_dt, duration_min):
+    if not slot_is_available(
+        slot_dt, duration_min, service_duration_minutes=duration_min
+    ):
         messages.error(request, "Этот слот уже занят. Пожалуйста, выберите другое время.")
         return redirect("repairs:slot_select",
                         brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
@@ -834,7 +840,9 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
             # повторная проверка в транзакции — защита от гонок
             with transaction.atomic():
                 lock_day(slot_local_date)
-                if not slot_is_available(slot_dt, duration_min):
+                if not slot_is_available(
+                    slot_dt, duration_min, service_duration_minutes=duration_min
+                ):
                     messages.error(request, "К сожалению, этот слот только что заняли. Выберите другое время.")
                     return redirect("repairs:slot_select",
                                     brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)

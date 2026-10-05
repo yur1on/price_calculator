@@ -88,24 +88,39 @@ class CapacitySnapshot:
         ).values_list("start", "end"))
         self.projection = project_load(start, (end - start).days + 1, snapshot=self)
 
-    def slot_is_available(self, slot_start, workload_minutes, *, appointment_duration_minutes=None):
+    def service_fits_working_hours(self, slot_start, service_duration_minutes):
+        """Return whether the complete service fits one configured work interval."""
+        local_start = timezone.localtime(slot_start)
+        local_end = timezone.localtime(
+            slot_start + timedelta(minutes=service_duration_minutes)
+        )
+        if local_end.date() != local_start.date():
+            return False
+        return any(
+            row.weekday == local_start.weekday()
+            and row.start <= local_start.time()
+            and local_end.time() <= row.end
+            for row in self.working_hours
+        )
+
+    def slot_is_available(
+        self,
+        slot_start,
+        workload_minutes,
+        *,
+        appointment_duration_minutes=None,
+        service_duration_minutes=None,
+    ):
         day = timezone.localtime(slot_start).date()
         projected = self.projection.get(day)
         if (not projected or projected["closed"] or day.weekday() not in self.weekdays
                 or workload_minutes > projected["available"]):
             return False
         local_start = timezone.localtime(slot_start)
-        service_end = timezone.localtime(
-            slot_start + timedelta(minutes=workload_minutes),
-            local_start.tzinfo,
+        effective_service_duration = (
+            workload_minutes if service_duration_minutes is None else service_duration_minutes
         )
-        if not any(
-            row.weekday == day.weekday()
-            and local_start.time() >= row.start
-            and service_end.date() == day
-            and service_end.time() <= row.end
-            for row in self.working_hours
-        ):
+        if not self.service_fits_working_hours(slot_start, effective_service_duration):
             return False
         slot_end = slot_start + timedelta(minutes=appointment_duration_minutes or settings.BOOKING_INTAKE_SLOT_MINUTES)
         local_end = timezone.localtime(slot_end)
@@ -138,14 +153,23 @@ def project_load(start_date, days, *, snapshot=None):
     return result
 
 
-def slot_is_available(slot_start, workload_minutes, *, appointment_duration_minutes=None):
+def slot_is_available(
+    slot_start,
+    workload_minutes,
+    *,
+    appointment_duration_minutes=None,
+    service_duration_minutes=None,
+):
     day = timezone.localtime(slot_start).date()
     today = timezone.localdate()
     if day < today:
         return False
     slot_end = slot_start + timedelta(minutes=appointment_duration_minutes or settings.BOOKING_INTAKE_SLOT_MINUTES)
     return CapacitySnapshot(today, day, overlap_until=slot_end).slot_is_available(
-        slot_start, workload_minutes, appointment_duration_minutes=appointment_duration_minutes,
+        slot_start,
+        workload_minutes,
+        appointment_duration_minutes=appointment_duration_minutes,
+        service_duration_minutes=service_duration_minutes,
     )
 
 

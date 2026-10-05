@@ -36,6 +36,7 @@ urlpatterns = [
     path("salaries/<int:pk>/delete/", views.salary_payment_delete, name="salary_payment_delete"),
     path("parts/", views.stock_list, name="stock_list"),
     path("parts/items/<int:pk>/", views.part_item_detail, name="part_item_detail"),
+    path("parts/items/<int:pk>/issue-to-master/", views.warehouse_issue_create, name="warehouse_issue_create"),
     path("parts/receipts/", views.receipt_list, name="receipt_list"),
     path("parts/receipts/add/", views.receipt_create, name="receipt_create"),
     path("parts/receipts/<int:pk>/edit/", views.receipt_edit, name="receipt_edit"),

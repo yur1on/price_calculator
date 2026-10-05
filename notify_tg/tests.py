@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as datetime_timezone
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -14,7 +14,7 @@ from crm.services import change_status, issue_order
 from crm.stale import decorate_stale_orders, with_status_changed_at
 from finance.models import Employee
 from notify_tg.models import PartnerTelegram
-from notify_tg.services import order_status_message
+from notify_tg.services import appointment_created_message, order_status_message
 from repairs.models import Appointment, PhoneBrand, PhoneModel, ReferralPartner, RepairType
 
 
@@ -46,6 +46,27 @@ class ClientNotificationTests(TestCase):
             Appointment.objects.create(phone_model=model, repair_type=repair, start=start, end=start + timedelta(hours=1), customer_name="Иван", customer_phone=self.customer.phone, price_original="200", price_final="200")
         texts = [call.args[1] for call in send.call_args_list]
         self.assertTrue(any("Запись подтверждена" in text and "Замена дисплея" in text for text in texts))
+
+    def test_appointment_message_formats_start_in_configured_local_timezone(self):
+        brand = PhoneBrand.objects.create(name="Timezone", slug="notify-timezone")
+        model = PhoneModel.objects.create(brand=brand, name="TZ phone", slug="notify-tz-phone")
+        repair = RepairType.objects.create(name="Экран", slug="notify-tz-display")
+        appointment = Appointment(
+            phone_model=model,
+            repair_type=repair,
+            start=datetime(2026, 10, 5, 14, 0, tzinfo=datetime_timezone.utc),
+            end=datetime(2026, 10, 5, 15, 0, tzinfo=datetime_timezone.utc),
+            customer_name="Иван",
+            customer_phone=self.customer.phone,
+            price_original="200",
+            price_final="200",
+        )
+
+        with timezone.override("Europe/Minsk"):
+            text = appointment_created_message(appointment)
+
+        self.assertIn("Дата и время: 05.10.2026 17:00", text)
+        self.assertNotIn("14:00", text)
 
     @patch("notify_tg.services.notify_partner_by_chat", return_value=True)
     def test_approval_waiting_ready_and_issued_messages(self, send):

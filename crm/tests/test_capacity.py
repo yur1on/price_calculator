@@ -111,9 +111,12 @@ class WorkshopCapacityTests(TestCase):
 
     def test_generated_intake_slots_use_thirty_minute_grid(self):
         tomorrow = self.today + timedelta(days=1)
-        WorkingHour.objects.create(weekday=tomorrow.weekday(), start=time(10), end=time(12))
+        WorkingHour.objects.create(weekday=tomorrow.weekday(), start=time(10), end=time(14))
         slots = get_available_slots(self.phone, self.repair_type, days=1, start_date=tomorrow)
-        self.assertEqual([timezone.localtime(slot).time() for slot in slots], [time(10)])
+        self.assertEqual(
+            [timezone.localtime(slot).time() for slot in slots],
+            [time(10), time(10, 30), time(11), time(11, 30), time(12)],
+        )
 
     def test_slots_require_full_service_duration_before_working_day_end(self):
         day = self.today + timedelta(days=1)
@@ -130,6 +133,32 @@ class WorkshopCapacityTests(TestCase):
         self.repair_type.save(update_fields=["default_duration_min"])
         short_slots = get_available_slots(self.phone, self.repair_type, days=1, start_date=day)
         self.assertIn(time(17, 30), [timezone.localtime(slot).time() for slot in short_slots])
+
+    def test_generated_slots_require_full_service_to_fit_before_close(self):
+        tomorrow = self.today + timedelta(days=1)
+        WorkingHour.objects.filter(weekday=tomorrow.weekday()).delete()
+        WorkingHour.objects.create(weekday=tomorrow.weekday(), start=time(10), end=time(18))
+
+        slots = get_available_slots(self.phone, self.repair_type, days=1, start_date=tomorrow)
+        slot_times = [timezone.localtime(slot).time() for slot in slots]
+
+        self.assertIn(time(15, 30), slot_times)
+        self.assertIn(time(16), slot_times)
+        self.assertNotIn(time(16, 30), slot_times)
+        self.assertNotIn(time(17), slot_times)
+        self.assertNotIn(time(17, 30), slot_times)
+
+    def test_short_service_can_start_at_last_half_hour(self):
+        tomorrow = self.today + timedelta(days=1)
+        WorkingHour.objects.filter(weekday=tomorrow.weekday()).delete()
+        WorkingHour.objects.create(weekday=tomorrow.weekday(), start=time(10), end=time(18))
+        short_repair = RepairType.objects.create(
+            name="Short repair", slug="short-repair", default_duration_min=30
+        )
+
+        slots = get_available_slots(self.phone, short_repair, days=1, start_date=tomorrow)
+
+        self.assertIn(time(17, 30), [timezone.localtime(slot).time() for slot in slots])
 
     @override_settings(REPAIRS_MAX_PARALLEL_APPOINTMENTS=1)
     def test_historical_long_appointment_still_blocks_overlapping_intake(self):

@@ -8,6 +8,7 @@ from .models import (
     PartItem, RepairFinance, RepairPart, SalaryPayment, StockReceipt, Supplier,
     SupplierPayment, SupplierReturn, WarrantyClaim,
     DistributedExpense, DistributedExpenseAllocation, PayrollCalculation, PayrollPeriod, PayrollRepairSnapshot,
+    WarehouseIssue,
 )
 
 
@@ -86,6 +87,7 @@ class ImmutablePayrollSnapshotAdmin(ModelAdmin):
 admin.site.register(PayrollCalculation, ImmutablePayrollSnapshotAdmin)
 admin.site.register(DistributedExpenseAllocation, ImmutablePayrollSnapshotAdmin)
 admin.site.register(PayrollRepairSnapshot, ImmutablePayrollSnapshotAdmin)
+admin.site.register(WarehouseIssue, ImmutablePayrollSnapshotAdmin)
 
 
 class PayrollPeriodAdmin(ModelAdmin):

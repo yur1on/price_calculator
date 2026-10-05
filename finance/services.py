@@ -9,14 +9,76 @@ from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
 
 from .models import (
-    Employee, Expense, OtherIncome, PartItem, RepairFinance, SalaryPayment,
+    Employee, Expense, ExpenseCategory, OtherIncome, PartItem, RepairFinance, SalaryPayment,
     StockReceipt, Supplier, SupplierPayment, WarrantyClaim, money,
     DistributedExpense, DistributedExpenseAllocation, PayrollCalculation, PayrollPeriod,
-    PayrollRepairSnapshot,
+    PayrollRepairSnapshot, WarehouseIssue,
 )
 
 
 ZERO = Decimal("0.00")
+
+
+@transaction.atomic
+def issue_stock_to_employee(
+    *, part_item, employee, quantity, issue_date, periods_count, comment="", actor=None,
+):
+    """Issue concrete items from one receipt and fund payroll distribution once."""
+    locked_item = (
+        PartItem.objects.select_for_update()
+        .select_related("receipt__part", "receipt__supplier")
+        .get(pk=part_item.pk)
+    )
+    if locked_item.status != PartItem.Status.IN_STOCK:
+        raise ValidationError("Выбранный экземпляр уже отсутствует на складе.")
+    if not employee.is_active or employee.is_owner:
+        raise ValidationError("Выберите активного мастера.")
+    quantity = int(quantity)
+    periods_count = int(periods_count)
+    if quantity < 1 or periods_count < 1:
+        raise ValidationError("Количество и число периодов должны быть больше нуля.")
+
+    candidates = list(
+        PartItem.objects.select_for_update()
+        .filter(receipt_id=locked_item.receipt_id, status=PartItem.Status.IN_STOCK)
+        .order_by("pk")
+    )
+    if len(candidates) < quantity:
+        raise ValidationError(f"В выбранной партии доступно только {len(candidates)} шт.")
+    selected = [locked_item] + [item for item in candidates if item.pk != locked_item.pk]
+    selected = selected[:quantity]
+
+    category, _ = ExpenseCategory.objects.get_or_create(name="Складские материалы")
+    unit_cost = money(locked_item.receipt.unit_cost)
+    total_cost = money(unit_cost * quantity)
+    part_name = str(locked_item.receipt.part)
+    distribution = DistributedExpense.objects.create(
+        name=f"{part_name} — выдача мастеру {employee.name}",
+        category=category,
+        start_date=issue_date,
+        total_cost=total_cost,
+        periods_count=periods_count,
+        comment=comment,
+    )
+    distribution.employees.add(employee)
+    issue = WarehouseIssue.objects.create(
+        employee=employee,
+        source_receipt=locked_item.receipt,
+        distributed_expense=distribution,
+        issue_date=issue_date,
+        quantity=quantity,
+        part_name_snapshot=part_name,
+        supplier_name_snapshot=locked_item.receipt.supplier.name,
+        unit_cost_snapshot=unit_cost,
+        total_cost_snapshot=total_cost,
+        comment=comment,
+        created_by=actor if getattr(actor, "is_authenticated", False) else None,
+    )
+    PartItem.objects.filter(pk__in=[item.pk for item in selected]).update(
+        status=PartItem.Status.WRITTEN_OFF,
+        warehouse_issue=issue,
+    )
+    return issue
 
 
 def resolve_period(request):

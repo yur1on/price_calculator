@@ -296,6 +296,10 @@ class PartItem(models.Model):
 
     receipt = models.ForeignKey(StockReceipt, verbose_name="Поступление", on_delete=models.PROTECT, related_name="items")
     status = models.CharField("Статус", max_length=20, choices=Status.choices, default=Status.IN_STOCK, db_index=True)
+    warehouse_issue = models.ForeignKey(
+        "WarehouseIssue", verbose_name="Выдача мастеру", on_delete=models.PROTECT,
+        related_name="items", null=True, blank=True, editable=False,
+    )
     created_at = models.DateTimeField("Создана", auto_now_add=True)
 
     class Meta:
@@ -520,6 +524,50 @@ class DistributedExpense(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class WarehouseIssue(models.Model):
+    """Immutable stock movement that funds an existing distributed expense."""
+
+    employee = models.ForeignKey(
+        Employee, verbose_name="Мастер", on_delete=models.PROTECT,
+        related_name="warehouse_issues", limit_choices_to={"is_owner": False},
+    )
+    source_receipt = models.ForeignKey(
+        StockReceipt, verbose_name="Поступление", on_delete=models.PROTECT,
+        related_name="warehouse_issues",
+    )
+    distributed_expense = models.OneToOneField(
+        DistributedExpense, verbose_name="Распределяемый расход",
+        on_delete=models.PROTECT, related_name="warehouse_issue",
+    )
+    issue_date = models.DateField("Дата выдачи")
+    quantity = models.PositiveIntegerField("Количество", validators=[MinValueValidator(1)])
+    part_name_snapshot = models.CharField("Материал на момент выдачи", max_length=255)
+    supplier_name_snapshot = models.CharField("Поставщик на момент выдачи", max_length=160, blank=True)
+    unit_cost_snapshot = models.DecimalField(
+        "Стоимость единицы на момент выдачи", max_digits=12, decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    total_cost_snapshot = models.DecimalField(
+        "Общая стоимость на момент выдачи", max_digits=12, decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    comment = models.TextField("Комментарий", blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="Оформил", on_delete=models.SET_NULL,
+        related_name="warehouse_issues_created", null=True, blank=True,
+    )
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Выдача со склада мастеру"
+        verbose_name_plural = "Выдачи со склада мастерам"
+        ordering = ["-issue_date", "-created_at"]
+        indexes = [models.Index(fields=["employee", "issue_date"])]
+
+    def __str__(self):
+        return f"{self.issue_date:%d.%m.%Y} — {self.part_name_snapshot} × {self.quantity} — {self.employee}"
 
 
 class PayrollPeriod(models.Model):

@@ -18,9 +18,9 @@ from .models import (
     RepairFinance, RepairPart, SalaryPayment, StockReceipt, Supplier,
     SupplierPayment, SupplierReturn, WarrantyClaim,
     DistributedExpense, DistributedExpenseAllocation, PayrollCalculation, PayrollPeriod,
-    PayrollRepairSnapshot,
+    PayrollRepairSnapshot, WarehouseIssue,
 )
-from .services import close_payroll_period, employee_rows, financial_summary, payroll_preview, supplier_summary
+from .services import close_payroll_period, employee_rows, financial_summary, issue_stock_to_employee, payroll_preview, supplier_summary
 from .supplier_ledger import supplier_ledger
 
 
@@ -355,6 +355,142 @@ class InventoryTests(TestCase):
         self.client.force_login(user)
         for name in ("stock_list", "receipt_list", "supplier_list", "warranty_list"):
             self.assertEqual(self.client.get(reverse(f"finance:{name}")).status_code, 302)
+
+
+class WarehouseIssueTests(TestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_superuser(username="issue-admin", password="test")
+        self.client.force_login(self.admin)
+        self.supplier = Supplier.objects.create(name="ChemSupplier")
+        self.part = PartCatalog.objects.create(name="Праймер")
+        self.receipt = StockReceipt.objects.create(
+            date=date(2026, 10, 5), supplier=self.supplier, part=self.part,
+            quantity=3, unit_cost="60.00", order_number="CHEM-1",
+        )
+        self.master = Employee.objects.create(name="Андрей", default_percent="35.00")
+
+    def issue(self, *, quantity=1, periods=6):
+        return issue_stock_to_employee(
+            part_item=self.receipt.items.order_by("pk").first(),
+            employee=self.master,
+            quantity=quantity,
+            issue_date=date(2026, 10, 5),
+            periods_count=periods,
+            comment="Праймер для работы",
+            actor=self.admin,
+        )
+
+    def test_issue_reduces_stock_and_creates_linked_distribution(self):
+        issue = self.issue()
+
+        self.assertEqual(
+            self.receipt.items.filter(status=PartItem.Status.IN_STOCK).count(), 2
+        )
+        self.assertEqual(issue.items.count(), 1)
+        self.assertEqual(issue.employee, self.master)
+        self.assertEqual(issue.total_cost_snapshot, Decimal("60.00"))
+        self.assertEqual(issue.distributed_expense.total_cost, Decimal("60.00"))
+        self.assertEqual(issue.distributed_expense.periods_count, 6)
+        self.assertEqual(list(issue.distributed_expense.employees.all()), [self.master])
+        self.assertIsNone(issue.distributed_expense.source_expense)
+
+        period = PayrollPeriod.objects.create(
+            start_date=date(2026, 10, 5), end_date=date(2026, 10, 18)
+        )
+        distribution = payroll_preview(period, self.master)["distributions"][0]
+        self.assertEqual(distribution["amount"], Decimal("10.00"))
+        self.assertEqual(distribution["parts_count"], 6)
+
+    def test_insufficient_stock_changes_nothing(self):
+        with self.assertRaises(ValidationError):
+            self.issue(quantity=4)
+
+        self.assertEqual(
+            self.receipt.items.filter(status=PartItem.Status.IN_STOCK).count(), 3
+        )
+        self.assertFalse(WarehouseIssue.objects.exists())
+        self.assertFalse(DistributedExpense.objects.exists())
+
+    @patch("finance.services.DistributedExpense.objects.create", side_effect=RuntimeError("failed"))
+    def test_distribution_failure_rolls_back_stock_issue(self, create_distribution):
+        with self.assertRaises(RuntimeError):
+            self.issue()
+
+        self.assertEqual(
+            self.receipt.items.filter(status=PartItem.Status.IN_STOCK).count(), 3
+        )
+        self.assertFalse(WarehouseIssue.objects.exists())
+
+    def test_cost_and_names_are_snapshots(self):
+        issue = self.issue()
+        self.receipt.unit_cost = Decimal("90.00")
+        self.receipt.save(update_fields=["unit_cost"])
+        self.part.name = "Праймер новый"
+        self.part.save(update_fields=["name"])
+        self.supplier.name = "Другой поставщик"
+        self.supplier.save(update_fields=["name"])
+
+        issue.refresh_from_db()
+        issue.distributed_expense.refresh_from_db()
+        self.assertEqual(issue.part_name_snapshot, "Праймер")
+        self.assertEqual(issue.supplier_name_snapshot, "ChemSupplier")
+        self.assertEqual(issue.unit_cost_snapshot, Decimal("60.00"))
+        self.assertEqual(issue.total_cost_snapshot, Decimal("60.00"))
+        self.assertEqual(issue.distributed_expense.total_cost, Decimal("60.00"))
+
+        edit_response = self.client.get(
+            reverse("finance:distributed_expense_edit", args=[issue.distributed_expense_id])
+        )
+        self.assertRedirects(
+            edit_response,
+            reverse("finance:distributed_expense_detail", args=[issue.distributed_expense_id]),
+        )
+
+    def test_issue_does_not_create_regular_expense_or_double_financial_summary(self):
+        before = financial_summary(date(2026, 10, 5), date(2026, 10, 5))
+        self.issue()
+        after = financial_summary(date(2026, 10, 5), date(2026, 10, 5))
+
+        self.assertFalse(Expense.objects.exists())
+        self.assertEqual(after["expenses"], before["expenses"])
+        self.assertEqual(after["net_profit"], before["net_profit"])
+
+    def test_admin_can_issue_from_stock_ui(self):
+        item = self.receipt.items.order_by("pk").first()
+        list_response = self.client.get(reverse("finance:stock_list"))
+        self.assertContains(list_response, "Выдать мастеру")
+        response = self.client.post(
+            reverse("finance:warehouse_issue_create", args=[item.pk]),
+            {
+                "employee": self.master.pk,
+                "quantity": 1,
+                "unit_cost": "999.00",
+                "issue_date": "2026-10-05",
+                "periods_count": 6,
+                "comment": "Праймер для работы",
+            },
+        )
+        self.assertRedirects(response, reverse("finance:part_item_detail", args=[item.pk]))
+        issue = WarehouseIssue.objects.get()
+        self.assertEqual(issue.unit_cost_snapshot, Decimal("60.00"))
+        self.assertEqual(issue.created_by, self.admin)
+
+    def test_master_cannot_issue_stock_to_self(self):
+        user = get_user_model().objects.create_user(username="andrey-issue", password="test")
+        self.master.user = user
+        self.master.save(update_fields=["user"])
+        self.client.force_login(user)
+        item = self.receipt.items.order_by("pk").first()
+
+        response = self.client.post(
+            reverse("finance:warehouse_issue_create", args=[item.pk]),
+            {"employee": self.master.pk, "quantity": 1, "issue_date": "2026-10-05", "periods_count": 6},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(WarehouseIssue.objects.exists())
+        item.refresh_from_db()
+        self.assertEqual(item.status, PartItem.Status.IN_STOCK)
 
 
 class DistributedPayrollTests(TestCase):
