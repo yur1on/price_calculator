@@ -475,6 +475,43 @@ class WarehouseIssueTests(TestCase):
         self.assertEqual(issue.unit_cost_snapshot, Decimal("60.00"))
         self.assertEqual(issue.created_by, self.admin)
 
+    def test_admin_can_start_stock_issue_from_distributed_expenses(self):
+        item = self.receipt.items.order_by("pk").first()
+
+        expenses_response = self.client.get(reverse("finance:distributed_expense_list"))
+        self.assertContains(expenses_response, "Выдать со склада")
+        self.assertContains(expenses_response, "?status=in_stock&amp;issue=1")
+
+        stock_response = self.client.get(
+            reverse("finance:stock_list"), {"status": "in_stock", "issue": "1"}
+        )
+        self.assertContains(stock_response, "Выберите материал для выдачи мастеру")
+        self.assertContains(stock_response, "?from=distributed-expenses")
+
+        response = self.client.post(
+            f"{reverse('finance:warehouse_issue_create', args=[item.pk])}"
+            "?from=distributed-expenses",
+            {
+                "employee": self.master.pk,
+                "quantity": 1,
+                "unit_cost": "999.00",
+                "issue_date": "2026-10-05",
+                "periods_count": 6,
+                "comment": "Праймер для работы",
+            },
+        )
+
+        issue = WarehouseIssue.objects.select_related("distributed_expense").get()
+        self.assertRedirects(
+            response,
+            reverse(
+                "finance:distributed_expense_detail",
+                args=[issue.distributed_expense_id],
+            ),
+        )
+        self.assertEqual(issue.unit_cost_snapshot, Decimal("60.00"))
+        self.assertEqual(issue.distributed_expense.per_period_amount, Decimal("10.00"))
+
     def test_master_cannot_issue_stock_to_self(self):
         user = get_user_model().objects.create_user(username="andrey-issue", password="test")
         self.master.user = user

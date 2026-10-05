@@ -13,6 +13,7 @@ from django.http import JsonResponse
 from django.http import HttpResponse
 import json
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
@@ -357,6 +358,7 @@ def employee_percent(request, pk):
 def stock_list(request):
     query = (request.GET.get("q") or "").strip()
     status = request.GET.get("status", PartItem.Status.IN_STOCK)
+    issue_mode = request.GET.get("issue") == "1"
     qs = PartItem.objects.select_related("receipt__part", "receipt__supplier").prefetch_related("warranty_claims")
     if status in PartItem.Status.values:
         qs = qs.filter(status=status)
@@ -368,7 +370,13 @@ def stock_list(request):
         )
         if query.upper().lstrip("#P").isdigit():
             qs = qs | PartItem.objects.filter(pk=int(query.upper().lstrip("#P"))).select_related("receipt__part", "receipt__supplier")
-    context = {"page_obj": _page(qs.distinct(), request), "q": query, "status": status, "statuses": PartItem.Status.choices}
+    context = {
+        "page_obj": _page(qs.distinct(), request),
+        "q": query,
+        "status": status,
+        "statuses": PartItem.Status.choices,
+        "issue_mode": issue_mode,
+    }
     return render(request, "finance/partials/stock_results.html" if _is_htmx(request) else "finance/stock_list.html", context)
 
 
@@ -382,11 +390,14 @@ def part_item_detail(request, pk):
 
 @finance_staff_required
 def warehouse_issue_create(request, pk):
+    from_distributed_expenses = request.GET.get("from") == "distributed-expenses"
     item = get_object_or_404(
         PartItem.objects.select_related("receipt__part", "receipt__supplier"), pk=pk,
     )
     if item.status != PartItem.Status.IN_STOCK:
         messages.error(request, "Выдать можно только материал со статусом «На складе».")
+        if from_distributed_expenses:
+            return redirect(f"{reverse('finance:stock_list')}?status=in_stock&issue=1")
         return redirect("finance:part_item_detail", pk=item.pk)
     form = WarehouseIssueForm(request.POST or None, part_item=item)
     if request.method == "POST" and form.is_valid():
@@ -409,8 +420,21 @@ def warehouse_issue_create(request, pk):
                 f"{issue.employee.name}. Стоимость {issue.total_cost_snapshot:.2f} BYN "
                 f"распределена на {issue.distributed_expense.periods_count} расчётных периодов.",
             )
+            if from_distributed_expenses:
+                return redirect(
+                    "finance:distributed_expense_detail",
+                    pk=issue.distributed_expense_id,
+                )
             return redirect("finance:part_item_detail", pk=item.pk)
-    return render(request, "finance/warehouse_issue_form.html", {"form": form, "item": item})
+    return render(
+        request,
+        "finance/warehouse_issue_form.html",
+        {
+            "form": form,
+            "item": item,
+            "from_distributed_expenses": from_distributed_expenses,
+        },
+    )
 
 
 @workshop_staff_required

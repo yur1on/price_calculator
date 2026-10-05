@@ -6,7 +6,7 @@
   <p class="fin-muted">Партия: {{ item.receipt.date|date:'d.m.Y' }} · {{ item.receipt.supplier }} · {{ item.unit_cost|money_byn }} за единицу</p>
   <form method="post">{% csrf_token %}{{ form.non_field_errors }}
     <div class="fin-form-grid">{% for field in form %}<div class="fin-field {% if field.name == 'comment' %}wide{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field.errors }}{{ field }}{% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}</div>{% endfor %}</div>
-    <div class="fin-form-actions"><button class="fin-btn primary">Выдать мастеру</button><a class="fin-btn" href="{% url 'finance:part_item_detail' item.pk %}">Отмена</a></div>
+    <div class="fin-form-actions"><button class="fin-btn primary">Выдать мастеру</button>{% if from_distributed_expenses %}<a class="fin-btn" href="{% url 'finance:stock_list' %}?status=in_stock&amp;issue=1">Отмена</a>{% else %}<a class="fin-btn" href="{% url 'finance:part_item_detail' item.pk %}">Отмена</a>{% endif %}</div>
   </form>
 </section>
 {% endblock %}
