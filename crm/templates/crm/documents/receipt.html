@@ -1,5 +1,6 @@
 {% extends "crm/documents/base.html" %}
 {% block body_class %}receipt-page{% endblock %}
+{% block document_back %}<a href="{% url 'crm:order_detail' order.pk %}">К ремонту</a>{% endblock %}
 {% block document_header %}{% endblock %}
 {% block document_style %}
 @page{size:A4 portrait;margin:8mm}
@@ -17,3 +18,4 @@ body.receipt-page{box-sizing:border-box;width:194mm;max-width:100%;margin:12px a
 {% block document %}
 {% include "crm/documents/receipt_copy.html" with copy_label="Экземпляр клиента" %}<div class="receipt-cut" aria-hidden="true">линия отреза</div>{% include "crm/documents/receipt_copy.html" with copy_label="Экземпляр сервиса" %}
 {% endblock %}
+{% block document_scripts %}{% if request.GET.print == '1' %}<script data-auto-print>window.addEventListener("load",function(){window.print()},{once:true});</script>{% endif %}{% endblock %}

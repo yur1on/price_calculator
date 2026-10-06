@@ -130,6 +130,7 @@ class ViewAndPermissionTests(CRMBase):
         self.assertNotContains(response, '<html')
 
     def test_invalid_order_displays_errors_in_continuous_form(self):
+        orders_before = CRMOrder.objects.count()
         response = self.client.post(reverse("crm:order_create"), {
             "client_name": "Иван", "phone": "", "device_type": "Телефон",
             "issue_description": "Не включается", "order_type": "paid",
@@ -138,6 +139,49 @@ class ViewAndPermissionTests(CRMBase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Проверьте выделенные поля.')
         self.assertContains(response, "Выберите клиента или заполните имя и телефон")
+        self.assertEqual(CRMOrder.objects.count(), orders_before)
+        self.assertNotIn("Location", response)
+        self.assertNotIn("HX-Redirect", response)
+
+    def test_successful_order_create_redirects_new_order_to_receipt_print(self):
+        response = self.client.post(reverse("crm:order_create"), {
+            "client_name": "Пётр", "phone": "+375441112233",
+            "device_type": "Телефон", "brand": "Apple", "device_model": "iPhone 14",
+            "issue_description": "Разбит экран", "employee": self.employee.pk,
+            "order_type": "paid", "agreed_price": "300", "warranty_days": "90",
+        })
+
+        order = CRMOrder.objects.get(client__name="Пётр", device__model="iPhone 14")
+        expected_url = f"{reverse('crm:receipt', args=[order.pk])}?print=1"
+        self.assertRedirects(response, expected_url)
+
+    def test_successful_htmx_order_create_uses_receipt_hx_redirect(self):
+        response = self.client.post(reverse("crm:order_create"), {
+            "client_name": "Анна", "phone": "+375291234567",
+            "device_type": "Планшет", "brand": "Apple", "device_model": "iPad",
+            "issue_description": "Не заряжается", "employee": self.employee.pk,
+            "order_type": "paid", "agreed_price": "180", "warranty_days": "30",
+        }, HTTP_HX_REQUEST="true")
+
+        order = CRMOrder.objects.get(client__name="Анна", device__model="iPad")
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(
+            response["HX-Redirect"],
+            f"{reverse('crm:receipt', args=[order.pk])}?print=1",
+        )
+
+    def test_receipt_auto_prints_only_with_explicit_print_parameter(self):
+        order = self.order()
+        receipt_url = reverse("crm:receipt", args=[order.pk])
+
+        manual_response = self.client.get(receipt_url)
+        self.assertContains(manual_response, "Печать")
+        self.assertContains(manual_response, "К ремонту")
+        self.assertNotContains(manual_response, "data-auto-print")
+
+        print_response = self.client.get(f"{receipt_url}?print=1")
+        self.assertContains(print_response, "data-auto-print")
+        self.assertContains(print_response, 'window.addEventListener("load"')
 
     def test_invalid_htmx_order_replaces_dedicated_intake_host(self):
         response = self.client.post(reverse("crm:order_create"), {

@@ -405,7 +405,12 @@ def order_create(request):
             if profile and not profile.crm_client_id:
                 profile.crm_client = client; profile.save(update_fields=["crm_client", "updated_at"])
         messages.success(request, f"Заказ {order.number} создан.")
-        return redirect("crm:order_detail", pk=order.pk)
+        receipt_url = f"{reverse('crm:receipt', args=[order.pk])}?print=1"
+        if _is_htmx(request):
+            response = HttpResponse(status=204)
+            response["HX-Redirect"] = receipt_url
+            return response
+        return redirect(receipt_url)
     context = {
         "form": form, "warranty_source": warranty_source, "appointment": appointment,
         "device_types": CRMDeviceType.objects.filter(is_active=True),
@@ -910,7 +915,8 @@ def _document(request, pk, kind, template):
 
 
 @crm_permission_required("crm.manage_documents")
-def receipt(request, pk): return _document(request, pk, "Квитанция", "crm/documents/receipt.html")
+def receipt(request, pk):
+    return _document(request, pk, "Квитанция", "crm/documents/receipt.html")
 
 @crm_permission_required("crm.manage_documents")
 def act(request, pk): return _document(request, pk, "Акт", "crm/documents/act.html")
