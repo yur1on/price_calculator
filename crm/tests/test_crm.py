@@ -103,6 +103,22 @@ class ViewAndPermissionTests(CRMBase):
         self.assertContains(response, 'data-intake-section="5"')
         self.assertEqual(response.content.count(b'data-intake-form'), 1)
 
+    def test_order_create_marks_all_primary_intake_fields(self):
+        response = self.client.get(reverse("crm:order_create"))
+
+        primary_fields = {
+            "client_name", "phone", "device_type", "brand", "device_model",
+            "employee", "agreed_price", "issue_description", "unlock_code",
+        }
+        for field_name in primary_fields:
+            self.assertContains(
+                response,
+                f'data-primary-field="{field_name}"',
+                count=1,
+            )
+        self.assertEqual(response.content.count(b"crm-field--primary"), 9)
+        self.assertEqual(response.content.count("Основное".encode()), 9)
+
     def test_order_create_htmx_returns_only_reusable_wizard(self):
         response = self.client.get(reverse("crm:order_create"), HTTP_HX_REQUEST="true")
         self.assertEqual(response.status_code, 200)
