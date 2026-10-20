@@ -10,7 +10,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from finance.models import PartItem, PayrollCalculation, PayrollPeriod, SalaryPayment, Supplier
-from finance.services import ZERO, payroll_preview
+from finance.services import ZERO, payroll_balance, payroll_preview, payroll_settlement
 
 from .access import account_landing_url, approved_master_required, is_client, is_tehsfera_admin, master_employee, profile_for, workspace_required
 from .forms import AccountAuthenticationForm, RegistrationForm, ClientProfileForm, PhoneCodeForm
@@ -216,10 +216,15 @@ def my_salary(request):
         .select_related("period").order_by("period__calculated_at", "created_at", "pk")
     )
     payments = list(SalaryPayment.objects.filter(employee=employee).order_by("date", "created_at", "pk"))
-    accrued = sum((item.salary_amount for item in history), ZERO)
-    preliminary = current["salary_amount"] if current else ZERO
+    settlement = payroll_balance(
+        employee, open_period,
+        preliminary_amount=current["salary_amount"] if current else ZERO,
+    )
+    current_settlement = payroll_settlement(open_period, employee, current["salary_amount"]) if current else None
+    accrued = settlement["closed_accrued"]
+    preliminary = settlement["preliminary"]
     earned = accrued + preliminary
-    paid = sum((item.amount for item in payments), ZERO)
+    paid = settlement["paid"]
     ledger = []
     for calculation in history:
         occurred_at = calculation.period.calculated_at or calculation.created_at
@@ -243,7 +248,8 @@ def my_salary(request):
         "employee": employee, "open_period": open_period, "current": current,
         "history": history, "payments": payments[:30], "ledger": ledger,
         "accrued": accrued, "preliminary": preliminary, "earned": earned,
-        "paid": paid, "remaining": earned - paid,
+        "paid": paid, "remaining": settlement["balance"],
+        "settlement": settlement, "current_settlement": current_settlement,
     })
 
 

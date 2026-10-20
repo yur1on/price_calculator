@@ -3,14 +3,12 @@ from functools import wraps
 from django.contrib.auth import login, logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import PermissionDenied
-from django.db.models import Sum
-from django.db.models.functions import Coalesce
 from django.http import HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .models import Employee, PayrollCalculation, PayrollPeriod, SalaryPayment
-from .services import ZERO, payroll_preview
+from .services import payroll_balance, payroll_preview, payroll_settlement
 
 
 def _employee_for(user):
@@ -73,12 +71,16 @@ def dashboard(request):
         .select_related("period").order_by("-period__start_date")
     )
     payments = SalaryPayment.objects.filter(employee=employee).order_by("-date", "-created_at")
-    accrued = sum((item.salary_amount for item in history), ZERO)
-    paid = payments.aggregate(total=Coalesce(Sum("amount"), ZERO))["total"]
+    settlement = payroll_balance(
+        employee, open_period,
+        preliminary_amount=current["salary_amount"] if current else None,
+    )
+    current_settlement = payroll_settlement(open_period, employee, current["salary_amount"]) if current else None
     return render(request, "master/dashboard.html", {
         "employee": employee, "open_period": open_period, "current": current,
-        "history": history, "payments": payments, "accrued": accrued,
-        "paid": paid, "remaining": accrued - paid,
+        "history": history, "payments": payments, "accrued": settlement["closed_accrued"],
+        "paid": settlement["paid"], "remaining": settlement["balance"],
+        "settlement": settlement, "current_settlement": current_settlement,
     })
 
 
@@ -95,9 +97,10 @@ def period_detail(request, pk):
         row, is_preview = _closed_row(calculation), False
     else:
         row, is_preview = payroll_preview(period, employee), True
-    payments = SalaryPayment.objects.filter(employee=employee, date__range=(period.start_date, period.end_date)).order_by("date")
-    paid = payments.aggregate(total=Coalesce(Sum("amount"), ZERO))["total"]
+    amount = row["salary_amount"] if is_preview else row.salary_amount
+    settlement = payroll_settlement(period, employee, amount)
     return render(request, "master/period_detail.html", {
         "employee": employee, "period": period, "row": row, "is_preview": is_preview,
-        "payments": payments, "paid": paid, "remaining": row["salary_amount"] - paid if is_preview else row.salary_amount - paid,
+        "payments": settlement["payments"], "paid": settlement["period_paid"],
+        "remaining": settlement["closing_balance"], "settlement": settlement,
     })

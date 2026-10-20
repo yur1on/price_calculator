@@ -139,9 +139,85 @@ def employee_rows(start, end, employee=None):
             salary=Coalesce(Sum("master_salary"), ZERO), profit=Coalesce(Sum("workshop_profit"), ZERO),
         )
         paid = person.salary_payments.filter(date__range=(start, end)).aggregate(v=Coalesce(Sum("amount"), ZERO))["v"]
-        totals.update(employee=person, paid=money(paid), debt=money(totals["salary"] - paid))
+        difference = money(totals["salary"] - paid)
+        totals.update(employee=person, paid=money(paid), date_difference=difference, debt=difference)
         rows.append(totals)
     return rows
+
+
+def payroll_settlement(period, employee, salary_amount):
+    """Date-allocated payments and carry-forward, without modifying snapshots.
+
+    Payments in gaps between periods enter the next period's opening balance.
+    A closed period's ending balance remains an as-of-period-end figure even
+    when a later payment settles its debt.
+    """
+    prior_accrued = PayrollCalculation.objects.filter(
+        employee=employee, period__status=PayrollPeriod.Status.CLOSED,
+        period__end_date__lt=period.start_date,
+    ).aggregate(v=Coalesce(Sum("salary_amount"), ZERO))["v"]
+    prior_paid = SalaryPayment.objects.filter(
+        employee=employee, date__lt=period.start_date,
+    ).aggregate(v=Coalesce(Sum("amount"), ZERO))["v"]
+    payments = list(SalaryPayment.objects.filter(
+        employee=employee, date__range=(period.start_date, period.end_date),
+    ).order_by("date", "created_at", "pk"))
+    paid = money(sum((payment.amount for payment in payments), ZERO))
+    opening = money(prior_accrued - prior_paid)
+    return {
+        "opening_balance": opening,
+        "period_paid": paid,
+        "closing_balance": money(opening + salary_amount - paid),
+        "payments": payments,
+        "opening_unknown": (
+            _unaccounted_repairs_before(employee, period.start_date)
+            or PayrollPeriod.objects.filter(
+                status=PayrollPeriod.Status.OPEN, start_date__lt=period.start_date,
+            ).exists()
+        ),
+    }
+
+
+def _unaccounted_repairs_before(employee, cutoff):
+    """Flag historical work not represented by any closed payroll snapshot."""
+    return RepairFinance.objects.filter(employee=employee).annotate(
+        effective_date=Case(
+            When(crm_order__isnull=False, then=TruncDate("crm_order__issued_at")),
+            default=F("date"), output_field=DateField(),
+        )
+    ).filter(effective_date__lt=cutoff).exclude(
+        payroll_snapshots__calculation__period__status=PayrollPeriod.Status.CLOSED,
+    ).exists()
+
+
+def payroll_balance(employee, open_period=None, preliminary_amount=None):
+    """Current recorded balance: closed accruals + one open preview − payments.
+
+    RepairFinance.master_salary is intentionally excluded: it is date-range
+    statistics, not the authoritative payroll accrual after distributions.
+    """
+    closed = PayrollCalculation.objects.filter(
+        employee=employee, period__status=PayrollPeriod.Status.CLOSED,
+    ).aggregate(v=Coalesce(Sum("salary_amount"), ZERO))["v"]
+    if open_period and open_period.status != PayrollPeriod.Status.OPEN:
+        open_period = None
+        preliminary_amount = None
+    preliminary = (
+        preliminary_amount if preliminary_amount is not None
+        else payroll_preview(open_period, employee)["salary_amount"] if open_period else ZERO
+    )
+    paid = SalaryPayment.objects.filter(employee=employee).aggregate(v=Coalesce(Sum("amount"), ZERO))["v"]
+    cutoff = open_period.start_date if open_period else timezone.localdate() + timedelta(days=1)
+    uncovered_repairs = _unaccounted_repairs_before(employee, cutoff)
+    if open_period:
+        uncovered_repairs = uncovered_repairs or PayrollPeriod.objects.filter(
+            status=PayrollPeriod.Status.OPEN,
+        ).exclude(pk=open_period.pk).exists()
+    return {
+        "closed_accrued": money(closed), "preliminary": money(preliminary),
+        "paid": money(paid), "balance": money(closed + preliminary - paid),
+        "opening_unknown": uncovered_repairs,
+    }
 
 
 def monthly_chart(year):

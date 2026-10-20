@@ -30,7 +30,7 @@ from .models import (
     RepairFinance, SalaryPayment, StockReceipt, Supplier, SupplierPayment, SupplierReturn, WarrantyClaim,
     DistributedExpense, PayrollPeriod, WarehouseIssue,
 )
-from .services import close_payroll_period, employee_rows, financial_summary, issue_stock_to_employee, monthly_chart, payroll_preview, resolve_period, stock_summary, supplier_summary
+from .services import close_payroll_period, employee_rows, financial_summary, issue_stock_to_employee, monthly_chart, payroll_balance, payroll_preview, payroll_settlement, resolve_period, stock_summary, supplier_summary
 from .supplier_ledger import supplier_ledger
 from accounts.access import is_approved_master, is_tehsfera_admin, profile_for
 
@@ -260,7 +260,12 @@ def income_delete(request, pk):
 @finance_staff_required
 def master_list(request):
     start, end, context = _period_context(request)
-    context.update(rows=employee_rows(start, end))
+    open_period = PayrollPeriod.objects.filter(status=PayrollPeriod.Status.OPEN).order_by("-start_date").first()
+    rows = employee_rows(start, end)
+    for row in rows:
+        if not row["employee"].is_owner:
+            row["settlement"] = payroll_balance(row["employee"], open_period)
+    context.update(rows=rows, open_period=open_period)
     return render(request, "finance/master_list.html", context)
 
 
@@ -763,6 +768,12 @@ def payroll_period_detail(request, pk):
         rows = [{"employee": employee, **payroll_preview(period, employee)} for employee in employees]
     if employee_id and period.status == PayrollPeriod.Status.CLOSED:
         rows = rows.filter(employee_id=employee_id)
+    rows = list(rows)
+    for row in rows:
+        if period.status == PayrollPeriod.Status.CLOSED:
+            row.settlement = payroll_settlement(period, row.employee, row.salary_amount)
+        else:
+            row["settlement"] = payroll_settlement(period, row["employee"], row["salary_amount"])
     return render(request, "finance/payroll_period_detail.html", {
         "period": period,
         "rows": rows,
