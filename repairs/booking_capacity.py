@@ -5,7 +5,7 @@ from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 
-from .models import Appointment, BookingBlock, WorkingHour, WorkshopDayCapacity
+from .models import Appointment, BookingBlock, TimeOff, WorkingHour, WorkshopDayCapacity
 
 RESERVING_STATUSES = ("new", "confirmed")
 ACTIVE_ORDER_STATUSES = ("accepted", "diagnostic", "repair")
@@ -82,10 +82,23 @@ class CapacitySnapshot:
         upper = timezone.make_aware(datetime.combine(end + timedelta(days=1), time.min))
         if overlap_until is not None:
             upper = max(upper, overlap_until)
-        # Converted appointments still occupy TIME, unlike workload reservations.
-        self.overlaps = list(Appointment.objects.filter(
-            status__in=RESERVING_STATUSES, start__lt=upper, end__gt=lower,
-        ).values_list("start", "end"))
+        # Old online bookings stored only the 30-minute intake window in `end`.
+        # Recover their actual occupied interval from the snapshotted items in
+        # one query; converted bookings still occupy time as before.
+        intervals = Appointment.objects.filter(
+            status__in=RESERVING_STATUSES,
+            start__gte=lower - timedelta(days=1), start__lt=upper,
+        ).annotate(item_minutes=Sum("items__duration_min")).values_list(
+            "start", "end", "item_minutes", "technician_id"
+        )
+        self.overlaps = [
+            (start_at, max(end_at, start_at + timedelta(minutes=item_minutes or 0)), technician_id)
+            for start_at, end_at, item_minutes, technician_id in intervals
+            if max(end_at, start_at + timedelta(minutes=item_minutes or 0)) > lower
+        ]
+        self.time_off = list(TimeOff.objects.filter(
+            start__lt=upper, end__gt=lower,
+        ).values_list("start", "end", "technician_id"))
         self.projection = project_load(start, (end - start).days + 1, snapshot=self)
 
     def service_fits_working_hours(self, slot_start, service_duration_minutes):
@@ -120,14 +133,30 @@ class CapacitySnapshot:
         effective_service_duration = (
             workload_minutes if service_duration_minutes is None else service_duration_minutes
         )
+        if workload_minutes <= 0 or effective_service_duration <= 0:
+            return False
         if not self.service_fits_working_hours(slot_start, effective_service_duration):
             return False
-        slot_end = slot_start + timedelta(minutes=appointment_duration_minutes or settings.BOOKING_INTAKE_SLOT_MINUTES)
+        slot_end = slot_start + timedelta(minutes=max(
+            effective_service_duration, appointment_duration_minutes or 0,
+        ))
         local_end = timezone.localtime(slot_end)
         if any(b.start_time < local_end.time() and b.end_time > local_start.time()
                for b in self.blocks.get(day, ())):
             return False
-        return sum(start < slot_end and end > slot_start for start, end in self.overlaps) < settings.REPAIRS_MAX_PARALLEL_APPOINTMENTS
+        overlapping = [
+            technician_id for start, end, technician_id in self.overlaps
+            if start < slot_end and end > slot_start
+        ]
+        unavailable_masters = {
+            technician_id for start, end, technician_id in self.time_off
+            if start < slot_end and end > slot_start
+        }
+        unavailable_masters.update(technician_id for technician_id in overlapping if technician_id is not None)
+        # Unassigned online bookings reserve anonymous seats; assigned bookings
+        # and absences of the same master consume only one seat together.
+        occupied_seats = len(unavailable_masters) + overlapping.count(None)
+        return occupied_seats < settings.REPAIRS_MAX_PARALLEL_APPOINTMENTS
 
 
 def project_load(start_date, days, *, snapshot=None):
@@ -164,7 +193,10 @@ def slot_is_available(
     today = timezone.localdate()
     if day < today:
         return False
-    slot_end = slot_start + timedelta(minutes=appointment_duration_minutes or settings.BOOKING_INTAKE_SLOT_MINUTES)
+    slot_end = slot_start + timedelta(minutes=max(
+        workload_minutes if service_duration_minutes is None else service_duration_minutes,
+        appointment_duration_minutes or 0,
+    ))
     return CapacitySnapshot(today, day, overlap_until=slot_end).slot_is_available(
         slot_start,
         workload_minutes,

@@ -17,7 +17,7 @@ from repairs.booking_capacity import (
 )
 from repairs.models import (
     Appointment, AppointmentItem, BookingBlock, PhoneBrand, PhoneModel,
-    RepairType, WorkingHour, WorkshopDayCapacity,
+    RepairType, Technician, TimeOff, WorkingHour, WorkshopDayCapacity,
 )
 from repairs.views import get_available_slots
 
@@ -108,6 +108,63 @@ class WorkshopCapacityTests(TestCase):
         self.assertTrue(slot_is_available(slot, 30))
         first.status = "no_show"; first.save(update_fields=["status"])
         self.assertTrue(slot_is_available(slot, 30))
+
+    def test_two_long_repairs_block_every_overlapping_start_but_not_end(self):
+        self.appointment(minutes=120, hour=12)
+        self.appointment(minutes=120, hour=12)
+        for hour, minute in ((12, 30), (13, 0), (13, 30)):
+            candidate = self.aware(hour) + timedelta(minutes=minute)
+            self.assertFalse(slot_is_available(candidate, 30))
+        self.assertTrue(slot_is_available(self.aware(14), 30))
+
+    def test_calendar_omits_starts_inside_two_long_repairs(self):
+        day = self.today + timedelta(days=1)
+        WorkingHour.objects.get_or_create(weekday=day.weekday(), start=time(9), end=time(18))
+        start = timezone.make_aware(datetime.combine(day, time(12)))
+        for number in range(2):
+            appointment = Appointment.objects.create(
+                phone_model=self.phone, repair_type=self.repair_type,
+                start=start, end=start + timedelta(minutes=30),
+                customer_name=f"Клиент {number}", customer_phone=f"+37529111111{number}",
+                price_original="100", price_final="100",
+            )
+            AppointmentItem.objects.create(
+                appointment=appointment, repair_type=self.repair_type,
+                price="100", duration_min=120,
+            )
+        slots = get_available_slots(self.phone, self.repair_type, days=1, start_date=day)
+        times = {timezone.localtime(slot).time() for slot in slots}
+        self.assertFalse({time(12, 30), time(13), time(13, 30)} & times)
+        self.assertIn(time(14), times)
+
+    def test_one_long_repair_leaves_second_master_available(self):
+        self.appointment(minutes=120, hour=12)
+        self.assertTrue(slot_is_available(self.aware(12) + timedelta(minutes=30), 60))
+
+    def test_master_time_off_consumes_one_seat_without_double_counting(self):
+        master = Technician.objects.create(name="Отсутствующий мастер")
+        TimeOff.objects.create(
+            technician=master, start=self.aware(12), end=self.aware(14),
+        )
+        self.assertTrue(slot_is_available(self.aware(12), 60))
+        appointment = self.appointment(minutes=120, hour=12)
+        self.assertFalse(slot_is_available(self.aware(12) + timedelta(minutes=30), 60))
+        appointment.technician = master
+        appointment.save(update_fields=["technician"])
+        self.assertTrue(slot_is_available(self.aware(12) + timedelta(minutes=30), 60))
+
+    def test_different_starts_and_full_new_duration_use_one_continuous_seat(self):
+        self.appointment(minutes=120, hour=12)
+        self.appointment(minutes=120, hour=13)
+        self.assertFalse(slot_is_available(self.aware(12) + timedelta(minutes=30), 60))
+        self.assertTrue(slot_is_available(self.aware(14), 60))
+        self.assertTrue(slot_is_available(self.aware(15), 60))
+
+    def test_short_free_window_does_not_fit_long_repair(self):
+        self.appointment(minutes=120, hour=12)
+        self.appointment(minutes=120, hour=14)
+        self.assertFalse(slot_is_available(self.aware(13), 120))
+        self.assertTrue(slot_is_available(self.aware(16), 120))
 
     def test_generated_intake_slots_use_thirty_minute_grid(self):
         tomorrow = self.today + timedelta(days=1)
@@ -258,7 +315,8 @@ class CapacitySnapshotTests(TestCase):
         self.assertEqual(snapshot.projection[self.today]["reserved"], 0)
         with self.assertNumQueries(0):
             self.assertFalse(snapshot.slot_is_available(appointment.start, 30))
-            self.assertTrue(snapshot.slot_is_available(appointment.end, 30))
+            self.assertFalse(snapshot.slot_is_available(appointment.end, 30))
+            self.assertTrue(snapshot.slot_is_available(appointment.start + timedelta(minutes=120), 30))
             self.assertTrue(snapshot.slot_is_available(appointment.start - timedelta(minutes=30), 30))
 
     def test_backlog_carries_over_closed_and_nonworking_days(self):
@@ -302,7 +360,7 @@ class CapacitySnapshotTests(TestCase):
         WorkingHour.objects.create(weekday=tomorrow.weekday(), start=time(12), end=time(14))
         BookingBlock.objects.create(date=tomorrow, start_time=time(9, 30), end_time=time(10))
         slots = get_available_slots(self.phone, self.repair_type, days=1, start_date=tomorrow)
-        self.assertEqual([timezone.localtime(slot).time() for slot in slots], [time(9), time(12)])
+        self.assertEqual([timezone.localtime(slot).time() for slot in slots], [time(12)])
 
     def test_horizon_clamped_before_forecast_and_last_day_included(self):
         from repairs.views import MAX_BOOK_AHEAD_DAYS
@@ -369,10 +427,17 @@ class CapacitySnapshotTests(TestCase):
                     backlog = max(0, backlog - max(0, cap["effective"] - reserved))
             for half_hour in range(18):
                 start = timezone.make_aware(datetime.combine(day, time(9))) + timedelta(minutes=30 * half_hour)
-                end = start + timedelta(minutes=30)
+                end = start + timedelta(minutes=120)
                 blocked = any(b.start_time < timezone.localtime(end).time() and b.end_time > timezone.localtime(start).time()
                               for b in BookingBlock.objects.filter(date=day, is_active=True))
-                overlaps = Appointment.objects.filter(status__in=("new", "confirmed"), start__lt=end, end__gt=start).count()
+                overlaps = sum(
+                    appointment.start < end
+                    and max(
+                        appointment.end,
+                        appointment.start + timedelta(minutes=appointment_workload(appointment)),
+                    ) > start
+                    for appointment in Appointment.objects.filter(status__in=("new", "confirmed")).prefetch_related("items")
+                )
                 service_end = timezone.localtime(start + timedelta(minutes=120)).time()
                 if working and available >= 120 and service_end <= time(18) and not blocked and overlaps < 2:
                     old_slots.append(start)

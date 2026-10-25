@@ -1,16 +1,21 @@
-from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, time, timedelta
+from html import unescape
 from io import BytesIO
+import re
+from threading import Barrier
 from unittest.mock import patch
 
 from django.core import signing
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase
+from django.db import close_old_connections, connection
+from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
-from repairs.models import Appointment, ModelRepairPrice, PhoneBrand, PhoneModel, ReferralPartner, RepairType, WorkingHour
-from repairs.views import BOOKING_SUCCESS_TOKEN_SALT
+from repairs.models import Appointment, AppointmentItem, ModelRepairPrice, PhoneBrand, PhoneModel, ReferralPartner, RepairType, WorkingHour, WorkshopDayCapacity
+from repairs.views import BOOKING_SUCCESS_TOKEN_SALT, get_available_slots
 from news.models import NewsCategory, NewsImage, NewsPost
 
 
@@ -227,6 +232,52 @@ class BookingFormViewTests(TestCase):
         self.assertContains(response, f'name="slot" value="{slot}"')
         self.assertNotContains(response, "?slot=")
 
+    def test_more_slots_have_unique_post_values_and_can_be_booked(self):
+        slot = self._monday_slot()
+        calendar_url = reverse("repairs:slot_select", kwargs={
+            "brand_slug": self.brand.slug,
+            "model_slug": self.model.slug,
+            "repair_slug": self.repair_type.slug,
+        })
+        response = self.client.get(calendar_url, {
+            "month": datetime.fromisoformat(slot).strftime("%Y-%m"),
+        })
+        self.assertEqual(response.status_code, 200)
+        markup = response.content.decode()
+        day_id = datetime.fromisoformat(slot).strftime("%Y%m%d")
+        day_markup = re.search(
+            rf'<div class="chips" id="chips-{day_id}">(.*?)</div>', markup, re.S,
+        ).group(1)
+        values = [unescape(value) for value in re.findall(
+            r'<button type="submit" class="chip slot-chip" name="slot" value="([^"]+)"',
+            day_markup,
+        )]
+        self.assertEqual(len(values), 15)
+        self.assertEqual(len(set(values)), len(values))
+        self.assertIn(f'aria-controls="chips-{day_id}" aria-expanded="false" hidden', day_markup)
+        self.assertIn('class="chip more"', day_markup)
+        self.assertNotIn('class="chip slot-chip" hidden', day_markup)
+        self.assertIn('#cal.js-enabled .chips.expanded .slot-chip{display:inline-flex}', markup)
+        self.assertIn("box.classList.toggle('expanded')", markup)
+        self.assertIn("const hidden = Math.max(0, box.querySelectorAll('.slot-chip').length - 6);", markup)
+
+        seventh = values[6]
+        selected = self.client.post(self._book_url(), {"slot": seventh})
+        self.assertEqual(selected.status_code, 200)
+        self.assertContains(selected, f'name="slot" value="{seventh}"')
+        confirmed = self.client.post(self._book_url(), {
+            **self._booking_data("Седьмой слот"), "booking_step": "confirm",
+            "slot": seventh,
+        })
+        self.assertEqual(confirmed.status_code, 302)
+        self.assertEqual(Appointment.objects.filter(customer_name="Седьмой слот").count(), 1)
+
+    def test_overlapping_working_hours_do_not_repeat_available_slots(self):
+        WorkingHour.objects.create(weekday=0, start=time(12), end=time(18))
+        day = datetime.fromisoformat(self._monday_slot()).date()
+        slots = get_available_slots(self.model, self.repair_type, days=1, start_date=day)
+        self.assertEqual(len(slots), len(set(slots)))
+
     def test_post_slot_selection_then_confirmation_without_query_string(self):
         slot = self._monday_slot()
         selected = self.client.post(self._book_url(), {"slot": slot})
@@ -406,7 +457,7 @@ class BookingFormViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         appointment = Appointment.objects.get(customer_phone="+375445684493")
-        self.assertEqual(appointment.end - appointment.start, timedelta(minutes=30))
+        self.assertEqual(appointment.end - appointment.start, timedelta(minutes=180))
         self.assertEqual(appointment.workload_minutes, 180)
         self.assertEqual(appointment.services_count, 3)
         self.assertEqual(appointment.services_display, "Замена дисплея, Замена аккумулятора, Замена микрофона")
@@ -469,6 +520,97 @@ class BookingFormViewTests(TestCase):
         lock_day.assert_called_once()
         self.assertEqual(availability.call_count, 2)
         self.assertFalse(Appointment.objects.filter(customer_name="Гонка").exists())
+
+    @override_settings(REPAIRS_MAX_PARALLEL_APPOINTMENTS=2)
+    def test_post_rejects_overlap_with_two_legacy_long_repairs(self):
+        start = datetime.fromisoformat(self._monday_slot(12))
+        for number in range(2):
+            appointment = Appointment.objects.create(
+                phone_model=self.model, repair_type=self.repair_type,
+                start=start, end=start + timedelta(minutes=30),
+                customer_name=f"Старый {number}", customer_phone=f"+37529111111{number}",
+                price_original="100", price_final="100",
+            )
+            AppointmentItem.objects.create(
+                appointment=appointment, repair_type=self.repair_type,
+                duration_min=120, price="100",
+            )
+        for minute in (30, 60, 90):
+            slot = (start + timedelta(minutes=minute)).isoformat()
+            response = self.client.post(self._book_url(), {
+                **self._booking_data(f"Новый {minute}"),
+                "booking_step": "confirm", "slot": slot,
+            })
+            self.assertEqual(response.status_code, 302)
+            self.assertFalse(Appointment.objects.filter(customer_name=f"Новый {minute}").exists())
+        self.assertEqual(self.client.post(self._book_url(), {
+            **self._booking_data("В 14:00"), "booking_step": "confirm",
+            "slot": (start + timedelta(hours=2)).isoformat(),
+        }).status_code, 302)
+        self.assertTrue(Appointment.objects.filter(customer_name="В 14:00").exists())
+
+    def test_calendar_clamps_ancient_month_before_date_arithmetic(self):
+        response = self.client.get(reverse("repairs:slot_select", kwargs={
+            "brand_slug": self.brand.slug, "model_slug": self.model.slug,
+            "repair_slug": self.repair_type.slug,
+        }), {"month": "0001-01"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["month_start"], timezone.localdate().replace(day=1))
+
+    def test_zero_duration_does_not_create_booking(self):
+        ModelRepairPrice.objects.filter(
+            phone_model=self.model, repair_type=self.repair_type,
+        ).update(duration_min=0)
+        self.assertEqual(self.client.post(self._book_url(), {
+            **self._booking_data("Нулевая"), "booking_step": "confirm",
+            "slot": self._monday_slot(),
+        }).status_code, 302)
+        self.assertFalse(Appointment.objects.filter(customer_name="Нулевая").exists())
+
+
+@override_settings(
+    REPAIRS_MAX_PARALLEL_APPOINTMENTS=1,
+    WORKSHOP_DEFAULT_CAPACITY_MINUTES=720,
+    WORKSHOP_DEFAULT_RESERVE_MINUTES=0,
+)
+class ConcurrentBookingPostgresTests(TransactionTestCase):
+    def test_two_post_requests_for_last_seat_create_one_appointment(self):
+        if connection.vendor != "postgresql":
+            self.skipTest("Requires PostgreSQL row-level locking")
+
+        brand = PhoneBrand.objects.create(name="Race", slug="race")
+        model = PhoneModel.objects.create(brand=brand, name="Phone", slug="phone", category="phone")
+        repair_type = RepairType.objects.create(name="Repair", slug="repair", default_duration_min=120)
+        ModelRepairPrice.objects.create(
+            phone_model=model, repair_type=repair_type, price="100", duration_min=120,
+        )
+        day = timezone.localdate() + timedelta(days=1)
+        WorkingHour.objects.create(weekday=day.weekday(), start=time(9), end=time(18))
+        WorkshopDayCapacity.objects.create(date=day, capacity_minutes=720, reserve_minutes=0)
+        slot = timezone.make_aware(datetime.combine(day, time(12))).isoformat()
+        url = reverse("repairs:book", args=[brand.slug, model.slug, repair_type.slug])
+        barrier = Barrier(2)
+
+        def submit(number):
+            close_old_connections()
+            try:
+                client = Client()
+                barrier.wait(timeout=10)
+                response = client.post(url, {
+                    "slot": slot, "booking_step": "confirm",
+                    "customer_name": f"Клиент {number}",
+                    "customer_phone": f"+37529111111{number}",
+                    "consent": "on",
+                })
+                return response.status_code, response.url
+            finally:
+                connection.close()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(submit, (1, 2)))
+        self.assertEqual([status for status, _ in results], [302, 302])
+        self.assertEqual(Appointment.objects.count(), 1)
+        self.assertEqual(sum("/success/" in url for _, url in results), 1)
 
 
 class ContactsPageTests(TestCase):

@@ -66,8 +66,7 @@
 
   /* Десктоп: показываем до 6 слотов */
   #cal.js-enabled .chips .slot-chip:nth-child(n+7){display:none}
-  #cal .chips.expanded .slot-chip{display:inline-flex}
-  #cal .chips.expanded .more{display:none}
+  #cal.js-enabled .chips.expanded .slot-chip{display:inline-flex}
   #cal .chip.more[hidden]{display:none}
 
   /* Мобильная метка дня недели внутри числа */
@@ -94,13 +93,6 @@
     #cal .chip svg{width:16px;height:16px}
 
     #cal .cal-days{grid-template-columns:repeat(2,1fr);gap:10px}
-
-    /* на мобильном до 4 слотов до раскрытия */
-    #cal.js-enabled .chips .slot-chip:nth-child(n+5){display:none}
-
-    /* при раскрытии показать все слоты, перекрывая nth-child */
-    #cal .chips.expanded .slot-chip{display:inline-flex !important;}
-    #cal .chips.expanded .more{display:none !important;}
 
     /* плейсхолдер на мобильном убираем из потока */
     #cal .cell.cell--placeholder{ display:none; visibility: hidden; }
@@ -179,7 +171,7 @@
                     {{ s|date:"H:i" }}
                   </button>
                 {% endfor %}
-                <button type="button" class="chip more" data-target="chips-{{ day.date|date:'Ymd' }}" hidden>+ ещё</button>
+                <button type="button" class="chip more" aria-controls="chips-{{ day.date|date:'Ymd' }}" aria-expanded="false" hidden>+ ещё</button>
               </div>
             {% else %}
               <div class="chips">
@@ -222,27 +214,16 @@
     });
   }
 
-  // Считать, сколько слотов скрыто (из-за nth-child на текущей ширине),
-  // и обновить текст/видимость кнопки "+ ещё N"
+  // Один порог для десктопа и мобильного; без JS все слоты видимы.
   function updateMoreButtons() {
     document.querySelectorAll('#cal .chips').forEach(box => {
       const btn = box.querySelector('.chip.more');
       if (!btn) return;
-
-      if (box.classList.contains('expanded')) {
-        btn.hidden = true;
-        return;
-      }
-
-      const hidden = Array.from(box.querySelectorAll('.slot-chip'))
-        .filter(el => getComputedStyle(el).display === 'none').length;
-
-      if (hidden > 0) {
-        btn.textContent = `+ ещё ${hidden}`;
-        btn.hidden = false;
-      } else {
-        btn.hidden = true;
-      }
+      const hidden = Math.max(0, box.querySelectorAll('.slot-chip').length - 6);
+      const expanded = box.classList.contains('expanded');
+      btn.hidden = hidden === 0;
+      btn.textContent = expanded ? 'Свернуть' : `+ ещё ${hidden}`;
+      btn.setAttribute('aria-expanded', String(expanded));
     });
   }
 
@@ -255,14 +236,13 @@
     updateCellHeights();
   });
 
-  // Раскрытие «ещё N»
-  document.addEventListener('click', function(e){
+  // Раскрытие и сворачивание только выбранного дня.
+  document.getElementById('cal').addEventListener('click', function(e){
     const btn = e.target.closest('.chip.more');
     if(!btn) return;
-    const id = btn.getAttribute('data-target');
-    const box = document.getElementById(id);
+    const box = btn.closest('.chips');
     if(box){
-      box.classList.add('expanded');
+      box.classList.toggle('expanded');
       updateMoreButtons();
       updateCellHeights();
     }

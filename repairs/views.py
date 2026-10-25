@@ -593,7 +593,9 @@ def get_available_slots(
         )
         duration_min = price_entry.duration_min
     except ModelRepairPrice.DoesNotExist:
-        duration_min = repair_type.default_duration_min or 60  # безопасный дефолт
+        duration_min = repair_type.default_duration_min
+    if not duration_min:
+        return []
     workload_minutes = int(duration_min)
     service_duration = timedelta(minutes=workload_minutes)
 
@@ -617,6 +619,7 @@ def get_available_slots(
     working_hours = snapshot.working_hours
 
     slots: List[datetime] = []
+    seen_slots = set()
 
     # --- 6) Проход по дням ---
     for day_offset in range((end_date - start_date).days + 1):
@@ -661,12 +664,13 @@ def get_available_slots(
                 if slot_end > day_end:
                     break  # дальше только позже — тоже выйдет за окно
 
-                if snapshot.slot_is_available(
+                if slot_start not in seen_slots and snapshot.slot_is_available(
                     slot_start,
                     workload_minutes,
                     service_duration_minutes=workload_minutes,
                 ):
                     slots.append(slot_start)
+                    seen_slots.add(slot_start)
 
                 # Следующий шаг по сетке
                 current_slot += step
@@ -692,6 +696,10 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
         effective_duration_min = price_entry.duration_min
     except ModelRepairPrice.DoesNotExist:
         effective_duration_min = repair_type.default_duration_min
+
+    if not effective_duration_min:
+        messages.info(request, "Для этой услуги не указана длительность. Запись возможна только по согласованию.")
+        return redirect("repairs:repair_list", brand_slug=brand.slug, model_slug=model.slug)
 
     if effective_duration_min and effective_duration_min > 560:
         messages.info(
@@ -722,6 +730,8 @@ def slot_select(request, brand_slug: str, model_slug: str, repair_slug: str):
     # Не даём уйти дальше лимитного месяца
     if month_start > limit_month_start:
         month_start = limit_month_start
+    elif month_start < current_month_start:
+        month_start = current_month_start
 
     # Сетка начинается с понедельника той недели, где находится 1-е число
     first_weekday = 0  # Пн
@@ -817,6 +827,10 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
     except ModelRepairPrice.DoesNotExist:
         effective_duration_min = repair_type.default_duration_min
 
+    if not effective_duration_min:
+        messages.error(request, "Для этой услуги не указана длительность. Запись возможна только по согласованию.")
+        return redirect("repairs:repair_list", brand_slug=brand.slug, model_slug=model.slug)
+
     if effective_duration_min and effective_duration_min > 560:
         messages.error(request, "Онлайн-запись на эту услугу недоступна. Срок по согласованию.")
         return redirect("repairs:repair_list", brand_slug=brand.slug, model_slug=model.slug)
@@ -866,12 +880,18 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
     duration_min = selection["total_duration"]
     price = selection["total_price"]
 
-    if duration_min and duration_min > 560:
+    if (selection["primary_duration"] <= 0
+            or any(item.duration_min <= 0 for item in selection["selected_extra_entries"])):
+        messages.error(request, "Для выбранных услуг не указана длительность. Запись возможна только по согласованию.")
+        return redirect("repairs:slot_select",
+                        brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
+
+    if duration_min > 560:
         messages.error(request, "При добавлении этих услуг онлайн-запись недоступна. Пожалуйста, позвоните нам.")
         return redirect("repairs:slot_select",
                         brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 
-    end_dt = slot_dt + timedelta(minutes=settings.BOOKING_INTAKE_SLOT_MINUTES)
+    end_dt = slot_dt + timedelta(minutes=duration_min)
 
     # первичная проверка занятости (глобально по всем активным заявкам)
     if not slot_is_available(
