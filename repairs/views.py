@@ -4,16 +4,18 @@
 
 from __future__ import annotations
 import logging
+from urllib.parse import urlencode
 from functools import wraps
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
-from django.core.paginator import Paginator
+from django.core.paginator import EmptyPage, Paginator
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import List
 
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
+from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 
 from django.conf import settings
@@ -493,9 +495,39 @@ def model_list(request, brand_slug: str):
     else:
         models_qs.sort(key=lambda m: _natural_key(m.name))
 
-    per_page = 112 if view_mode == "grid" else 80
-    paginator = Paginator(models_qs, per_page)
-    page_obj = paginator.get_page(request.GET.get("page") or 1)
+    paginator = Paginator(models_qs, 80)
+    base_path = reverse("repairs:model_list", kwargs={"brand_slug": brand.slug})
+
+    def page_url(number, *, mode=None, include_view=True):
+        params = {"cat": sel}
+        selected_mode = view_mode if mode is None else mode
+        if include_view and selected_mode != "grid":
+            params["view"] = selected_mode
+        if q:
+            params["q"] = q
+        if number > 1:
+            params["page"] = number
+        return f"{base_path}?{urlencode(params)}"
+
+    raw_page = request.GET.get("page")
+    if raw_page is None:
+        page_number = 1
+    elif not re.fullmatch(r"[1-9][0-9]*", raw_page):
+        raise Http404("Некорректный номер страницы")
+    else:
+        try:
+            page_number = int(raw_page)
+        except ValueError as exc:
+            raise Http404("Некорректный номер страницы") from exc
+        if page_number == 1:
+            return redirect(page_url(1))
+
+    try:
+        page_obj = paginator.page(page_number)
+    except EmptyPage as exc:
+        raise Http404("Страница вне диапазона") from exc
+
+    canonical_path = page_url(page_number, include_view=False) if page_number > 1 else f"{base_path}?cat={sel}"
 
     return render(request, "repairs/model_list.html", {
         "brand": brand,
@@ -505,6 +537,15 @@ def model_list(request, brand_slug: str):
         "view_mode": view_mode,
         "q": q,
         "page_obj": page_obj,
+        "canonical_url": request.build_absolute_uri(canonical_path),
+        "grid_url": page_url(page_number, mode="grid"),
+        "list_url": page_url(page_number, mode="list"),
+        "page_links": [
+            {"number": number, "url": page_url(number), "current": number == page_number}
+            for number in paginator.page_range
+        ],
+        "previous_url": page_url(page_number - 1) if page_obj.has_previous() else None,
+        "next_url": page_url(page_number + 1) if page_obj.has_next() else None,
         "models": page_obj.object_list,  # совместимо с вашим циклом
     })
 # ---------- шаг 3: услуги/цены модели ----------
@@ -781,7 +822,13 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
         return redirect("repairs:repair_list", brand_slug=brand.slug, model_slug=model.slug)
 
     # слот обязателен
-    slot_str = request.GET.get("slot")
+    posted_slot = request.POST.get("slot") if request.method == "POST" else None
+    legacy_slot = request.GET.get("slot")
+    if posted_slot and legacy_slot and posted_slot.replace(" ", "+") != legacy_slot.replace(" ", "+"):
+        messages.error(request, "Некорректный слот времени.")
+        return redirect("repairs:slot_select",
+                        brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
+    slot_str = posted_slot or legacy_slot
     if not slot_str:
         return redirect("repairs:slot_select",
                         brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
@@ -834,7 +881,11 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
         return redirect("repairs:slot_select",
                         brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 
-    if request.method == "POST":
+    is_confirmation = request.method == "POST" and (
+        request.POST.get("booking_step") == "confirm"
+        or (legacy_slot and "customer_name" in request.POST)
+    )
+    if is_confirmation:
         form = BookingForm(request.POST)
         if form.is_valid():
             # повторная проверка в транзакции — защита от гонок
@@ -844,6 +895,19 @@ def book(request, brand_slug: str, model_slug: str, repair_slug: str):
                     slot_dt, duration_min, service_duration_minutes=duration_min
                 ):
                     messages.error(request, "К сожалению, этот слот только что заняли. Выберите другое время.")
+                    return redirect("repairs:slot_select",
+                                    brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
+
+                # A repeated confirmation must not reserve a second intake slot.
+                if Appointment.objects.filter(
+                    phone_model=model,
+                    repair_type=repair_type,
+                    start=slot_dt,
+                    customer_name=form.cleaned_data["customer_name"],
+                    customer_phone=form.cleaned_data["customer_phone"],
+                    status__in=("new", "confirmed"),
+                ).exists():
+                    messages.info(request, "Запись на это время уже была отправлена.")
                     return redirect("repairs:slot_select",
                                     brand_slug=brand.slug, model_slug=model.slug, repair_slug=repair_type.slug)
 

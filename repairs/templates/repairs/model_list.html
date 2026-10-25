@@ -4,7 +4,8 @@
 
 {% block title %}{% if selected_cat == "phone" and brand.slug == "apple" %}Ремонт iPhone в Гомеле — модели и цены | Tehsfera{% elif selected_cat == "phone" and brand.slug == "google" %}Ремонт Google Pixel в Гомеле — модели и цены | Tehsfera{% else %}Ремонт {{ device_label }} {{ brand.name }} в Гомеле: модели и цены — Tehsfera{% endif %}{% endblock %}
 {% block meta_description %}{% if selected_cat == "phone" and brand.slug == "apple" %}Ремонт Apple iPhone в Гомеле. Выберите модель, посмотрите доступные услуги, цены и запишитесь на ремонт в Tehsfera.{% elif selected_cat == "phone" and brand.slug == "google" %}Ремонт Google Pixel в Гомеле. Выберите модель, посмотрите доступные услуги, цены и запишитесь на ремонт в Tehsfera.{% else %}Выберите модель для ремонта {{ device_label }} {{ brand.name }} в Гомеле. Доступные услуги, стоимость и запись в мастерскую Tehsfera.{% endif %}{% endblock %}
-{% block canonical_href %}{{ request.scheme }}://{{ request.get_host }}{% url 'repairs:model_list' brand_slug=brand.slug %}?cat={{ selected_cat }}{% endblock %}
+{% block canonical_href %}{{ canonical_url }}{% endblock %}
+{% block robots %}{% if q %}noindex, follow{% else %}index, follow{% endif %}{% endblock %}
 
 {% block content %}
 <style>
@@ -198,6 +199,11 @@
   .as-list .card:hover{ background:#fafafa }
   .as-list .info .name{ color: var(--accent); }
 
+  .catalog-pagination{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;margin:20px 0}
+  .catalog-pagination a,.catalog-pagination span{display:inline-flex;align-items:center;justify-content:center;min-width:38px;min-height:38px;padding:7px 11px;border:1px solid #e5e7eb;border-radius:9px;background:#fff;color:#0f172a;text-decoration:none}
+  .catalog-pagination a:hover{border-color:#111}
+  .catalog-pagination .current{background:#111;border-color:#111;color:#fff;font-weight:700}
+
   .seo-copy{
     margin-top:18px;
     background:#fff;
@@ -312,7 +318,7 @@
   <div class="view" role="tablist" aria-label="Режим отображения">
     <!-- плитка -->
     <a role="tab" title="Плиткой"
-       href="?cat={{ selected_cat }}&view=grid{% if q %}&q={{ q|urlencode }}{% endif %}"
+       href="{{ grid_url }}"
        class="{% if view_mode == 'grid' or not view_mode %}active{% endif %}"
        aria-selected="{% if view_mode == 'grid' or not view_mode %}true{% else %}false{% endif %}">
        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -324,7 +330,7 @@
     </a>
     <!-- список -->
     <a role="tab" title="Списком"
-       href="?cat={{ selected_cat }}&view=list{% if q %}&q={{ q|urlencode }}{% endif %}"
+       href="{{ list_url }}"
        class="{% if view_mode == 'list' %}active{% endif %}"
        aria-selected="{% if view_mode == 'list' %}true{% else %}false{% endif %}">
        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -377,6 +383,17 @@
   </div>
 {% else %}
   <p class="muted">Нет моделей выбранной категории.</p>
+{% endif %}
+
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="catalog-pagination" aria-label="Страницы моделей">
+  {% if previous_url %}<a href="{{ previous_url }}" rel="prev">← Предыдущая</a>{% endif %}
+  {% for link in page_links %}
+    {% if link.current %}<span class="current" aria-current="page">{{ link.number }}</span>
+    {% else %}<a href="{{ link.url }}">{{ link.number }}</a>{% endif %}
+  {% endfor %}
+  {% if next_url %}<a href="{{ next_url }}" rel="next">Следующая →</a>{% endif %}
+</nav>
 {% endif %}
 
 <section class="seo-copy">

@@ -245,8 +245,10 @@
 </section>
 {% endif %}
 
-<form id="booking-form" method="post" action="" novalidate>
+<form id="booking-form" method="post" action="{% url 'repairs:book' brand_slug=model.brand.slug model_slug=model.slug repair_slug=repair_type.slug %}" novalidate>
   {% csrf_token %}
+  <input type="hidden" name="booking_step" value="confirm">
+  <input type="hidden" name="slot" value="{{ slot|date:'c' }}">
 
   <div class="form-grid">
     <div class="form-row {% if form.customer_name.errors %}has-error{% endif %}">

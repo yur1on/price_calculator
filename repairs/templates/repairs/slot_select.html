@@ -59,14 +59,16 @@
     background:#111;color:#fff;text-decoration:none;font-size:14px;white-space:nowrap
   }
   #cal .chip:hover{opacity:.95}
+  #cal button.chip{font-family:inherit;cursor:pointer}
   #cal .chip.ghost{background:#fff;color:var(--ink);border:1px solid var(--brd)}
   #cal .chip.more{background:#fff;color:var(--ink);border:1px dashed var(--brd)}
   #cal .chip svg{width:18px;height:18px}
 
   /* Десктоп: показываем до 6 слотов */
-  #cal .chips .slot-chip:nth-child(n+7){display:none}
+  #cal.js-enabled .chips .slot-chip:nth-child(n+7){display:none}
   #cal .chips.expanded .slot-chip{display:inline-flex}
   #cal .chips.expanded .more{display:none}
+  #cal .chip.more[hidden]{display:none}
 
   /* Мобильная метка дня недели внутри числа */
   #cal .wday-mobile{
@@ -94,7 +96,7 @@
     #cal .cal-days{grid-template-columns:repeat(2,1fr);gap:10px}
 
     /* на мобильном до 4 слотов до раскрытия */
-    #cal .chips .slot-chip:nth-child(n+5){display:none}
+    #cal.js-enabled .chips .slot-chip:nth-child(n+5){display:none}
 
     /* при раскрытии показать все слоты, перекрывая nth-child */
     #cal .chips.expanded .slot-chip{display:inline-flex !important;}
@@ -144,6 +146,8 @@
   </div>
 
   <!-- Сетка -->
+  <form method="post" action="{% url 'repairs:book' brand_slug=model.brand.slug model_slug=model.slug repair_slug=repair_type.slug %}">
+    {% csrf_token %}
   <div class="grid cal-days">
     {% for week in weeks %}
       {% for day in week %}
@@ -171,10 +175,9 @@
             {% if day.slots %}
               <div class="chips" id="chips-{{ day.date|date:'Ymd' }}">
                 {% for s in day.slots %}
-                  <a class="chip slot-chip"
-                     href="{% url 'repairs:book' brand_slug=model.brand.slug model_slug=model.slug repair_slug=repair_type.slug %}?slot={{ s|date:'c'|urlencode }}">
+                  <button type="submit" class="chip slot-chip" name="slot" value="{{ s|date:'c' }}">
                     {{ s|date:"H:i" }}
-                  </a>
+                  </button>
                 {% endfor %}
                 <button type="button" class="chip more" data-target="chips-{{ day.date|date:'Ymd' }}" hidden>+ ещё</button>
               </div>
@@ -188,6 +191,7 @@
       {% endfor %}
     {% endfor %}
   </div>
+  </form>
 
   {% if not has_available_slots %}<p class="small" role="status" style="margin-top:12px;color:#64748b">На этот период нет свободного времени для выбранного ремонта. Выберите другой день.</p>{% endif %}
 
@@ -201,6 +205,8 @@
   {% endif %}
 </div>
 <script>
+  // Without JavaScript every slot stays visible and the POST form still works.
+  document.getElementById('cal').classList.add('js-enabled');
   // Выравниваем высоты ячеек под самую высокую (без скрытых плейсхолдеров)
   function updateCellHeights() {
     const cells = document.querySelectorAll('#cal .cal-days .cell');

@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from django.core import signing
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
@@ -205,6 +205,98 @@ class BookingFormViewTests(TestCase):
             "referral_code": "",
             "consent": "on",
         }
+
+    def _book_url(self):
+        return reverse("repairs:book", kwargs={
+            "brand_slug": self.brand.slug,
+            "model_slug": self.model.slug,
+            "repair_slug": self.repair_type.slug,
+        })
+
+    def test_calendar_uses_post_buttons_without_slot_links(self):
+        slot = self._monday_slot()
+        month = datetime.fromisoformat(slot).strftime("%Y-%m")
+        response = self.client.get(reverse("repairs:slot_select", kwargs={
+            "brand_slug": self.brand.slug,
+            "model_slug": self.model.slug,
+            "repair_slug": self.repair_type.slug,
+        }), {"month": month})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f'<form method="post" action="{self._book_url()}">')
+        self.assertContains(response, 'name="csrfmiddlewaretoken"')
+        self.assertContains(response, f'name="slot" value="{slot}"')
+        self.assertNotContains(response, "?slot=")
+
+    def test_post_slot_selection_then_confirmation_without_query_string(self):
+        slot = self._monday_slot()
+        selected = self.client.post(self._book_url(), {"slot": slot})
+        self.assertEqual(selected.status_code, 200)
+        self.assertContains(selected, 'name="booking_step" value="confirm"')
+        self.assertContains(selected, f'name="slot" value="{slot}"')
+        self.assertContains(selected, f'action="{self._book_url()}"')
+        self.assertEqual(Appointment.objects.count(), 0)
+
+        confirmed = self.client.post(self._book_url(), {
+            **self._booking_data("Новый POST"), "booking_step": "confirm", "slot": slot,
+        })
+        self.assertEqual(confirmed.status_code, 302)
+        self.assertEqual(Appointment.objects.filter(customer_name="Новый POST").count(), 1)
+
+    def test_slot_selection_requires_csrf(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+        slot = self._monday_slot()
+        self.assertEqual(csrf_client.post(self._book_url(), {"slot": slot}).status_code, 403)
+        calendar = csrf_client.get(reverse("repairs:slot_select", kwargs={
+            "brand_slug": self.brand.slug,
+            "model_slug": self.model.slug,
+            "repair_slug": self.repair_type.slug,
+        }))
+        self.assertEqual(calendar.status_code, 200)
+        token = csrf_client.cookies["csrftoken"].value
+        self.assertEqual(csrf_client.post(self._book_url(), {
+            "slot": slot, "csrfmiddlewaretoken": token,
+        }).status_code, 200)
+        self.assertEqual(Appointment.objects.count(), 0)
+
+    def test_post_rejects_slot_that_became_busy(self):
+        slot = self._monday_slot()
+        self.assertEqual(self.client.post(self._book_url(), {"slot": slot}).status_code, 200)
+        start = datetime.fromisoformat(slot)
+        with self.settings(REPAIRS_MAX_PARALLEL_APPOINTMENTS=1):
+            Appointment.objects.create(
+                phone_model=self.model, repair_type=self.repair_type,
+                start=start, end=start + timedelta(minutes=30),
+                customer_name="Другой клиент", customer_phone="+375291111111",
+                price_original="100", price_final="100",
+            )
+            response = self.client.post(self._book_url(), {
+                **self._booking_data("Опоздал"), "booking_step": "confirm", "slot": slot,
+            })
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Appointment.objects.filter(customer_name="Опоздал").exists())
+
+    def test_post_selection_rejects_expired_slot(self):
+        expired = (datetime.fromisoformat(self._monday_slot()) - timedelta(days=14)).isoformat()
+        response = self.client.post(self._book_url(), {"slot": expired})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Appointment.objects.count(), 0)
+
+    def test_repeated_confirmation_does_not_create_second_appointment(self):
+        slot = self._monday_slot()
+        data = {**self._booking_data("Повтор"), "booking_step": "confirm", "slot": slot}
+        first = self.client.post(self._book_url(), data)
+        second = self.client.post(self._book_url(), data)
+        self.assertEqual(first.status_code, 302)
+        self.assertEqual(second.status_code, 302)
+        self.assertEqual(Appointment.objects.filter(customer_name="Повтор").count(), 1)
+
+    def test_old_get_slot_link_and_confirmation_remain_supported(self):
+        slot = self._monday_slot()
+        legacy_url = f"{self._book_url()}?slot={slot}"
+        self.assertEqual(self.client.get(legacy_url).status_code, 200)
+        response = self.client.post(legacy_url, self._booking_data("Старая ссылка"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Appointment.objects.filter(customer_name="Старая ссылка").count(), 1)
 
     def test_direct_post_rejects_service_that_ends_after_working_hours(self):
         ModelRepairPrice.objects.filter(
