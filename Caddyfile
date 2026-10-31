@@ -1,3 +1,4 @@
+
 tehsfera.by {
   encode gzip zstd
 
@@ -41,4 +42,11 @@ yanina-beauty.by, www.yanina-beauty.by {
   }
 
   reverse_proxy yanina-beauty-web-1:8000
+}
+
+# AVTOMOD — автомастерская
+avtomod.by {
+  encode gzip zstd
+
+  reverse_proxy avtomod_web:8000
 }
